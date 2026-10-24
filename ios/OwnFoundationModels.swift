@@ -1,0 +1,169 @@
+import Foundation
+import FoundationModels
+import React
+
+@available(iOS 26.0, *)
+private struct OwnAppleTool: Tool {
+  let name: String
+  let description: String
+  let parameters: GenerationSchema
+  let invoke: @Sendable (String, String) async throws -> String
+  func call(arguments: GeneratedContent) async throws -> String {
+    try await invoke(name, arguments.jsonString)
+  }
+}
+
+@objc(OwnFoundationModels)
+final class OwnFoundationModels: RCTEventEmitter {
+  private var currentID: String?
+  private var task: Task<Void, Never>?
+  private var pendingTools: [String: CheckedContinuation<String, Error>] = [:]
+  private var toolCount = 0
+  @objc override static func requiresMainQueueSetup() -> Bool { true }
+  override func supportedEvents() -> [String]! { ["OwnFoundationToken", "OwnFoundationTool"] }
+
+  private func status() -> [String: Any] {
+    guard #available(iOS 26.0, *) else { return ["available": false, "reason": "unsupportedOS"] }
+    switch SystemLanguageModel.default.availability {
+    case .available: return ["available": true, "reason": "available"]
+    case .unavailable(let reason):
+      let code: String
+      switch reason {
+      case .deviceNotEligible: code = "deviceNotEligible"
+      case .appleIntelligenceNotEnabled: code = "appleIntelligenceNotEnabled"
+      case .modelNotReady: code = "modelNotReady"
+      @unknown default: code = "unknown"
+      }
+      return ["available": false, "reason": code]
+    }
+  }
+  @objc(availability:rejecter:)
+  func availability(_ resolve: @escaping RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+    DispatchQueue.main.async { resolve(self.status()) }
+  }
+  @objc(cancel:resolver:rejecter:)
+  func cancel(_ requestId: String, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: RCTPromiseRejectBlock) {
+    DispatchQueue.main.async {
+      guard self.currentID == requestId else { resolve(nil); return }
+      let pending = self.task
+      pending?.cancel()
+      self.currentID = nil
+      self.finishTools()
+      Task { @MainActor in
+        await pending?.value
+        resolve(nil)
+      }
+    }
+  }
+  private func finishTools() {
+    let continuations = Array(pendingTools.values)
+    pendingTools.removeAll()
+    for continuation in continuations { continuation.resume(throwing: CancellationError()) }
+  }
+  @objc(resolveTool:callId:output:)
+  func resolveTool(_ requestId: String, callId: String, output: String) {
+    DispatchQueue.main.async {
+      guard self.currentID == requestId, output.utf8.count <= 100_000 else { return }
+      self.pendingTools.removeValue(forKey: callId)?.resume(returning: output)
+    }
+  }
+  @available(iOS 26.0, *)
+  @MainActor private func invokeTool(_ name: String, arguments: String, requestId: String) async throws -> String {
+    guard currentID == requestId, !Task.isCancelled, arguments.utf8.count <= 32_768, toolCount < 8 else {
+      throw CancellationError()
+    }
+    toolCount += 1
+    let callId = UUID().uuidString
+    return try await withCheckedThrowingContinuation { continuation in
+      pendingTools[callId] = continuation
+      sendEvent(withName: "OwnFoundationTool", body: ["requestId": requestId, "callId": callId, "name": name, "arguments": arguments])
+      Task { @MainActor [weak self] in
+        try? await Task.sleep(nanoseconds: 30_000_000_000)
+        guard let self, self.currentID == requestId else { return }
+        self.pendingTools.removeValue(forKey: callId)?.resume(returning: "Tool timed out. Do not invent its result.")
+      }
+    }
+  }
+  @available(iOS 26.0, *)
+  private func makeTools(_ descriptors: [[String: Any]], requestId: String) throws -> [any Tool] {
+    guard descriptors.count <= 6 else { throw CocoaError(.coderInvalidValue) }
+    let allowed: Set<String> = ["web_search", "read_url", "calculator", "get_current_datetime", "get_device_info", "search_knowledge_base"]
+    return try descriptors.prefix(6).map { item in
+      guard let name = item["name"] as? String, allowed.contains(name),
+            let description = item["description"] as? String, description.utf8.count <= 4096,
+            let fields = item["parameters"] as? [String: [String: Any]], fields.count <= 8,
+            fields.keys.allSatisfy({$0.utf8.count <= 64}) else { throw CocoaError(.coderInvalidValue) }
+      let properties = fields.sorted(by: {$0.key < $1.key}).map { key, field in
+        DynamicGenerationSchema.Property(name: key, description: field["description"] as? String,
+          schema: DynamicGenerationSchema(type: String.self), isOptional: field["required"] as? Bool != true)
+      }
+      let schema = try GenerationSchema(root: DynamicGenerationSchema(name: name + "Arguments", properties: properties), dependencies: [])
+      return OwnAppleTool(name: name, description: description, parameters: schema) { [weak self] tool, json in
+        guard let self else { throw CancellationError() }
+        return try await self.invokeTool(tool, arguments: json, requestId: requestId)
+      }
+    }
+  }
+  @objc(generate:resolver:rejecter:)
+  func generate(_ params: [String: Any], resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.main.async {
+      guard #available(iOS 26.0, *) else { reject("UNAVAILABLE", "The Apple model requires iOS 26 or later.", nil); return }
+      guard self.task == nil, let id = params["requestId"] as? String, !id.isEmpty, id.count < 100,
+            let messages = params["messages"] as? [[String: String]], !messages.isEmpty, messages.count <= 256,
+            messages.allSatisfy({["system", "user", "assistant"].contains($0["role"] ?? "") && $0["content"] != nil}),
+            messages.reduce(0, {$0 + ($1["content"]?.utf8.count ?? 0)}) <= 524_288,
+            self.status()["available"] as? Bool == true else {
+        reject("UNAVAILABLE", "The Apple model is unavailable, busy, or the request is invalid. Choose a model or retry.", nil); return
+      }
+      self.currentID = id
+      self.toolCount = 0
+      self.task = Task { @MainActor in
+        defer {
+          // Keep a cancelled task busy until it has actually stopped.
+          self.finishTools()
+          if self.currentID == id { self.currentID = nil }
+          self.task = nil
+        }
+        var phase = "tools"
+        do {
+          let tools = try self.makeTools(params["tools"] as? [[String: Any]] ?? [], requestId: id)
+          phase = "history"
+          let instructions = messages.filter {$0["role"] == "system"}.compactMap {$0["content"]}.joined(separator: "\n")
+          let seed = LanguageModelSession(model: SystemLanguageModel.default, tools: tools, instructions: instructions)
+          var entries = Array(seed.transcript)
+          let chat = messages.filter {$0["role"] != "system"}
+          guard let last = chat.last, last["role"] == "user", let prompt = last["content"] else { throw CocoaError(.coderInvalidValue) }
+          for message in chat.dropLast() {
+            let segment = Transcript.Segment.text(Transcript.TextSegment(content: message["content"] ?? ""))
+            if message["role"] == "user" { entries.append(.prompt(Transcript.Prompt(segments: [segment]))) }
+            else { entries.append(.response(Transcript.Response(assetIDs: [], segments: [segment]))) }
+          }
+          let session = LanguageModelSession(model: SystemLanguageModel.default, tools: tools, transcript: Transcript(entries: entries))
+          let maximum = max(1, min(params["maxTokens"] as? Int ?? 1024, 2048))
+          let temperature = max(0, min(params["temperature"] as? Double ?? 0.7, 2))
+          var content = ""
+          phase = "response"
+          for try await snapshot in session.streamResponse(to: prompt, options: GenerationOptions(temperature: temperature, maximumResponseTokens: maximum)) {
+            try Task.checkCancellation()
+            guard self.currentID == id else { throw CancellationError() }
+            content = snapshot.content
+            self.sendEvent(withName: "OwnFoundationToken", body: ["requestId": id, "content": content])
+          }
+          try Task.checkCancellation()
+          guard self.currentID == id else { throw CancellationError() }
+          resolve(["content": content])
+        } catch is CancellationError {
+          reject("CANCELLED", "Generation cancelled.", nil)
+        } catch {
+          // Framework payloads may contain user content. QA records only error
+          // type, numeric code and phase, never the payload or prompt.
+          if ProcessInfo.processInfo.environment["OWN_QA_DIAGNOSTICS"] == "1" {
+            NSLog("[Own QA] Apple failure phase=%@ type=%@ code=%ld", phase,
+                  String(reflecting: type(of: error)), (error as NSError).code)
+          }
+          reject("APPLE_GENERATION_FAILED", "The Apple model could not run this request. Retry, or choose another model.", nil)
+        }
+      }
+    }
+  }
+}

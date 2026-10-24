@@ -1,0 +1,45 @@
+# Own verification
+
+Status: INCOMPLETE. Evidence refers to the active Own source-only candidate, version0.1.0(1). Earlier recovery workspaces are excluded from delivery.
+
+| Gate | Result | Evidence and limits |
+|---|---|---|
+| Clean npm install + seven native patches | PASS | Final lockfile installed; patched native package versions unchanged. Dependency API smoke passes. |
+| JavaScript unit/integration/UI component tests | PASS | 193 suites,5524 tests passed,4 skipped; current T09 run exited0. Jest reports delayed shutdown/open-handle warning; this is recorded, not hidden. |
+| TypeScript | PASS | Active candidate types checked after T09 hook API change; exit0. |
+| JavaScript lint | PASS with warnings | 0 errors,30 warnings; warnings remain reviewed/incomplete work, not erased. |
+| SwiftLint | PASS with warnings | Installed0.65.1; no-cache command exits0; native style/complexity warnings remain. |
+| Native crypto and destination policy | PASS | Independent native vectors and deny-list tests compiled/executed as Objective-C and Objective-C++. |
+| Renamed Release simulator build/start | PASS | Latest T09 Release simulator rebuild exits0 (own-eta-ios-build.log), including latest native error copy. Earlier scene startup and actual welcome screen viewed; latest screen/runtime not rerun. |
+| Apple default/Home/relaunch UI | PASS | XCTest UI run4 passed; screenshot viewed, Apple remains selected without downloaded files. |
+| Native storage tests | PASS | Current52 tests passed, including8 storage/HTTP/path safety cases. Symlink regression failed before the fix and passed after it. |
+| Real local Apple chat | FAIL in simulator | UI chat probe reaches native response generation but Apple model service throws ModelManagerServices.ModelManagerError1026. Host macOS26.6.2 and simulator iOS27.0 differ; Apple documents simulator use of host model and matching-version requirements. This is a likely environment cause, not proven physical-phone behavior. Tools/schema/history setup passed the diagnostic phase. |
+| Dependency advisories | OPEN | Compatible fixes reduce to15 findings:0critical,4high,11moderate. High findings currently trace to Metro image-size and ESLint/Zod build tooling; full release-bundle reachability review remains. |
+| Identity | PARTIAL | Owned-source text and binary scan reviewed; original editor path and marketing cover removed; own icon and Home visually inspected. Final built-bundle scan remains. |
+| Google live search | FAIL / UNVERIFIED | Earlier Mac request received a JavaScript challenge. Parser handles challenge honestly. Phone successful result search remains unverified. |
+| Device/background/speech/traffic/model import | NOT_RUN | Physical iPhone and full download/background/lock/retry/cancel/storage/network scenarios remain. HF search and Files GGUF(+vision) import confirmed in source. |
+| T09 measured download estimate | PASS for source behavior; device NOT_RUN | Four focused suites /47 tests pass, including actual download-store to visible-card integration. TypeScript exits0; focused ESLint exits0. Real phone transfers, background recovery and rendered ETA review remain NOT_RUN. |
+| T10/T11 additions and final T17 settings | NOT_COMPLETE | T10 pinned source/API research recorded in ash-reference-review.md; playback, citations/context and final simple model settings remain. |
+
+Current native log: work/own-validation-5.log outside the delivery tree. Prior UI result: work/own-ui-validation-4.xcresult. No physical phone install, Git publication or release has occurred.
+
+Final review has found and corrected real defects: scene lifecycle startup crash, onboarding/relaunch forcing model downloads, stale test fixtures, missing button accessibility roles, network changes after download consent, unsafe multi-file destinations, and false completion after file-save failure. This review does not establish complete security or readiness.
+
+T09 separate self-review: inspected the utility, hook and active download card against measured-only ETA, combined-byte progress, retries, stale data and timer cleanup. Corrected a transient old-task sample by gating task ID and byte rollback before rendering. Source implementation does not change the native background downloader. Integration initially failed a global timer-count assertion because React Native also owns timers; it now checks that this hook clears its interval. All47 focused tests pass. There is no independent-agent review or actual phone/visual proof for T09 yet. Logs: work/own-eta-regression.log, work/own-eta-types.log, work/own-eta-lint.log, outside delivery tree.
+
+## Current feature verification update — 2026-10-24
+
+This section supersedes older T10/T11/T17 implementation status above.
+
+- T10: native55 tests PASS (own-speech-native-final.log), including real installed basic-voice playback and cancellation. Full speech-stage JS196 suites /5543 PASS,4 skipped. Voice opt-in/relaunch UI PASS; default light screenshot reviewed.
+- T11: trusted document sources, saved excerpts and project-scoped original-file lookup implemented; actual local tokenizer/managed-prompt context count with reply reserve, honest unavailable capacity for other engines. Seven focused suites /270 tests PASS (own-t11-focused-2.log). Generation ownership fixes prevent stale data/errors affecting a new response. Native rendered citation/context flow NOT RUN.
+- T17: plain controls, built-in/custom local profiles, supported-parameter filtering, history limits, explanations, memory warnings and advanced sections implemented. Four initial focused suites /168 PASS,1 skipped. Profile save while keyboard open, relaunch, apply and remove passed on Own QA iPhone17e/iOS27 simulator (own-t17-ui-4.log). Two screenshots visually reviewed at1170x2532 light/default text; headings, choices and profile controls fit without overlap. Earlier three UI attempts failed due test gestures hitting keyboard; corrected test targets the actual RN wrapper and visible coordinates.
+- Separate final review found Reset did not meet the plan's chosen-profile requirement. Fixed with persisted engine-specific reset baseline, validated and whitelisted on hydration. Twelve focused tests PASS, including rehydration, failed persistence, reset after custom selection and screen remount. Types and scoped lint exit0. New final UI/full regression are still running; do not substitute earlier artifact results.
+- Full JS before reset fix:203 suites /5570 PASS,4 skipped; process exit0, delayed shutdown warning remains recorded. Full app ESLint0 errors/38 warnings; current targeted scopes clean.
+- Source identity scan:762 files checked, two raw-byte matches in Android third-party libraries are lowercase Unicode script alias `ogam`, not retired identity. No app-brand match in source. Final current iOS bundle scan still pending.
+- Scanner41 heuristic findings:39 max-token findings, one export-as-endpoint and one local message-role finding. These require contextual classification; no certification or zero-finding claim. Dependency15 advisories remain open, including build-tool image-size/Zod high findings; no blind major override.
+- Physical phone installation and all device/traffic checks are NOT RUN and explicitly deferred by the user. Simulator Apple generation still has model service error1026; successful local Apple reply is not proven. Dark/large-text and source/context runtime review remain open.
+
+Final reset-source checks:203 suites /5571 tests PASS,4 skipped (own-final-regression.log); scoped reset tests12 PASS; TypeScript and scoped ESLint exit0. Delayed Jest shutdown warning remains. Dependency API smoke PASS (own-final-dependency-smoke.log). `npm ls --omit=dev` still includes image-size through React Native's community CLI/Metro dependency; this is build tooling even though RN declares the CLI in its production tree. Zod is absent from this production tree; neither package has a direct application-source import. This is scoped reachability evidence, not proof that all advisories are harmless. Current built iOS identity scan78 files /0 matches with hashes recorded in own-features-built-identity.json.
+
+Final T17 simulator result: PASS on Own QA iPhone17e/iOS27.0, Release build. Normal/light flow (own-t17-ui-reset.log) and dark/accessibility-extra-extra-large flow (own-t17-ui-accessibility.log,154sec) both exercised save, restart, choose profile, edit, reset, supported technical controls and removal. Two final accessibility screenshots reviewed: text and buttons wrap, selected choices remain visible, no observed overlap within the viewed scroll positions. Large-text first run failed the test's eight-scroll limit; raised bounded limit to32 and reran successfully. QA simulator restored to light/large. Remaining source/context runtime, local Apple reply1026, dependencies and all phone/traffic/download/background checks remain open; no full readiness claim.
