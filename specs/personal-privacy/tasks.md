@@ -2,7 +2,7 @@
 
 Requirements and acceptance: [plan](plan.md), R01–R13 / T01–T17.
 
-- T01 PARTIAL: clean npm install, seven native patches and pod install passed in the renamed source. No Git commit yet.
+- T01 PARTIAL: clean npm install, seven native patches and pod install passed in the renamed source. Uploaded as a work-in-progress review branch, feat/current-own-project, in ios3kov/own (PR #1).
 - T02–T06 PARTIAL: privacy guards, PBKDF2 authentication, Google parser, optional Apple speech implemented; complete source inventory, live traffic and phone scenarios remain.
 - T07 IN_PROGRESS: JavaScript lint has no errors (38 warnings); repaired fail-masking native scripts and stale tests. Compatible dependency updates applied and API-smoke tested. SwiftLint0.65.1 installed; no lint errors, style warnings remain.
 - T08/T16 PARTIAL: Own project/identifiers/icons and source rename done; binary scan removed original editor recovery path; runtime bundle/UI review remains.
