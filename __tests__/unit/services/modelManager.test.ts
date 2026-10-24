@@ -886,6 +886,15 @@ describe('ModelManager', () => {
   describe('scanForUntrackedImageModels', () => {
     const IMAGE_MODELS_KEY = '@local_llm/downloaded_image_models';
 
+    it('does not recover a second model from a registered nested Core ML directory', async () => {
+      mockedRNFS.exists.mockResolvedValue(true);
+      const root='/mock/documents/image_models/sdxl';
+      mockedRNFS.readDir.mockResolvedValue([{name:'sdxl',path:root,isDirectory:()=>true,isFile:()=>false}] as any);
+      mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([{id:'sdxl',modelPath:`${root}/compiled`}])) ;
+      expect(await modelManager.scanForUntrackedImageModels()).toEqual([]);
+      expect(mockedAsyncStorage.setItem).not.toHaveBeenCalled();
+    });
+
     it('discovers untracked model directories', async () => {
       mockedRNFS.exists.mockResolvedValue(true);
 
@@ -1104,7 +1113,7 @@ describe('ModelManager', () => {
       expect(removedCount).toBe(0);
     });
 
-    it('links orphaned mmproj files to matching vision models', async () => {
+    it('does not link orphaned mmproj files by filename similarity', async () => {
       const storedModels = [
         {
           id: 'vision1',
@@ -1129,14 +1138,15 @@ describe('ModelManager', () => {
 
       await modelManager.cleanupMMProjEntries();
 
-      // The saved model list should have the mmproj linked
+      // A plausible filename does not prove compatibility.
       const savedCall = mockedAsyncStorage.setItem.mock.calls.find(
         (call) => call[0] === MODELS_STORAGE_KEY
       );
       expect(savedCall).toBeDefined();
       const savedModels = JSON.parse(savedCall![1]);
-      expect(savedModels[0].isVisionModel).toBe(true);
-      expect(savedModels[0].mmProjFileName).toBe('Qwen3VL-2B-Instruct-mmproj-f16.gguf');
+      expect(savedModels[0].isVisionModel).toBe(false);
+      expect(savedModels[0].mmProjPath).toBeUndefined();
+      expect(savedModels[0].mmProjFileName).toBeUndefined();
     });
 
     it('returns count of removed entries', async () => {

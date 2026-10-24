@@ -97,6 +97,10 @@ describe('HuggingFaceService', () => {
   describe('findMatchingMMProj', () => {
     const modelId = 'org/model';
 
+    it('does not choose the first of ambiguous same-precision components',()=>{
+      expect(service.findMatchingMMProj('model-Q4_K_M.gguf',[{path:'mmproj-Q4_K_M.gguf'},{path:'mmproj-Q4_K_M-v2.gguf'}],modelId)).toBeUndefined();
+    });
+
     it('returns undefined when no mmproj files', () => {
       const result = service.findMatchingMMProj('model-Q4_K_M.gguf', [], modelId);
       expect(result).toBeUndefined();

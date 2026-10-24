@@ -19,6 +19,12 @@ const shouldPrintJestConsole = process.env.DEBUG_JEST_CONSOLE === '1';
 // CommonCrypto implementation is exercised by scripts/privacy/native-tests.m.
 const { NativeModules: privacyNativeModules } = require('react-native');
 const privacyCrypto = require('node:crypto');
+// Transport mock only; native pinned-IP behavior has separate iOS tests.
+privacyNativeModules.PublicWebFetcher = { fetch: jest.fn(async (url: string) => {
+  const response = await global.fetch(url, {});
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  return response.text();
+}) };
 privacyNativeModules.PrivacyCrypto = {
   createVerifier: async (password: string) => {
     if (!password || Buffer.byteLength(password, 'utf8') > 4096) throw new Error('Invalid passphrase');
@@ -94,6 +100,7 @@ jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
+    useScrollToTop: jest.fn(),
     useNavigation: () => ({
       navigate: jest.fn(),
       goBack: jest.fn(),
@@ -232,7 +239,10 @@ jest.mock('react-native-image-picker', () => ({
 
 // react-native-keychain mock
 jest.mock('react-native-keychain', () => ({
-  ACCESSIBLE: { WHEN_UNLOCKED: 'AccessibleWhenUnlocked' },
+  ACCESSIBLE: { WHEN_UNLOCKED: 'AccessibleWhenUnlocked', WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AccessibleWhenUnlockedThisDeviceOnly' },
+  ACCESS_CONTROL: { BIOMETRY_CURRENT_SET: 'BiometryCurrentSet' },
+  BIOMETRY_TYPE: { FACE_ID: 'FaceID', TOUCH_ID: 'TouchID' },
+  getSupportedBiometryType: jest.fn().mockResolvedValue(null),
   setGenericPassword: jest.fn(() => Promise.resolve(true)),
   getGenericPassword: jest.fn(() => Promise.resolve(false)),
   resetGenericPassword: jest.fn(() => Promise.resolve(true)),
@@ -252,6 +262,7 @@ jest.mock('@react-native-voice/voice', () => ({
 
 // @react-native-documents/picker mock
 jest.mock('@react-native-documents/picker', () => ({
+  keepLocalCopy: jest.fn(async ({files}: any) => files.map((file:any)=>({status:'success',localUri:`file:///mock/documents/${encodeURIComponent(file.fileName)}`}))),
   pick: jest.fn(() => Promise.resolve([{
     uri: 'file:///mock/document.txt',
     name: 'document.txt',

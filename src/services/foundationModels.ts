@@ -88,14 +88,18 @@ export const foundationModelService = {
     messages: Message[],
     options: {
       onToken: (token: string) => void;
+      signal?: AbortSignal;
       enabledToolIds?: string[];
       projectId?: string;
       onToolCallStart?: (name: string, args: Record<string, unknown>) => void;
       onToolCallComplete?: (name: string, result: any) => void;
     },
   ): Promise<string> {
+    if (options.signal?.aborted) throw new Error('Generation cancelled.');
     await this.assertReady();
+    if (options.signal?.aborted) throw new Error('Generation cancelled.');
     if (pendingStop) await pendingStop;
+    if (options.signal?.aborted) throw new Error('Generation cancelled.');
     if (activeRequest) throw new Error('Apple model is already responding.');
     if (messages.some(m => m.attachments?.some(a => a.type === 'image'))) {
       throw new Error(
@@ -107,6 +111,8 @@ export const foundationModelService = {
     const native = bridge();
     let stream: { remove: () => void } | undefined;
     let toolListener: { remove: () => void } | undefined;
+    const onAbort = () => { if (activeRequest === requestId) this.stopGeneration().catch(() => {}); };
+    options.signal?.addEventListener('abort', onAbort);
     try {
       const emitter = new NativeEventEmitter(native);
       const enabled = new Set(options.enabledToolIds || []);
@@ -136,6 +142,7 @@ export const foundationModelService = {
         try {
           if (
             !tools.some(tool => tool.name === event.name) ||
+            !useAppStore.getState().settings.enabledTools.includes(event.name) ||
             typeof event.arguments !== 'string' ||
             event.arguments.length > 8192
           ) {
@@ -192,6 +199,7 @@ export const foundationModelService = {
         throw new Error('The Apple response stream changed unexpectedly.');
       return result.content;
     } finally {
+      options.signal?.removeEventListener('abort', onAbort);
       stream?.remove();
       toolListener?.remove();
       if (activeRequest === requestId) activeRequest = null;

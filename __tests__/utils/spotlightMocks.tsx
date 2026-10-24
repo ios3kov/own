@@ -44,6 +44,7 @@ export function createNavigationMock(extras?: Record<string, any>) {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
+    useScrollToTop: jest.fn(),
     useNavigation: () => ({
       navigate: mockNavigate,
       goBack: mockGoBack,

@@ -99,7 +99,7 @@ describe('LLMService', () => {
         expect.objectContaining({
           model: '/models/test.gguf',
         })
-      );
+      , expect.any(Function));
       expect(llmService.isModelLoaded()).toBe(true);
       expect(llmService.getLoadedModelPath()).toBe('/models/test.gguf');
     });
@@ -242,7 +242,7 @@ describe('LLMService', () => {
           n_batch: 512,
           n_ctx: 4096,
         })
-      );
+      , expect.any(Function));
     });
 
     it('uses llama.rn jinja support to detect thinking support', async () => {
@@ -278,7 +278,7 @@ describe('LLMService', () => {
           cache_type_k: 'q8_0',
           cache_type_v: 'q8_0',
         })
-      );
+      , expect.any(Function));
     });
 
     it('uses flashAttn=false from store and sets f16 KV cache when cacheType is f16', async () => {
@@ -302,7 +302,7 @@ describe('LLMService', () => {
           cache_type_k: 'f16',
           cache_type_v: 'f16',
         })
-      );
+      , expect.any(Function));
     });
 
     it('falls back to platform default when flashAttn is undefined (iOS → flash attn ON)', async () => {
@@ -326,7 +326,7 @@ describe('LLMService', () => {
           cache_type_k: 'q8_0',
           cache_type_v: 'q8_0',
         })
-      );
+      , expect.any(Function));
     });
 
     it('captures GPU status from context', async () => {
@@ -2005,7 +2005,7 @@ describe('LLMService', () => {
       // The test env is iOS, so DEFAULT_THREADS = Platform.OS === 'ios' ? 6 : 4 = 4
       expect(initLlama).toHaveBeenCalledWith(
         expect.objectContaining({ n_threads: 4 })
-      );
+      , expect.any(Function));
     });
 
     it('uses getOptimalBatchSize when nBatch is 0', async () => {
@@ -2022,7 +2022,7 @@ describe('LLMService', () => {
       // nBatch=0 is falsy, so getOptimalBatchSize() (returns DEFAULT_BATCH=512) is used
       expect(initLlama).toHaveBeenCalledWith(
         expect.objectContaining({ n_batch: 512 })
-      );
+      , expect.any(Function));
     });
   });
 
@@ -2149,8 +2149,7 @@ describe('LLMService', () => {
       // targetCtx = min(8192, 4096, deviceMax=4096) = 4096 = initial.actualLength → no second init
       expect(initLlama).toHaveBeenCalledTimes(1);
       expect(initLlama).toHaveBeenCalledWith(
-        expect.objectContaining({ n_ctx: 4096 }),
-      );
+        expect.objectContaining({ n_ctx: 4096 }), expect.any(Function));
     });
 
     it('does not scale when user set a custom context length', async () => {

@@ -1,11 +1,7 @@
 import type { ThemeColors,ThemeShadows } from '../../theme';
 import { FONTS } from '../../constants';
 
-export const PILL_ICON_SIZE = 32;
-const NUM_PILL_ICONS = 2;
-export const PILL_ICONS_WIDTH = PILL_ICON_SIZE * NUM_PILL_ICONS;
-export const ANIM_DURATION_IN = 180;
-export const ANIM_DURATION_OUT = 200;
+export const PILL_ICON_SIZE = 44;
 const TOOL_WARNING_COLOR = '#F59E0B';
 
 export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
@@ -103,14 +99,14 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   // Main input row (pill + circular button)
   mainRow: {
     flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+    alignItems: 'flex-end' as const,
     gap: 8,
   },
   // Pill container
   pill: {
     flex: 1,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+    flexDirection: 'column' as const,
+    alignItems: 'stretch' as const,
     backgroundColor: colors.surface,
     borderRadius: 24,
     borderWidth: 1,
@@ -122,7 +118,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     minHeight: 48,
   },
   pillInput: {
-    flex: 1,
+    alignSelf: 'stretch' as const,
     color: colors.text,
     fontSize: 15,
     fontFamily: FONTS.mono,

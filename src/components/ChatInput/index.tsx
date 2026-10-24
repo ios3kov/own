@@ -1,13 +1,13 @@
-import React,{ useState,useRef,useEffect } from 'react';
-import { View,TextInput,TouchableOpacity,Animated,StyleSheet,ActionSheetIOS } from 'react-native';
-import Icon from 'react-native-vector-icons/Feather';
+import React,{ useState,useRef } from 'react';
+import { View,Text,TextInput,TouchableOpacity,StyleSheet,ActionSheetIOS } from 'react-native';
+import { ComposerIcon } from './ComposerIcon';
 import { useTheme,useThemedStyles } from '../../theme';
 import { ImageModeState,MediaAttachment } from '../../types';
 import { VoiceRecordButton } from '../VoiceRecordButton';
 import { AttachStep } from 'react-native-spotlight-tour';
 import { triggerHaptic } from '../../utils/haptics';
 import { CustomAlert,showAlert,hideAlert,AlertState,initialAlertState } from '../CustomAlert';
-import { createStyles,PILL_ICONS_WIDTH,ANIM_DURATION_IN,ANIM_DURATION_OUT } from './styles';
+import { createStyles } from './styles';
 import { QueueRow } from './Toolbar';
 import { AttachmentPreview,useAttachments } from './Attachments';
 import { useVoiceInput } from './Voice';
@@ -72,18 +72,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const quickSettings = useKeyboardAwarePopover();
   const attachPicker = useKeyboardAwarePopover();
   const inputRef = useRef<TextInput>(null);
-  const hasText = message.length > 0;
-  const iconsAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(iconsAnim, {
-      toValue: hasText ? 1 : 0,
-      duration: hasText ? ANIM_DURATION_IN : ANIM_DURATION_OUT,
-      useNativeDriver: false,
-    }).start();
-  }, [hasText, iconsAnim]);
-
-  const { attachments, removeAttachment, clearAttachments, handlePickImage, handlePickDocument } = useAttachments(setAlertState);
+  const { attachments, removeAttachment, clearAttachments, handlePickImage, handlePickDocument, handleReadPhoto, processingAttachment } = useAttachments(setAlertState);
 
   const { isRecording, isModelLoading, isTranscribing, partialResult, error, voiceAvailable, startRecording, stopRecording, clearResult } = useVoiceInput({
     conversationId,
@@ -95,7 +84,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     },
   });
 
-  const canSend = (message.trim().length > 0 || attachments.length > 0) && !disabled;
+  const canSend = (message.trim().length > 0 || attachments.length > 0) && !disabled && !processingAttachment;
 
   const handleSend = () => {
     if (!canSend) return;
@@ -143,19 +132,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleAttachPress = () => {
     {
-      const options = supportsVision
-        ? ['Photo', 'Document', 'Cancel']
-        : ['Document', 'Cancel'];
+      const actions = [
+        ...(supportsVision ? [{ title: 'Photo', run: handleVisionPress }] : []),
+        { title: 'Document', run: handlePickDocument },
+        { title: 'Read text from photo', run: handleReadPhoto },
+        { title: 'Audio recording', run: handlePickDocument },
+      ];
       ActionSheetIOS.showActionSheetWithOptions(
-        { options, cancelButtonIndex: options.length - 1 },
-        (index) => {
-          if (supportsVision) {
-            if (index === 0) handleVisionPress();
-            else if (index === 1) handlePickDocument();
-          } else {
-            if (index === 0) handlePickDocument();
-          }
-        },
+        { options: [...actions.map(a => a.title), 'Cancel'], cancelButtonIndex: actions.length },
+        index => { actions[index]?.run(); },
       );
     }
   };
@@ -163,18 +148,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const actionButton = canSend ? (
     <TouchableOpacity
       testID="send-button"
+      accessibilityRole="button" accessibilityLabel="Send message"
       style={styles.circleButton}
       onPress={handleSend}
     >
-      <Icon name="send" size={18} color={colors.background} />
+      <ComposerIcon name="send" color={colors.background} />
     </TouchableOpacity>
   ) : isGenerating && onStop ? (
     <TouchableOpacity
       testID="stop-button"
+      accessibilityRole="button" accessibilityLabel="Stop generation"
       style={[styles.circleButton, styles.circleButtonStop]}
       onPress={handleStop}
     >
-      <Icon name="square" size={18} color={colors.background} />
+      <ComposerIcon name="stop" color={colors.background} />
     </TouchableOpacity>
   ) : (
     <VoiceRecordButton
@@ -194,6 +181,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const content = (
     <View style={styles.container}>
+      {processingAttachment && <Text accessibilityLiveRegion="polite" style={{ color: colors.text }}>Reading file on your device…</Text>}
       <AttachmentPreview attachments={attachments} onRemove={removeAttachment} />
       <QueueRow
         queueCount={queueCount}
@@ -217,27 +205,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             blurOnSubmit={false}
             returnKeyType="default"
           />
-          {/* Icons collapse when user starts typing, reappear when input is empty */}
-          <Animated.View
-            pointerEvents={hasText ? 'none' : 'auto'}
-            style={[styles.pillIcons, {
-              width: iconsAnim.interpolate({ inputRange: [0, 1], outputRange: [PILL_ICONS_WIDTH, 0] }),
-              opacity: iconsAnim.interpolate({ inputRange: [0, 0.4], outputRange: [1, 0], extrapolate: 'clamp' }),
-              overflow: 'hidden' as const,
-            }]}
-          >
+          {/* Keep attachment and options available while composing a draft. */}
+          <View testID="composer-actions" style={styles.pillIcons}>
             {/* Attach button — opens picker for image or document */}
             <TouchableOpacity
               ref={attachPicker.triggerRef}
               testID="attach-button"
+              accessibilityRole="button" accessibilityLabel="Add attachment"
               style={styles.pillIconButton}
               onPress={handleAttachPress}
               disabled={disabled}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
-              <Icon
-                name="plus"
-                size={20}
+              <ComposerIcon
+                name="attach"
                 color={disabled ? colors.textMuted : colors.textSecondary}
               />
             </TouchableOpacity>
@@ -246,18 +226,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <TouchableOpacity
               ref={quickSettings.triggerRef}
               testID="quick-settings-button"
+              accessibilityRole="button" accessibilityLabel="Chat options"
               style={styles.pillIconButton}
               onPress={handleQuickSettingsPress}
               disabled={disabled}
-              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
             >
               <View style={styles.iconWrapper}>
-                <Icon name="settings" size={18} color={disabled ? colors.textMuted : colors.textSecondary} />
+                <ComposerIcon name="options" color={disabled ? colors.textMuted : colors.textSecondary} />
                 {showSettingsDot && <View style={styles.toolWarningDot} />}
               </View>
             </TouchableOpacity>
 
-          </Animated.View>
+          </View>
         </View>
 
         {/* Circular action button — conditionally wrapped with AttachStep */}

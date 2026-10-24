@@ -44,6 +44,7 @@ jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
+    useScrollToTop: jest.fn(),
     useNavigation: () => ({
       navigate: mockNavigate,
       goBack: jest.fn(),
@@ -131,6 +132,7 @@ jest.mock('../../../src/components', () => {
   const actual = jest.requireActual('../../../src/components');
   return {
     ...actual,
+    useScrollToTop: jest.fn(),
     CustomAlert: () => null,
   };
 });

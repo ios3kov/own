@@ -1,3 +1,4 @@
+import { reportModelLoad, useModelLoadStore } from '../stores/modelLoadStore';
 import { initLlama,LlamaContext } from 'llama.rn';
 import RNFS from 'react-native-fs';
 import { APP_CONFIG } from '../constants';
@@ -80,13 +81,15 @@ export async function initContextWithFallback(
   contextLength: number,
   nGpuLayers: number,
 ): Promise<ContextInitResult> {
+  const ticket=useModelLoadStore.getState().ticket;
+  const onProgress=(progress:number)=>reportModelLoad(ticket, progress>=100?'Preparing runtime':'Loading model file',progress>=100?null:progress);
   const modelPath = (params as any).model || 'unknown';
   logger.log(`[LLM] initContextWithFallback: model=${modelPath}, ctx=${contextLength}, gpuLayers=${nGpuLayers}`);
   const fallbackLength = Math.min(contextLength, 2048);
   let gpuAttemptFailed = false;
   try {
     logger.log(`[LLM] Attempt 1/3: GPU init (ctx=${contextLength}, gpu_layers=${nGpuLayers})`);
-    const gpuInitPromise = initLlama({ ...params, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any);
+    const gpuInitPromise = initLlama({ ...params, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any, onProgress);
     const context = await gpuInitPromise;
     logger.log('[LLM] GPU init succeeded');
     return { context, gpuAttemptFailed, actualLength: contextLength };
@@ -103,7 +106,7 @@ export async function initContextWithFallback(
       // A CPU retry must not request accelerator devices.
       const cpuParams = { ...(params as Record<string, unknown>) };
       delete cpuParams.devices;
-      const context = await initLlama({ ...cpuParams, n_ctx: contextLength, n_gpu_layers: 0 } as any);
+      const context = await initLlama({ ...cpuParams, n_ctx: contextLength, n_gpu_layers: 0 } as any, onProgress);
       logger.log('[LLM] CPU init succeeded');
       return { context, gpuAttemptFailed, actualLength: contextLength };
     } catch (cpuError: any) {
@@ -113,7 +116,7 @@ export async function initContextWithFallback(
         logger.log(`[LLM] Attempt 3/3: CPU init (ctx=${fallbackLength}, gpu_layers=0)`);
         const cpuMinParams = { ...(params as Record<string, unknown>) };
         delete cpuMinParams.devices;
-        const context = await initLlama({ ...cpuMinParams, n_ctx: fallbackLength, n_gpu_layers: 0 } as any);
+        const context = await initLlama({ ...cpuMinParams, n_ctx: fallbackLength, n_gpu_layers: 0 } as any, onProgress);
         logger.log(`[LLM] CPU init with ctx=${fallbackLength} succeeded`);
         return { context, gpuAttemptFailed, actualLength: fallbackLength };
       } catch (finalError: any) {

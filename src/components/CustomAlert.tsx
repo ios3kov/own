@@ -60,6 +60,7 @@ export const CustomAlert: React.FC<CustomAlertProps> = ({
           {buttons.map((button, index) => (
             <TouchableOpacity
               key={index}
+              accessibilityRole="button" accessibilityLabel={button.text}
               style={[
                 styles.button,
                 button.style === 'destructive' && styles.destructiveButton,

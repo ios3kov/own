@@ -1,3 +1,4 @@
+import { ModelLoadProgress } from '../ModelLoadProgress';
 import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
@@ -206,6 +207,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({
         {isAnyLoading && (
           <View style={styles.loadingBanner}>
             <ActivityIndicator size="small" color={colors.primary} />
+          <ModelLoadProgress />
             <Text style={styles.loadingText}>Loading model...</Text>
           </View>
         )}

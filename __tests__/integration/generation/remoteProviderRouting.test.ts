@@ -78,12 +78,6 @@ jest.mock('../../../src/services/tools', () => ({
   executeToolCall: jest.fn(),
 }));
 
-// Mock sharePrompt
-jest.mock('../../../src/utils/sharePrompt', () => ({
-  shouldShowSharePrompt: jest.fn(() => false),
-  emitSharePrompt: jest.fn(),
-}));
-
 describe('Generation Service Provider Routing', () => {
   beforeEach(() => {
     jest.clearAllMocks();

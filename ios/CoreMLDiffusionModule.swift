@@ -54,7 +54,7 @@ class CoreMLDiffusionModule: RCTEventEmitter {
   override static func requiresMainQueueSetup() -> Bool { false }
 
   override func supportedEvents() -> [String]! {
-    ["OwnImageProgress", "OwnImageError"]
+    ["OwnImageProgress", "OwnImageError", "OwnImageLoadProgress"]
   }
 
   // MARK: - SDXL detection
@@ -134,6 +134,7 @@ class CoreMLDiffusionModule: RCTEventEmitter {
       do {
         let url = URL(fileURLWithPath: modelPath)
 
+        self.sendEvent(withName: "OwnImageLoadProgress", body: ["modelPath": modelPath, "phase": "Checking model files"])
         // Validate model files exist before attempting to load
         let isXL = Self.isXLModelDirectory(at: url)
         if let validationError = Self.validateModelDirectory(at: url) {
@@ -148,6 +149,7 @@ class CoreMLDiffusionModule: RCTEventEmitter {
         // cpuAndGPU fallback lets low-memory devices avoid ANE compilation overhead.
         config.computeUnits = cpuOnly ? .cpuAndGPU : .cpuAndNeuralEngine
 
+        self.sendEvent(withName: "OwnImageLoadProgress", body: ["modelPath": modelPath, "phase": "Preparing CoreML pipeline"])
         let pipe: StableDiffusionPipelineProtocol
 
         if isXL {
@@ -172,6 +174,7 @@ class CoreMLDiffusionModule: RCTEventEmitter {
         // With reduceMemory=true the pipeline lazily loads each submodel during
         // generateImages(), so prewarming is unnecessary.
         if attentionVariant != "original" {
+          self.sendEvent(withName: "OwnImageLoadProgress", body: ["modelPath": modelPath, "phase": "Preparing CoreML components"])
           try pipe.loadResources()
         }
 
@@ -235,6 +238,13 @@ class CoreMLDiffusionModule: RCTEventEmitter {
     // TextEncoder.encode(ids:) to force-unwrap a nil value and crash.
     guard !prompt.isEmpty else {
       reject("ERR_INVALID_PROMPT", "Prompt cannot be empty", nil)
+      return
+    }
+
+    let width = params["width"] as? Int ?? 512
+    let height = params["height"] as? Int ?? 512
+    guard (128...1024).contains(width), (128...1024).contains(height) else {
+      reject("ERR_INVALID_SIZE", "Output dimensions must be between 128 and 1024 pixels.", nil)
       return
     }
 
@@ -308,7 +318,14 @@ class CoreMLDiffusionModule: RCTEventEmitter {
         try FileManager.default.createDirectory(at: generatedDir, withIntermediateDirectories: true)
 
         let imagePath = generatedDir.appendingPathComponent("\(imageId).png")
-        let uiImage = UIImage(cgImage: cgImage)
+        // CoreML model tensor sizes are fixed. Apply the selected export size
+        // after native inference; settings must not promise faster inference.
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
+        let uiImage = renderer.image { _ in
+          UIImage(cgImage: cgImage).draw(in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
         guard let pngData = uiImage.pngData() else {
           reject("ERR_ENCODE", "Failed to encode image as PNG", nil)
           return
@@ -325,8 +342,8 @@ class CoreMLDiffusionModule: RCTEventEmitter {
         resolve([
           "id": imageId,
           "imagePath": imagePath.path,
-          "width": cgImage.width,
-          "height": cgImage.height,
+          "width": width,
+          "height": height,
           "seed": seed
         ] as [String: Any])
 
@@ -410,6 +427,10 @@ class CoreMLDiffusionModule: RCTEventEmitter {
   @objc func deleteGeneratedImage(_ imageId: String,
                                   resolver resolve: @escaping RCTPromiseResolveBlock,
                                   rejecter reject: @escaping RCTPromiseRejectBlock) {
+    guard imageId.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil else {
+      reject("ERR_INVALID_IMAGE", "Invalid image identifier.", nil)
+      return
+    }
     guard let docsDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
       reject("ERR_NO_DOCS_DIR", "Could not locate documents directory", nil)
       return
@@ -418,6 +439,8 @@ class CoreMLDiffusionModule: RCTEventEmitter {
       .appendingPathComponent("generated_images")
       .appendingPathComponent("\(imageId).png")
 
+    // A missing file is already deleted; allow removal of its stale thumbnail.
+    if !FileManager.default.fileExists(atPath: imagePath.path) { resolve(true); return }
     do {
       try FileManager.default.removeItem(at: imagePath)
       resolve(true)

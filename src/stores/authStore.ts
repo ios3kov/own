@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AuthState {
+  biometricEnabled: boolean;
+  setBiometricEnabled: (enabled: boolean) => void;
   isEnabled: boolean;
   isLocked: boolean;
   failedAttempts: number;
@@ -25,6 +27,8 @@ const LOCKOUT_DURATION = 5 * 60 * 1000; // 5 minutes in milliseconds
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
+      biometricEnabled: false,
+      setBiometricEnabled: (enabled) => set({ biometricEnabled: enabled }),
       isEnabled: false,
       isLocked: true, // Always start locked if enabled
       failedAttempts: 0,
@@ -32,7 +36,7 @@ export const useAuthStore = create<AuthState>()(
       lastBackgroundTime: null,
 
       setEnabled: (enabled) => {
-        set({ isEnabled: enabled, isLocked: enabled });
+        set({ isEnabled: enabled, isLocked: enabled, ...(!enabled ? { biometricEnabled: false } : {}) });
       },
 
       setLocked: (locked) => {
@@ -89,6 +93,7 @@ export const useAuthStore = create<AuthState>()(
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         isEnabled: state.isEnabled,
+        biometricEnabled: state.biometricEnabled,
         failedAttempts: state.failedAttempts,
         lockoutUntil: state.lockoutUntil,
       }),

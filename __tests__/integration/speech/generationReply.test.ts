@@ -7,8 +7,6 @@ import { useChatStore } from '../../../src/stores/chatStore';
 import { resetStores,setupWithActiveModel,setupWithConversation } from '../../utils/testHelpers';
 
 jest.mock('../../../src/services/llm');
-
-jest.mock('../../../src/utils/sharePrompt', () => ({shouldShowSharePrompt: () => false, emitSharePrompt: jest.fn()}));
 const tick = async () => { for (let i = 0; i < 12; i += 1) await Promise.resolve(); };
 
 describe('generation to local spoken replies', () => {

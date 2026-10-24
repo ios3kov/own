@@ -26,6 +26,7 @@ jest.mock('react-native-image-picker', () => ({
 const mockPick = jest.fn();
 const mockIsErrorWithCode = jest.fn(() => false);
 jest.mock('@react-native-documents/picker', () => ({
+  keepLocalCopy: jest.fn(async ({files}: any) => files.map((file:any)=>({status:'success',localUri:`file:///mock/documents/${encodeURIComponent(file.fileName)}`}))),
   get pick() { return mockPick; },
   get isErrorWithCode() { return mockIsErrorWithCode; },
   types: { allFiles: '*/*' },
@@ -541,7 +542,7 @@ describe('ChatInput', () => {
       const result = render(<ChatInput {...defaultProps} supportsVision={false} />);
       openAttachPicker(result);
       expect(ActionSheetIOS.showActionSheetWithOptions).toHaveBeenLastCalledWith(
-        {options:['Document','Cancel'],cancelButtonIndex:1},expect.any(Function));
+        {options:['Document','Read text from photo','Audio recording','Cancel'],cancelButtonIndex:3},expect.any(Function));
     });
 
     it('opens image picker when pressing photo with vision support', () => {
@@ -1793,60 +1794,14 @@ describe('ChatInput', () => {
   // ============================================================================
   // Icon collapse animation (triggered by text content)
   // ============================================================================
-  describe('icon collapse animation', () => {
-    it('starts Animated.timing to collapse when text is entered', () => {
-      const timingSpy = jest.spyOn(require('react-native').Animated, 'timing');
-      const { getByTestId } = render(<ChatInput {...defaultProps} />);
-
-      fireEvent.changeText(getByTestId('chat-input'), 'a');
-
-      expect(timingSpy).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.objectContaining({ toValue: 1 }),
-      );
-      timingSpy.mockRestore();
-    });
-
-    it('starts Animated.timing to expand when text is cleared', () => {
-      const timingSpy = jest.spyOn(require('react-native').Animated, 'timing');
-      const { getByTestId } = render(<ChatInput {...defaultProps} />);
-
-      fireEvent.changeText(getByTestId('chat-input'), 'a');
-      timingSpy.mockClear();
-      fireEvent.changeText(getByTestId('chat-input'), '');
-
-      expect(timingSpy).toHaveBeenCalledWith(
-        expect.any(Object),
-        expect.objectContaining({ toValue: 0 }),
-      );
-      timingSpy.mockRestore();
-    });
-
-    it('disables pointer events on pill icons when text is present', () => {
-      const { getByTestId, UNSAFE_queryAllByProps } = render(
-        <ChatInput {...defaultProps} />
-      );
-
-      // Before typing, icons should be interactive
-      expect(getByTestId('attach-button')).toBeTruthy();
-
-      fireEvent.changeText(getByTestId('chat-input'), 'hello');
-
-      // After typing, the Animated.View wrapping icons should have pointerEvents='none'
-      const pointerNoneViews = UNSAFE_queryAllByProps({ pointerEvents: 'none' });
-      expect(pointerNoneViews.length).toBeGreaterThan(0);
-    });
-
-    it('re-enables pointer events on pill icons when text is cleared', () => {
-      const { getByTestId, UNSAFE_queryAllByProps } = render(
-        <ChatInput {...defaultProps} />
-      );
-
-      fireEvent.changeText(getByTestId('chat-input'), 'hello');
-      fireEvent.changeText(getByTestId('chat-input'), '');
-
-      const pointerNoneViews = UNSAFE_queryAllByProps({ pointerEvents: 'none' });
-      expect(pointerNoneViews.length).toBe(0);
+  describe('persistent composer actions', () => {
+    it('keeps attachment and options usable after typing', () => {
+      const {getByTestId,getByLabelText}=render(<ChatInput {...defaultProps}/>);
+      fireEvent.changeText(getByTestId('chat-input'),'Draft with an attachment');
+      expect(getByLabelText('Add attachment').props.disabled).toBeFalsy();
+      fireEvent.press(getByLabelText('Chat options'));
+      expect(getByTestId('quick-image-mode')).toBeTruthy();
+      expect(getByTestId('chat-input').props.value).toBe('Draft with an attachment');
     });
 
     it('icons remain accessible when input is empty', () => {

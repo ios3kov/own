@@ -193,10 +193,10 @@ export const ImageGenerationSection: React.FC = () => {
 
       <View style={styles.sliderSection}>
         <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Image Size</Text>
+          <Text style={styles.sliderLabel}>Saved Image Size</Text>
           <Text style={styles.sliderValue}>{settings?.imageWidth ?? 256}x{settings?.imageHeight ?? 256}</Text>
         </View>
-        <Text style={styles.sliderDesc}>Output resolution (smaller = faster, larger = more detail)</Text>
+        <Text style={styles.sliderDesc}>Export size. The model renders at its native resolution; larger exports do not add detail.</Text>
         <Slider
           style={styles.slider}
           minimumValue={128}

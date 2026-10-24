@@ -33,6 +33,7 @@ jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
+    useScrollToTop: jest.fn(),
     useNavigation: () => ({
       navigate: mockNavigate,
       goBack: jest.fn(),
@@ -328,7 +329,7 @@ describe('ModelsScreen', () => {
       const { getByText } = renderModelsScreen();
 
       await waitFor(() => {
-        expect(getByText('Recommended for your device')).toBeTruthy();
+        expect(getByText('Start here')).toBeTruthy();
       });
     });
 
@@ -337,7 +338,7 @@ describe('ModelsScreen', () => {
 
       await waitFor(() => {
         // The banner shows "XGB RAM — models up to YB recommended (Q4_K_M)"
-        expect(getByText(/\d+GB RAM/)).toBeTruthy(); // NOSONAR — regex matches short rendered UI strings, not user input; ReDoS not applicable
+        expect(getByText(/\d+ GB memory/)).toBeTruthy(); // NOSONAR — regex matches short rendered UI strings, not user input; ReDoS not applicable
       });
     });
 
@@ -997,7 +998,7 @@ describe('ModelsScreen', () => {
 
       await waitFor(() => {
         expect(getByText('Available Files')).toBeTruthy();
-        expect(getByText(/Choose a quantization/)).toBeTruthy();
+        expect(getByText(/Start with the suggested file/)).toBeTruthy();
       });
     });
 
@@ -1339,7 +1340,7 @@ describe('ModelsScreen', () => {
 
       // Should show recommended models again
       await waitFor(() => {
-        expect(getByText('Recommended for your device')).toBeTruthy();
+        expect(getByText('Start here')).toBeTruthy();
       });
     });
 
@@ -2473,7 +2474,7 @@ describe('ModelsScreen', () => {
       const { getByText, getByTestId, getAllByText } = renderModelsScreen();
 
       await waitFor(() => {
-        expect(getByText(/Recommended for your device/)).toBeTruthy();
+        expect(getByText(/Start here/)).toBeTruthy();
       });
 
       // Open filter bar
@@ -2504,7 +2505,7 @@ describe('ModelsScreen', () => {
       const { getByText } = renderModelsScreen();
 
       await waitFor(() => {
-        expect(getByText(/Recommended for your device/)).toBeTruthy();
+        expect(getByText(/Start here/)).toBeTruthy();
       });
 
       mockSearchModels.mockClear();
@@ -2514,7 +2515,7 @@ describe('ModelsScreen', () => {
       expect(mockSearchModels).not.toHaveBeenCalled();
       // Should still show recommended section
       await waitFor(() => {
-        expect(getByText(/Recommended for your device/)).toBeTruthy();
+        expect(getByText(/Start here/)).toBeTruthy();
       });
     });
 
@@ -2522,7 +2523,7 @@ describe('ModelsScreen', () => {
       const { getByText, getByTestId } = renderModelsScreen();
 
       await waitFor(() => {
-        expect(getByText(/Recommended for your device/)).toBeTruthy();
+        expect(getByText(/Start here/)).toBeTruthy();
       });
 
       // Open filter bar

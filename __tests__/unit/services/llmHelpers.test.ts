@@ -367,8 +367,7 @@ describe('initContextWithFallback — accelerator removal on CPU retry', () => {
     await initContextWithFallback(baseParams, 2048, 99);
 
     expect(mockedInitLlama).toHaveBeenCalledWith(
-      expect.objectContaining({ devices: ['Metal'], n_gpu_layers: 99 }),
-    );
+      expect.objectContaining({ devices: ['Metal'], n_gpu_layers: 99 }), expect.any(Function));
   });
 
   it('strips devices from params on CPU fallback (attempt 2)', async () => {

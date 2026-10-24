@@ -1,3 +1,4 @@
+import { runImageFinalization, isImageFinalizing } from './imageFinalization';
 import { requestDownloadConsent,type ModelDownloadPlan } from '../../services/downloadConsent';
 /**
  * Standalone async image download handlers - no hooks.
@@ -172,7 +173,7 @@ export async function registerAndNotify(
   // Auto-load the first image model unless the onboarding spotlight flow is
   // still active - Step 13 needs activeImageModelId to be null so the
   // "Load your image model" spotlight can fire on HomeScreen.
-  if (!deps.activeImageModelId && deps.triedImageGen) deps.setActiveImageModelId(imageModel.id);
+  // Download completion never selects or loads a large model. The user chooses when to load it.
   removeStoreEntry(imageModel.id);
   deps.setAlertState(showAlert('Success', `${modelName} downloaded successfully!`));
 }
@@ -220,7 +221,7 @@ function wireZipListeners(
   const { downloadId, deps } = ctx;
   const unsubComplete = backgroundDownloadService.onComplete(downloadId, async () => {
     unsubComplete(); unsubError();
-    try { await onCompleteWork(); } catch (e: any) {
+    try { await runImageFinalization(ctx.modelId, onCompleteWork); } catch (e: any) {
       deps.setAlertState(showAlert('Download Failed', getUserFacingDownloadMessage(e?.message || 'Failed to process model')));
       useDownloadStore.getState().setStatus(downloadId, 'failed', { message: e?.message || 'Failed to process model' });
     }
@@ -234,7 +235,11 @@ function wireZipListeners(
 }
 
 /** HuggingFace multi-file download. Each file goes through downloadFileTo sequentially. */
-export async function downloadHuggingFaceModel(
+export async function downloadHuggingFaceModel(modelInfo: ImageModelDescriptor, deps: ImageDownloadDeps): Promise<void> {
+  return runImageFinalization(modelInfo.id, () => downloadHuggingFaceModelImpl(modelInfo, deps));
+}
+
+async function downloadHuggingFaceModelImpl(
   modelInfo: ImageModelDescriptor,
   deps: ImageDownloadDeps,
 ): Promise<void> {
@@ -296,7 +301,11 @@ export async function downloadHuggingFaceModel(
 }
 
 /** CoreML multi-file download (one file per blob in coremlFiles). */
-export async function downloadCoreMLMultiFile(
+export async function downloadCoreMLMultiFile(modelInfo: ImageModelDescriptor, deps: ImageDownloadDeps): Promise<void> {
+  return runImageFinalization(modelInfo.id, () => downloadCoreMLMultiFileImpl(modelInfo, deps));
+}
+
+async function downloadCoreMLMultiFileImpl(
   modelInfo: ImageModelDescriptor,
   deps: ImageDownloadDeps,
 ): Promise<void> {
@@ -368,8 +377,8 @@ export async function proceedWithDownload(
       files.push({size: null, url: `https://huggingface.co/${modelInfo.repo}/resolve/main/${file}`});
     }
   }
+  if (isImageFinalizing(modelInfo.id)) return;
   if (!(await requestDownloadConsent({name: modelInfo.name, files}))) return;
-  deps.setAlertState({ ...showAlert('Download Started', 'Keep app open while image model processes'), closeLabel: '' });
   if (modelInfo.huggingFaceRepo && modelInfo.huggingFaceFiles) {
     await downloadHuggingFaceModel(modelInfo, deps);
     return;

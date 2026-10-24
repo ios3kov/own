@@ -102,8 +102,6 @@ interface AppState {
   imageGenerationCount: number;
   incrementTextGenerationCount: () => number;
   incrementImageGenerationCount: () => number;
-  hasEngagedSharePrompt: boolean;
-  setHasEngagedSharePrompt: (v: boolean) => void;
   // PRO pre-order state
   hasRegisteredPro: boolean;
   setHasRegisteredPro: (v: boolean) => void;
@@ -293,8 +291,6 @@ export const useAppStore = create<AppState>()(
       imageGenerationCount: 0,
       incrementTextGenerationCount: () => { const c = get().textGenerationCount + 1; set({ textGenerationCount: c }); return c; },
       incrementImageGenerationCount: () => { const c = get().imageGenerationCount + 1; set({ imageGenerationCount: c }); return c; },
-      hasEngagedSharePrompt: false,
-      setHasEngagedSharePrompt: (v) => set({ hasEngagedSharePrompt: v }),
       hasRegisteredPro: false,
       setHasRegisteredPro: (v) => set({ hasRegisteredPro: v }),
       proBannerDismissed: false,
@@ -321,7 +317,6 @@ export const useAppStore = create<AppState>()(
         generatedImages: state.generatedImages,
         shownSpotlights: state.shownSpotlights,
         textGenerationCount: state.textGenerationCount, imageGenerationCount: state.imageGenerationCount,
-        hasEngagedSharePrompt: state.hasEngagedSharePrompt,
         hasRegisteredPro: state.hasRegisteredPro,
         proBannerDismissed: state.proBannerDismissed,
         proAhaTriggeredBy: state.proAhaTriggeredBy,

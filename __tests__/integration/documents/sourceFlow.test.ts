@@ -11,7 +11,6 @@ import { resolveDocumentSource } from '../../../src/services/documentSourceFile'
 jest.mock('../../../src/services/llm');
 
 jest.mock('../../../src/services/rag', () => ({ragService:{searchProject:jest.fn(),getDocumentsByProject:jest.fn()}}));
-jest.mock('../../../src/utils/sharePrompt', () => ({shouldShowSharePrompt:()=>false,emitSharePrompt:jest.fn()}));
 const chunks = [{doc_id:7,name:'Notes.txt',position:2,content:'The original passage.',score:1}];
 describe('retrieved document references', () => {
   beforeEach(() => {

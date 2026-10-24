@@ -1,3 +1,4 @@
+import { useScrollToTop } from '@react-navigation/native';
 import { FoundationModelCard } from '../../components/FoundationModelCard';
 import { useFoundationStore, APPLE_MODEL_ID } from '../../services/foundationModels';
 import { useAppStore } from '../../stores/appStore';
@@ -26,6 +27,8 @@ type HomeScreenProps = {
 };
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
+  const scrollRef = React.useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const focusTrigger = useFocusTrigger();
   const appleAvailable = useFoundationStore(s => s.availability.available);
   const appleSelected = useAppStore(s => s.activeModelId === APPLE_MODEL_ID);
@@ -80,7 +83,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View testID="home-screen" style={styles.scrollView}>
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        <ScrollView ref={scrollRef} style={styles.scrollView} contentContainerStyle={styles.content}>
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Text style={styles.title}>Own</Text>
@@ -165,6 +168,9 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
 
           {/* Image Gallery */}
           <AnimatedPressable
+            testID="open-gallery"
+            accessibilityRole="button"
+            accessibilityLabel="Image Gallery"
             style={styles.galleryCard}
             onPress={() => navigation.navigate('Gallery')}
             hapticType="selection"

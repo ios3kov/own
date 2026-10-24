@@ -22,6 +22,7 @@ buildEnhancementMessages,
 getConversationContext,
 cleanEnhancedPrompt,
 buildImageGenMeta,
+needsImagePromptTranslation,
 } from '../../../src/services/imageGenerationHelpers';
 
 const mockGetState = useChatStore.getState as jest.Mock;
@@ -180,4 +181,17 @@ describe('buildImageGenMeta', () => {
   });
 
 
+});
+
+
+describe('image language preparation', () => {
+  it('detects Cyrillic and preserves an English request', () => {
+    expect(needsImagePromptTranslation('Нарисуй собачку')).toBe(true);
+    expect(needsImagePromptTranslation('A small puppy')).toBe(false);
+  });
+  it('keeps translation separate from optional artistic improvement', () => {
+    const messages=buildEnhancementMessages('Нарисуй собачку', [], false);
+    expect(messages[0].content).toContain('Do not add artistic details');
+    expect(messages[1].content).toContain('Нарисуй собачку');
+  });
 });

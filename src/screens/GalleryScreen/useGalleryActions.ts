@@ -83,9 +83,14 @@ export const useGalleryActions = (conversationId: string | undefined) => {
   const handleDelete = useCallback((image: GeneratedImage) => {
     const doDelete = async () => {
       setAlertState(hideAlert());
-      await coreMLImageGeneratorService.deleteGeneratedImage(image.id);
-      removeGeneratedImage(image.id);
-      if (selectedImage?.id === image.id) setSelectedImage(null);
+      try {
+        const removed = await coreMLImageGeneratorService.deleteGeneratedImage(image.id);
+        if (removed === false) throw new Error('The image file could not be deleted.');
+        removeGeneratedImage(image.id);
+        if (selectedImage?.id === image.id) setSelectedImage(null);
+      } catch {
+        setAlertState(showAlert('Could not delete image', 'Your image is still in the gallery. Please try again.'));
+      }
     };
     setAlertState(showAlert(
       'Delete Image',
@@ -135,8 +140,14 @@ export const useGalleryActions = (conversationId: string | undefined) => {
             const doDeleteSelected = async () => {
               setAlertState(hideAlert());
               for (const imageId of selectedIds) {
-                await coreMLImageGeneratorService.deleteGeneratedImage(imageId);
-                removeGeneratedImage(imageId);
+                try {
+                  const removed = await coreMLImageGeneratorService.deleteGeneratedImage(imageId);
+                  if (removed === false) throw new Error('Delete failed');
+                  removeGeneratedImage(imageId);
+                } catch {
+                  setAlertState(showAlert('Could not delete all images', 'Some images could not be deleted. They remain in the gallery. Please try again.'));
+                  return;
+                }
               }
               setSelectedIds(new Set());
               setIsSelectMode(false);

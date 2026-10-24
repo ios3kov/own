@@ -6,6 +6,10 @@ describe('saved local document paths',()=>{
     expect(localDocumentPath(`file://${old}/Documents/My%20notes%3F.txt`)).toBe('/mock/documents/My notes?.txt');
     expect(localDocumentPath(`${old}/Library/Caches/one.txt`)).toBe('/mock/caches/one.txt');
   });
+  it('does not relocate a newly picked external container',()=>{
+    expect(localDocumentPath(`file://${old}/Documents/Other%20notes.txt`,false)).toBe(`${old}/Documents/Other notes.txt`);
+    expect(localDocumentPath('/mock/documents/100% ready.txt',false)).toBe('/mock/documents/100% ready.txt');
+  });
   it('does not guess by filename or a loose Documents suffix',()=>{
     expect(localDocumentPath('/local/Documents/one.txt')).toBe('/local/Documents/one.txt');
     expect(localDocumentPath(`${old}/Documents2/one.txt`)).toBe(`${old}/Documents2/one.txt`);

@@ -334,13 +334,20 @@ class WhisperService {
       throw new Error('No Whisper model loaded');
     }
 
-    const { promise } = this.context.transcribe(filePath, {
-      language: options?.language || 'en',
-      onProgress: options?.onProgress,
-    });
-
-    const { result } = await promise;
-    return result;
+    if (this.isTranscribing) throw new Error('Another transcription is running. Stop it before importing audio.');
+    this.isTranscribing = true;
+    try {
+      const { promise, stop } = this.context.transcribe(filePath, {
+        language: options?.language || 'auto', onProgress: options?.onProgress,
+      });
+      this.stopFn = stop;
+      this.transcriptionFullyStopped = promise.then(() => {}, () => {});
+      const { result } = await promise;
+      return result;
+    } finally {
+      this.stopFn = null;
+      this.isTranscribing = false;
+    }
   }
 }
 

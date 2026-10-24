@@ -276,8 +276,8 @@ describe('ChatScreen Spotlight Integration', () => {
       renderChatScreen();
 
       act(() => { jest.advanceTimersByTime(800); });
-      expect(mockGoTo).toHaveBeenCalledWith(16);
-      expect(useAppStore.getState().shownSpotlights.imageSettings).toBe(true);
+      expect(mockGoTo).not.toHaveBeenCalledWith(16);
+      expect(useAppStore.getState().shownSpotlights.imageSettings).toBeFalsy();
     });
 
     it('does NOT fire when no images generated', () => {

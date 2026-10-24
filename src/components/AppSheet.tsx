@@ -314,7 +314,7 @@ export const AppSheet: React.FC<AppSheetProps> = ({
               <Text style={styles.headerTitle} numberOfLines={1}>
                 {title}
               </Text>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={closeLabel}
                 onPress={onHeaderClosePress || dismiss}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >

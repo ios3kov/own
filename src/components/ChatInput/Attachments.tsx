@@ -8,6 +8,7 @@ import { MediaAttachment } from '../../types';
 import { documentService } from '../../services/documentService';
 import { AlertState,showAlert } from '../CustomAlert';
 import { createStyles } from './styles';
+import { resolvePickedFileUri } from '../../utils/resolvePickedFileUri';
 import { isPickerStuck } from '../../utils/pickerErrorUtils';
 
 let _attachmentIdSeq = 0;
@@ -18,6 +19,7 @@ const nextAttachmentId = () => `${Date.now()}-${(++_attachmentIdSeq).toString(36
 export function useAttachments(setAlertState: (state: AlertState) => void) {
   const [attachments, setAttachments] = useState<MediaAttachment[]>([]);
   const isPickingRef = useRef(false);
+  const [processingAttachment, setProcessingAttachment] = useState(false);
 
   const addAttachments = (assets: Asset[]) => {
     const newAttachments: MediaAttachment[] = assets
@@ -71,6 +73,7 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
   const handlePickDocument = async () => {
     if (isPickingRef.current) return;
     isPickingRef.current = true;
+    setProcessingAttachment(true);
     try {
       const result = await pick({ type: [types.allFiles], allowMultiSelection: false });
       const file = result[0];
@@ -79,12 +82,13 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
       if (!documentService.isSupported(fileName)) {
         setAlertState(showAlert(
           'Unsupported File',
-          `"${fileName}" is not supported. Supported types: txt, md, csv, json, pdf, and code files.`,
+          `"${fileName}" is not supported. Supported: documents, CSV/XLSX, photos for text recognition, and WAV/M4A/MP3 audio.`,
           [{ text: 'OK' }],
         ));
         return;
       }
-      const attachment = await documentService.processDocumentFromPath(file.uri, fileName);
+      const localPath = await resolvePickedFileUri(file.uri, fileName);
+      const attachment = await documentService.processDocumentFromPath(localPath, fileName);
       if (attachment) setAttachments(prev => [...prev, attachment]);
     } catch (pickError: any) {
       if (isErrorWithCode(pickError) && pickError.code === errorCodes.OPERATION_CANCELED) return;
@@ -99,12 +103,27 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
       setAlertState(showAlert('Error', pickError.message || 'Failed to read document', [{ text: 'OK' }]));
     } finally {
       isPickingRef.current = false;
+      setProcessingAttachment(false);
     }
+  };
+
+  const handleReadPhoto = async () => {
+    if (isPickingRef.current) return;
+    isPickingRef.current = true;
+    setProcessingAttachment(true);
+    try {
+      const result = await launchImageLibrary({ mediaType: 'photo', quality: 1, maxWidth: 3000, maxHeight: 3000 });
+      const asset = result.assets?.[0];
+      if (!asset?.uri) return;
+      const attachment = await documentService.processDocumentFromPath(asset.uri, asset.fileName || 'Photo.jpg');
+      if (attachment) setAttachments(previous => [...previous, attachment]);
+    } catch (error: any) { setAlertState(showAlert('Could not read photo', error.message, [{ text: 'OK' }])); }
+    finally { isPickingRef.current = false; setProcessingAttachment(false); }
   };
 
   const clearAttachments = () => setAttachments([]);
 
-  return { attachments, removeAttachment, clearAttachments, handlePickImage, handlePickDocument };
+  return { attachments, removeAttachment, clearAttachments, handlePickImage, handlePickDocument, handleReadPhoto, processingAttachment };
 }
 
 // ─── AttachmentPreview component ─────────────────────────────────────────────

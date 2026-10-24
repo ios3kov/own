@@ -30,7 +30,9 @@ export const popoverStyles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  closeButton: {minHeight:44,minWidth:44,alignItems:'center',justifyContent:'center'},
   row: {
+    minHeight:44,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
@@ -113,16 +115,23 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
-      <TouchableWithoutFeedback onPress={onClose}>
+      <TouchableWithoutFeedback accessible={false} onPress={onClose}>
         <View style={popoverStyles.overlay}>
-          <TouchableWithoutFeedback>
+          <TouchableWithoutFeedback accessible={false}>
             <View style={[popoverStyles.popover, {
               backgroundColor: colors.surface,
               borderColor: colors.border,
               bottom: anchorY + 8,
               right: anchorX,
             }]}>
+              <View style={popoverStyles.row}>
+                <Text accessibilityRole="header" style={[popoverStyles.rowLabel,{color:colors.text}]}>Chat options</Text>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close chat options" testID="quick-settings-close" onPress={onClose} style={popoverStyles.closeButton}>
+                  <Icon name="x" size={20} color={colors.text}/>
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity
+                accessibilityRole="button" accessibilityLabel="Image generation mode"
                 testID="quick-image-mode"
                 style={popoverStyles.row}
                 onPress={() => { triggerHaptic('impactLight'); onImageModeToggle(); }}
@@ -136,6 +145,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
 
               {supportsThinking && (
                 <TouchableOpacity
+                  accessibilityRole="button" accessibilityLabel="Thinking"
                   testID="quick-thinking-toggle"
                   style={popoverStyles.row}
                   onPress={() => {
@@ -156,6 +166,7 @@ export const QuickSettingsPopover: React.FC<QuickSettingsPopoverProps> = ({
               )}
 
               <TouchableOpacity
+                accessibilityRole="button" accessibilityLabel={supportsToolCalling ? "Tools" : "Tools unavailable for this model"} disabled={!supportsToolCalling}
                 testID="quick-tools"
                 style={popoverStyles.row}
                 onPress={() => {
@@ -200,9 +211,9 @@ export const AttachPickerPopover: React.FC<AttachPickerPopoverProps> = ({
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
-      <TouchableWithoutFeedback onPress={onClose}>
+      <TouchableWithoutFeedback accessible={false} onPress={onClose}>
         <View style={popoverStyles.overlay}>
-          <TouchableWithoutFeedback>
+          <TouchableWithoutFeedback accessible={false}>
             <View style={[popoverStyles.popover, {
               backgroundColor: colors.surface,
               borderColor: colors.border,

@@ -1,3 +1,4 @@
+import { ModelLoadProgress } from '../../components/ModelLoadProgress';
 import { FoundationModelCard } from '../../components/FoundationModelCard';
 import React from 'react';
 import {
@@ -95,6 +96,7 @@ export const LoadingScreen: React.FC<{
       <ActivityIndicator size="large" color={colors.primary} />
       <Text style={styles.loadingText}>Loading {loadingModelName}</Text>
       {modelSize ? <Text style={styles.loadingSubtext}>{modelSize}</Text> : null}
+          <ModelLoadProgress />
       <Text style={styles.loadingHint}>
         Preparing model for inference. This may take a moment for larger models.
       </Text>

@@ -24,6 +24,7 @@ let mockAppState: any = {
   downloadedModels: [],
   activeModelId: null,
   settings: {
+    enabledTools: ['web_search', 'read_url', 'calculator', 'get_current_datetime', 'get_device_info', 'search_knowledge_base'],
     temperature: 0.7,
     maxTokens: 1024,
     topP: 0.9,
@@ -129,7 +130,8 @@ describe('runToolLoop', () => {
       downloadedModels: [],
       activeModelId: null,
       settings: {
-        temperature: 0.7,
+        enabledTools: ['web_search', 'read_url', 'calculator', 'get_current_datetime', 'get_device_info', 'search_knowledge_base'],
+    temperature: 0.7,
         maxTokens: 1024,
         topP: 0.9,
       },
@@ -398,8 +400,8 @@ describe('runToolLoop', () => {
 
     it('stops executing tool calls when aborted mid-iteration', async () => {
       let aborted = false;
-      const tc1 = makeToolCall({ id: 'tc-1', name: 'tool_a' });
-      const tc2 = makeToolCall({ id: 'tc-2', name: 'tool_b' });
+      const tc1 = makeToolCall({ id: 'tc-1', name: 'web_search' });
+      const tc2 = makeToolCall({ id: 'tc-2', name: 'calculator' });
 
       mockExecuteToolCall.mockImplementation(async (call: ToolCall) => {
         if (call.id === 'tc-1') {
@@ -509,12 +511,12 @@ describe('runToolLoop', () => {
       const onToolCallStart = jest.fn();
       const onToolCallComplete = jest.fn();
 
-      const tc1 = makeToolCall({ id: 'tc-1', name: 'tool_a', arguments: { x: 1 } });
-      const tc2 = makeToolCall({ id: 'tc-2', name: 'tool_b', arguments: { y: 2 } });
+      const tc1 = makeToolCall({ id: 'tc-1', name: 'web_search', arguments: { x: 1 } });
+      const tc2 = makeToolCall({ id: 'tc-2', name: 'calculator', arguments: { y: 2 } });
 
       mockExecuteToolCall
-        .mockResolvedValueOnce(makeToolResult({ name: 'tool_a' }))
-        .mockResolvedValueOnce(makeToolResult({ name: 'tool_b' }));
+        .mockResolvedValueOnce(makeToolResult({ name: 'web_search' }))
+        .mockResolvedValueOnce(makeToolResult({ name: 'calculator' }));
 
       mockedGenerateResponseWithTools
         .mockResolvedValueOnce({
@@ -532,8 +534,8 @@ describe('runToolLoop', () => {
       await runToolLoop(ctx);
 
       expect(onToolCallStart).toHaveBeenCalledTimes(2);
-      expect(onToolCallStart).toHaveBeenNthCalledWith(1, 'tool_a', { x: 1 });
-      expect(onToolCallStart).toHaveBeenNthCalledWith(2, 'tool_b', { y: 2 });
+      expect(onToolCallStart).toHaveBeenNthCalledWith(1, 'web_search', { x: 1 });
+      expect(onToolCallStart).toHaveBeenNthCalledWith(2, 'calculator', { y: 2 });
 
       expect(onToolCallComplete).toHaveBeenCalledTimes(2);
     });
@@ -945,7 +947,7 @@ describe('runToolLoop – web search fallback query', () => {
     mockSetStreamingMessage.mockClear();
   });
 
-  it('uses last user message as query when web_search is called with empty args', async () => {
+  it('never substitutes private user text for an empty search query', async () => {
     mockExecuteToolCall.mockResolvedValue({
       toolCallId: 'tc-empty',
       name: 'web_search',
@@ -970,7 +972,7 @@ describe('runToolLoop – web search fallback query', () => {
     // The tool call should have been executed with the user's message as fallback query
     expect(mockExecuteToolCall).toHaveBeenCalledTimes(1);
     const executedCall = mockExecuteToolCall.mock.calls[0][0];
-    expect(executedCall.arguments.query).toBe('What is the weather in Tokyo?');
+    expect(executedCall.arguments.query).toBeUndefined();
   });
 });
 

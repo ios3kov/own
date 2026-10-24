@@ -186,27 +186,18 @@ export interface ToolLoopContext {
 function normalizeStreamChunk(data: StreamChunk): StreamToken {
   return typeof data === 'string' ? { content: data } : data;
 }
-function getLastUserQuery(messages: Message[]): string {
-  for (let i = messages.length - 1; i >= 0; i--)
-    if (messages[i].role === 'user' && messages[i].content.trim()) return messages[i].content.trim();
-  return '';
-}
 async function executeToolCalls(ctx: ToolLoopContext, toolCalls: import('./tools/types').ToolCall[], loopMessages: Message[]): Promise<void> {
   const chatStore = useChatStore.getState();
   for (const tc of toolCalls) {
     if (ctx.isAborted()) break;
-    // Small models often call web_search with empty args — use user's message as fallback
-    if (tc.name === 'web_search' && (!tc.arguments.query || typeof tc.arguments.query !== 'string' || !tc.arguments.query.trim())) {
-      const fallbackQuery = getLastUserQuery(loopMessages);
-      if (fallbackQuery) {
-        logger.log(`[ToolLoop] web_search called with empty query, using user message: "${fallbackQuery.substring(0, 80)}"`);
-        tc.arguments = { ...tc.arguments, query: fallbackQuery };
-      }
-    }
     logger.log(`[ToolLoop][DEBUG] Executing tool: ${tc.name}, args: ${JSON.stringify(tc.arguments).substring(0, 200)}`);
     if (ctx.projectId) tc.context = { projectId: ctx.projectId };
     ctx.callbacks?.onToolCallStart?.(tc.name, tc.arguments);
-    const result = await executeToolCall(tc);
+    const allowed = ctx.enabledToolIds.includes(tc.name)
+      && useAppStore.getState().settings.enabledTools.includes(tc.name);
+    const result: ToolResult = allowed ? await executeToolCall(tc) : {
+      toolCallId: tc.id, name: tc.name, content: '', error: 'This tool is disabled.', durationMs: 0,
+    };
     if (ctx.isAborted()) return;
     ctx.onDocumentSources?.(result.documentSources || []);
     logger.log(`[ToolLoop][DEBUG] Tool ${tc.name} result: error=${result.error || 'none'}, content length=${result.content?.length || 0}, duration=${result.durationMs}ms`);

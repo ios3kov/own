@@ -15,6 +15,11 @@ class PDFExtractor {
     return PDFExtractorModule != null;
   }
 
+  async extractImageText(filePath: string, maxChars = 50000): Promise<string> {
+    if (!PDFExtractorModule?.extractImageText) throw new Error('On-device text recognition is unavailable.');
+    return PDFExtractorModule.extractImageText(filePath, maxChars);
+  }
+
   /**
    * Extract text from a PDF file at the given path.
    * Returns up to maxChars characters of text content.

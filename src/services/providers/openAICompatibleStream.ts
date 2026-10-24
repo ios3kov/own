@@ -114,16 +114,18 @@ function processToolCallChunk(
   tc: NonNullable<DeltaShape['tool_calls']>[0],
   state: OpenAIStreamState,
 ): void {
-  if (tc.id) {
-    state.currentToolCall = { id: tc.id, type: 'function', function: { name: '', arguments: '' } };
-    state.toolCalls.push(state.currentToolCall as OpenAIToolCall);
+  const index = tc.index ?? 0;
+  const calls = state.toolCallsByIndex ??= {};
+  let call = calls[index];
+  if (!call) {
+    call = { id: tc.id || '', type: 'function', function: { name: '', arguments: '' } };
+    calls[index] = call;
+    state.toolCalls.push(call);
   }
-  if (tc.function?.name && state.currentToolCall?.function) {
-    state.currentToolCall.function.name = tc.function.name;
-  }
-  if (tc.function?.arguments && state.currentToolCall?.function) {
-    state.currentToolCall.function.arguments += tc.function.arguments;
-  }
+  if (tc.id) call.id = tc.id;
+  if (tc.function?.name) call.function.name += tc.function.name;
+  if (tc.function?.arguments) call.function.arguments += tc.function.arguments;
+  state.currentToolCall = call;
 }
 
 /**

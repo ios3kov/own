@@ -63,8 +63,8 @@ describe('DocumentService', () => {
       expect(documentService.isSupported('document.docx')).toBe(false);
     });
 
-    it('returns false for .png files', () => {
-      expect(documentService.isSupported('image.png')).toBe(false);
+    it('supports photos for local OCR', () => {
+      expect(documentService.isSupported('image.png')).toBe(true);
     });
 
     it('returns false for files with no extension', () => {

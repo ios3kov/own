@@ -1,3 +1,4 @@
+import { isImageFinalizing } from './imageFinalization';
 import { useState,useCallback,useMemo,useEffect,useRef } from 'react';
 import { AlertState } from '../../components/CustomAlert';
 import { useAppStore } from '../../stores';
@@ -89,6 +90,7 @@ export function useImageModels(setAlertState: (s: AlertState) => void) {
         if (resumingDownloadKeysRef.current.has(entry.modelKey)) continue;
 
         const modelId = entry.modelId.replace('image:', '');
+        if (isImageFinalizing(modelId)) continue;
         if (downloadedIds.has(modelId)) {
           useDownloadStore.getState().remove(entry.modelKey);
           continue;

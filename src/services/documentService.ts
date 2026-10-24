@@ -1,4 +1,6 @@
 import logger from '../utils/logger';
+import { localDocumentPath } from './localDocumentPath';
+import { extractSpecialFile, IMAGE_TEXT_EXTENSIONS, AUDIO_EXTENSIONS } from './localFileContent';
 /**
  * DocumentService - Handles reading and parsing document files
  * Supports: text files, code files, CSV, JSON, PDF, and other text-based formats
@@ -40,7 +42,7 @@ class DocumentService {
     if (extension === PDF_EXTENSION && pdfExtractor.isAvailable()) {
       return true;
     }
-    return TEXT_EXTENSIONS.includes(extension);
+    return TEXT_EXTENSIONS.includes(extension) || extension === '.xlsx' || IMAGE_TEXT_EXTENSIONS.includes(extension) || AUDIO_EXTENSIONS.includes(extension);
   }
 
   /**
@@ -58,14 +60,13 @@ class DocumentService {
 
     // Decode URL-encoded characters (like %20 for spaces) and strip file:// prefix
     // This is critical because RNFS.exists() needs decoded paths, not URL-encoded
-    const decodedUri = decodeURIComponent(uri);
-    const cleanUri = decodedUri.replace(/^file:\/\//, '');
+    const cleanUri = localDocumentPath(uri, false);
     logger.log(`[DocumentService] Decoded and cleaned path: ${cleanUri}`);
     logger.log(`[DocumentService] Documents path: ${documentsPath}`);
 
     // Only skip copying if the file is exactly in our app's Documents directory
     // This must be a precise match to avoid security-scoped URLs from document picker
-    if (cleanUri.startsWith(documentsPath)) {
+    if (cleanUri.startsWith(`${documentsPath}/`)) {
       logger.log(`[DocumentService] File is in app Documents directory, using directly`);
       return cleanUri;
     }
@@ -83,7 +84,7 @@ class DocumentService {
         return tempPath;
       } catch (_copyError) {
         // If direct copy fails, try stripping the file:// prefix
-        const pathWithoutScheme = decodedUri.replace(/^file:\/\//, '');
+        const pathWithoutScheme = cleanUri;
         try {
           await RNFS.copyFile(pathWithoutScheme, tempPath);
           logger.log(`[DocumentService] Copied (fallback) to: ${tempPath}`);
@@ -100,7 +101,7 @@ class DocumentService {
   }
 
   private validateFileType(extension: string, isPdf: boolean): void {
-    if (!isPdf && !TEXT_EXTENSIONS.includes(extension)) {
+    if (!isPdf && !this.isSupported(`file${extension}`)) {
       throw new Error(`Unsupported file type: ${extension}. Supported: txt, md, csv, json, pdf, code files`);
     }
     if (isPdf && !pdfExtractor.isAvailable()) {
@@ -172,12 +173,14 @@ class DocumentService {
 
       const stat = await RNFS.stat(resolvedPath);
       logger.log(`[DocumentService] File size: ${stat.size} bytes`);
-      if (stat.size > MAX_FILE_SIZE) {
-        throw new Error(`File is too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
+      const sizeLimit = AUDIO_EXTENSIONS.includes(extension) ? 100 * 1024 * 1024 : MAX_FILE_SIZE;
+      if (stat.size > sizeLimit) {
+        throw new Error(`File is too large. Maximum size is ${sizeLimit / (1024 * 1024)}MB`);
       }
 
       const maxChars = maxCharsOverride ?? Math.floor((useAppStore.getState().settings.contextLength || APP_CONFIG.maxContextLength) * 4 * 0.5);
-      const textContent = await this.readContent(resolvedPath, isPdf, maxChars);
+      const special = await extractSpecialFile(resolvedPath, extension, maxChars);
+      const textContent = special === null ? await this.readContent(resolvedPath, isPdf, maxChars) : special.slice(0, maxChars);
       const { id, uri } = await this.savePersistentCopy(resolvedPath, filePath, name);
 
       return { id, type: 'document', uri, fileName: name, textContent, fileSize: stat.size };

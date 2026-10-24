@@ -26,6 +26,11 @@ interface LockScreenProps {
 }
 
 export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
+  const [kind, setKind] = useState<'pin' | 'passphrase'>('passphrase');
+  useEffect(() => { authService.getLockKind().then(setKind).catch(() => {}); }, []);
+  const biometricEnabled = useAuthStore(s => s.biometricEnabled);
+  const [biometricName, setBiometricName] = useState<string | null>(null);
+  useEffect(() => { authService.biometricName().then(setBiometricName); }, []);
   const [passphrase, setPassphrase] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
@@ -57,8 +62,9 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   }, [checkLockout, getLockoutRemaining]);
 
   const handleUnlock = useCallback(async () => {
-    if (!passphrase.trim()) {
-      setAlertState(showAlert('Error', 'Please enter your passphrase'));
+    if (isVerifying) return;
+    if (!passphrase.trim() || (kind === 'pin' && !/^[0-9]{4}$/.test(passphrase))) {
+      setAlertState(showAlert('Error', kind === 'pin' ? 'Enter your four-digit PIN.' : 'Enter your current passphrase.'));
       return;
     }
 
@@ -100,7 +106,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
     } finally {
       setIsVerifying(false);
     }
-  }, [passphrase, checkLockout, failedAttempts, recordFailedAttempt, resetFailedAttempts, onUnlock]);
+  }, [passphrase, kind, isVerifying, checkLockout, failedAttempts, recordFailedAttempt, resetFailedAttempts, onUnlock]);
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
@@ -122,7 +128,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
           </View>
           <Text style={styles.title}>App Locked</Text>
           <Text style={styles.subtitle}>
-            Enter your passphrase to unlock
+            {kind === 'pin' ? 'Enter your four-digit PIN' : 'Enter your passphrase to unlock'}
           </Text>
         </View>
 
@@ -138,7 +144,10 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
               style={styles.input}
               value={passphrase}
               onChangeText={setPassphrase}
-              placeholder="Enter passphrase"
+              placeholder={kind === 'pin' ? 'Four-digit PIN' : 'Enter passphrase'}
+              keyboardType={kind === 'pin' ? 'number-pad' : 'default'}
+              maxLength={kind === 'pin' ? 4 : 50}
+              editable={!isVerifying}
               placeholderTextColor={colors.textMuted}
               secureTextEntry
               autoCapitalize="none"
@@ -153,6 +162,14 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
               disabled={isVerifying || !passphrase.trim()}
               style={styles.unlockButton}
             />
+
+            {biometricEnabled && biometricName && <Button title={`Use ${biometricName}`} disabled={isVerifying}
+              onPress={async () => {
+                if (isVerifying || checkLockout()) return;
+                setIsVerifying(true);
+                try { if (await authService.unlockWithBiometrics()) { resetFailedAttempts(); onUnlock(); } }
+                finally { setIsVerifying(false); }
+              }} />}
 
             {failedAttempts > 0 && (
               <Text style={styles.attemptsText}>

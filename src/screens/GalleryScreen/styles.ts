@@ -126,6 +126,11 @@ const createGridStyles = (colors: ThemeColors) => ({
 });
 
 const createViewerStyles = (colors: ThemeColors) => ({
+  alertOverlay: {...StyleSheet.absoluteFillObject,backgroundColor:'rgba(0,0,0,0.7)',justifyContent:'center' as const,padding:24},
+  alertCard: {backgroundColor:colors.surface,borderRadius:16,padding:24,gap:16},
+  alertTitle: {color:colors.text,fontSize:20},
+  alertButton: {minHeight:44,justifyContent:'center' as const},
+  alertButtonText: {fontSize:17},
   viewerContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.95)',
@@ -147,7 +152,10 @@ const createViewerStyles = (colors: ThemeColors) => ({
     flexDirection: 'row' as const,
     position: 'absolute' as const,
     bottom: 60,
-    gap: SPACING.lg + 4,
+    gap: SPACING.sm,
+    flexWrap: 'wrap' as const,
+    justifyContent: 'center' as const,
+    left: SPACING.md, right: SPACING.md,
   },
   viewerButton: {
     alignItems: 'center' as const,

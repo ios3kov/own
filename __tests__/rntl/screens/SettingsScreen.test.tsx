@@ -67,6 +67,7 @@ const mockNavigate = jest.fn();
 const mockDispatch = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
+  useScrollToTop: jest.fn(),
   useNavigation: () => ({
     navigate: mockNavigate,
     getParent: () => ({
@@ -106,7 +107,7 @@ describe('SettingsScreen', () => {
     const { getByText } = render(<SettingsScreen />);
     expect(getByText('System prompt, generation, and performance')).toBeTruthy();
     expect(getByText('Voice input and spoken replies')).toBeTruthy();
-    expect(getByText('Passphrase and app lock')).toBeTruthy();
+    expect(getByText('PIN and biometric app lock')).toBeTruthy();
     expect(getByText('Hardware and compatibility')).toBeTruthy();
     expect(getByText('Models and data usage')).toBeTruthy();
   });

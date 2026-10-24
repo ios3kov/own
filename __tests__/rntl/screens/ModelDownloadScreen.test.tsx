@@ -21,6 +21,7 @@ jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
+    useScrollToTop: jest.fn(),
     useNavigation: () => ({
       navigate: mockNavigate,
       goBack: jest.fn(),
@@ -187,6 +188,7 @@ jest.mock('../../../src/screens/ModelDownloadHelpers', () => {
   const actual = jest.requireActual('../../../src/screens/ModelDownloadHelpers');
   return {
     ...actual,
+    useScrollToTop: jest.fn(),
     NetworkSection: ({ onScanNetwork, onAddManually, onConnectServer, servers, isCheckingNetwork, isScanning }: any) => {
       const { View, Text, TouchableOpacity } = require('react-native');
       // Store refs so tests can call them

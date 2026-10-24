@@ -28,6 +28,9 @@ export const GalleryGridItem: React.FC<GalleryGridItemProps> = ({
   return (
     <AnimatedEntry index={index} staggerMs={40} maxItems={15}>
       <TouchableOpacity
+        testID={`gallery-image-${item.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={`Open image: ${item.prompt}`}
         style={styles.gridItem}
         onPress={onPress}
         onLongPress={onLongPress}

@@ -12,27 +12,9 @@ import { modelManager } from '../modelManager';
 import logger from '../../utils/logger';
 import RNFS from 'react-native-fs';
 
-function isMMProjFile(fileName: string): boolean {
-  const lower = fileName.toLowerCase();
-  if (!lower.endsWith('.gguf')) return false;
-  return (
-    lower.includes('mmproj') ||
-    lower.includes('projector') ||
-    (lower.includes('clip') && lower.includes('vit'))
-  );
-}
-
-async function scanDirForMmProj(modelFilePath: string): Promise<RNFS.ReadDirItem | undefined> {
-  const modelDir = modelFilePath.substring(0, modelFilePath.lastIndexOf('/'));
-  const files = await RNFS.readDir(modelDir);
-  return files.find((f: { name: string; isFile: () => boolean }) =>
-    f.isFile() && isMMProjFile(f.name),
-  );
-}
-
 export async function resolveMmProjPath(
   model: LlamaDownloadedModel,
-  modelId: string,
+  _modelId: string,
 ): Promise<string | undefined> {
   // Fast path: persisted mmProjPath still exists on disk
   if (model.mmProjPath) {
@@ -41,34 +23,9 @@ export async function resolveMmProjPath(
     }
   }
 
-  try {
-    const mmProjFile = await scanDirForMmProj(model.filePath);
-    if (!mmProjFile) {
-      return undefined;
-    }
-
-    const { downloadedModels, setDownloadedModels } = useAppStore.getState();
-    const updatedModels = downloadedModels.map(m => {
-      if (m.id !== modelId) {
-        return m;
-      }
-      return {
-        ...m,
-        mmProjPath: mmProjFile.path,
-        mmProjFileName: mmProjFile.name,
-        mmProjFileSize:
-          typeof mmProjFile.size === 'string'
-            ? Number.parseInt(mmProjFile.size, 10)
-            : mmProjFile.size,
-        isVisionModel: true,
-      };
-    });
-    setDownloadedModels(updatedModels);
-    await modelManager.saveModelWithMmproj(modelId, mmProjFile.path);
-    return mmProjFile.path;
-  } catch {
-    return undefined;
-  }
+  // Never attach an unlinked projector by filename. Compatibility must be
+  // established during an explicit paired download/import.
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------

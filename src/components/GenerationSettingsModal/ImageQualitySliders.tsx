@@ -5,7 +5,7 @@ import { useTheme,useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { createStyles } from './styles';
 
-/** Basic sliders: Image Steps + Image Size */
+/** Basic sliders: Image Steps + Saved Image Size */
 export const ImageQualityBasicSliders: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -40,13 +40,13 @@ export const ImageQualityBasicSliders: React.FC = () => {
 
       <View style={styles.settingGroup}>
         <View style={styles.settingHeader}>
-          <Text style={styles.settingLabel}>Image Size</Text>
+          <Text style={styles.settingLabel}>Saved Image Size</Text>
           <Text style={styles.settingValue}>
             {settings.imageWidth ?? 256}x{settings.imageHeight ?? 256}
           </Text>
         </View>
         <Text style={styles.settingDescription}>
-          Output resolution (smaller = faster, larger = more detail)
+          Export size. The model renders at its native resolution; larger exports do not add detail.
         </Text>
         <Slider
           style={styles.slider}

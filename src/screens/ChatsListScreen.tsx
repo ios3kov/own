@@ -1,4 +1,5 @@
-import React,{ useState,useEffect } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
+import React,{ useState } from 'react';
 import { View,Text,FlatList,TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation,CompositeNavigationProp } from '@react-navigation/native';
@@ -6,9 +7,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import Icon from 'react-native-vector-icons/Feather';
-import { AttachStep,useSpotlightTour } from 'react-native-spotlight-tour';
-import { IMAGE_NEW_CHAT_STEP_INDEX,IMAGE_DRAW_STEP_INDEX } from '../components/onboarding/spotlightConfig';
-import { setPendingSpotlight } from '../components/onboarding/spotlightState';
+import { AttachStep } from 'react-native-spotlight-tour';
 import { Button } from '../components/Button';
 import { ModelSelectorModal } from '../components';
 import { CustomAlert,showAlert,hideAlert,AlertState,initialAlertState } from '../components/CustomAlert';
@@ -29,6 +28,8 @@ type NavigationProp = CompositeNavigationProp<
 >;
 
 export const ChatsListScreen: React.FC = () => {
+  const scrollRef = React.useRef<FlatList<any>>(null);
+  useScrollToTop(scrollRef);
   const navigation = useNavigation<NavigationProp>();
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
@@ -37,28 +38,11 @@ export const ChatsListScreen: React.FC = () => {
   const { deleteConversation, setActiveConversation } = useChatStore.getState();
   const { getProject } = useProjectStore();
   const activeImageModelId = useAppStore(s => s.activeImageModelId);
-  const onboardingChecklist = useAppStore(s => s.onboardingChecklist);
-  const shownSpotlights = useAppStore(s => s.shownSpotlights);
-  const { removeImagesByConversationId, markSpotlightShown } = useAppStore.getState();
+  const { removeImagesByConversationId } = useAppStore.getState();
   const { modelId: activeTextModelId } = useActiveTextModel();
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const [showModelSelector, setShowModelSelector] = useState(false);
   const [isModelLoading, setIsModelLoading] = useState(false);
-  const { goTo } = useSpotlightTour();
-
-  // Reactive: image model loaded → spotlight "New Chat" button (step 14)
-  useEffect(() => {
-    if (
-      activeImageModelId &&
-      !shownSpotlights.imageNewChat &&
-      !onboardingChecklist.triedImageGen
-    ) {
-      markSpotlightShown('imageNewChat');
-      // Queue step 15 so ChatScreen picks it up when "New Chat" is tapped
-      setPendingSpotlight(IMAGE_DRAW_STEP_INDEX);
-      setTimeout(() => goTo(IMAGE_NEW_CHAT_STEP_INDEX), 800);
-    }
-  }, [activeImageModelId, shownSpotlights, onboardingChecklist.triedImageGen, markSpotlightShown, goTo]);
 
   const hasModels = !!activeTextModelId || !!activeImageModelId;
 
@@ -256,6 +240,7 @@ export const ChatsListScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
+          ref={scrollRef}
           data={sortedConversations}
           renderItem={renderChat}
           keyExtractor={(item) => item.id}

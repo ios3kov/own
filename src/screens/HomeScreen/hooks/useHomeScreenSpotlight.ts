@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { useSpotlightTour } from 'react-native-spotlight-tour';
 import { STEP_TAB_MAP, STEP_INDEX_MAP, CHAT_INPUT_STEP_INDEX, MODEL_SETTINGS_STEP_INDEX, PROJECT_EDIT_STEP_INDEX, DOWNLOAD_FILE_STEP_INDEX, MODEL_PICKER_STEP_INDEX, IMAGE_LOAD_STEP_INDEX, IMAGE_DOWNLOAD_STEP_INDEX, IMAGE_NEW_CHAT_STEP_INDEX, IMAGE_DRAW_STEP_INDEX } from '../../../components/onboarding/spotlightConfig';
 import { setPendingSpotlight } from '../../../components/onboarding/spotlightState';
@@ -14,8 +14,6 @@ interface SpotlightProps {
 
 export function useHomeScreenSpotlight({ navigation, closeSheet, activeImageModelId, downloadedImageModelsCount }: SpotlightProps) {
   const { goTo } = useSpotlightTour();
-  const onboardingChecklist = useAppStore(s => s.onboardingChecklist);
-  const shownSpotlights = useAppStore(s => s.shownSpotlights);
   const markSpotlightShown = useAppStore(s => s.markSpotlightShown);
 
   const handleStepPress = useCallback((stepId: string) => {
@@ -67,19 +65,6 @@ export function useHomeScreenSpotlight({ navigation, closeSheet, activeImageMode
       setTimeout(() => goTo(stepIndex), delay);
     }
   }, [closeSheet, navigation, goTo, activeImageModelId, downloadedImageModelsCount, markSpotlightShown]);
-
-  // Reactive: image model downloaded but not loaded → spotlight ImageModelCard (step 13)
-  useEffect(() => {
-    if (
-      downloadedImageModelsCount > 0 &&
-      !activeImageModelId &&
-      !shownSpotlights.imageLoad &&
-      !onboardingChecklist.triedImageGen
-    ) {
-      markSpotlightShown('imageLoad');
-      setTimeout(() => goTo(IMAGE_LOAD_STEP_INDEX), 800);
-    }
-  }, [downloadedImageModelsCount, activeImageModelId, shownSpotlights, onboardingChecklist.triedImageGen, markSpotlightShown, goTo]);
 
   return { handleStepPress };
 }

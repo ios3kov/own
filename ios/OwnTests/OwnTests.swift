@@ -276,7 +276,8 @@ final class CoreMLDiffusionModuleTests: XCTestCase {
     let events = module.supportedEvents()!
     XCTAssertTrue(events.contains("OwnImageProgress"))
     XCTAssertTrue(events.contains("OwnImageError"))
-    XCTAssertEqual(events.count, 2)
+    XCTAssertTrue(events.contains("OwnImageLoadProgress"))
+    XCTAssertEqual(events.count, 3)
   }
 
   func testValidateModelDirectoryAcceptsStandardUnetLayout() throws {
@@ -992,5 +993,94 @@ final class ScenePrivacyCoverTests: XCTestCase {
     delegate.showPrivacyCover()
     delegate.hidePrivacyCover()
     XCTAssertNil(delegate.window)
+  }
+}
+
+final class OwnLocalImportAndURLTests: XCTestCase {
+  func testRejectsNonPublicAddresses() throws {
+    XCTAssertFalse(PublicWebAddress.isPublicIPv4([127, 0, 0, 1]))
+    XCTAssertFalse(PublicWebAddress.isPublicIPv4([169, 254, 169, 254]))
+    XCTAssertFalse(PublicWebAddress.isPublicIPv4([192, 168, 1, 1]))
+    XCTAssertFalse(PublicWebAddress.isPublicIPv4([100, 64, 0, 1]))
+    XCTAssertTrue(PublicWebAddress.isPublicIPv4([93, 184, 216, 34]))
+    let blockedPrefixes: [[UInt8]] = [[192, 0, 2, 1], [198, 51, 100, 1], [203, 0, 113, 1], [192, 88, 99, 2]]
+    for address in blockedPrefixes {
+      XCTAssertFalse(PublicWebAddress.isPublicIPv4(address))
+    }
+    let publicNeighbors: [[UInt8]] = [[192, 0, 1, 7], [198, 51, 99, 7], [198, 51, 101, 7], [203, 0, 112, 7], [203, 0, 114, 7]]
+    for address in publicNeighbors {
+      XCTAssertTrue(PublicWebAddress.isPublicIPv4(address), "Do not block the public neighbors of reserved /24 prefixes")
+    }
+    XCTAssertFalse(PublicWebAddress.isPublicIPv6([UInt8](repeating: 0, count: 16)))
+    XCTAssertFalse(PublicWebAddress.isPublicIPv6([0x20, 0x02] + [UInt8](repeating: 0, count: 14)))
+    XCTAssertThrowsError(try PublicWebAddress.resolve("127.0.0.1"))
+    XCTAssertThrowsError(try PublicWebAddress.resolve("::1"))
+    XCTAssertThrowsError(try PublicWebAddress.resolve("2130706433"))
+  }
+
+  func testPublicWebsiteFetchAndPrivateRejection() {
+    let done = expectation(description: "public website")
+    PublicWebFetcher().fetch("https://example.com", resolver: { value in
+      XCTAssertTrue((value as? String ?? "").contains("Example Domain")); done.fulfill()
+    }, rejecter: { _, message, _ in XCTFail(message ?? "Public website failed"); done.fulfill() })
+    let blocked = expectation(description: "private website")
+    PublicWebFetcher().fetch("http://2130706433", resolver: { _ in
+      XCTFail("Private address must be rejected"); blocked.fulfill()
+    }, rejecter: { _, _, _ in blocked.fulfill() })
+    wait(for: [done, blocked], timeout: 45)
+  }
+
+  func testDecodesAudioToLocalMonoWAV() throws {
+    let folder = try makeTempDirectory()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let source = folder.appendingPathComponent("source.wav")
+    let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2))
+    let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 4410))
+    buffer.frameLength = 4410
+    for channel in 0..<2 {
+      for frame in 0..<4410 { buffer.floatChannelData?[channel][frame] = Float(sin(Double(frame) * 0.03) * 0.1) }
+    }
+    do {
+      let file = try AVAudioFile(forWriting: source, settings: format.settings)
+      try file.write(from: buffer)
+    }
+    let done = expectation(description: "audio conversion")
+    AudioImport().prepare(source.path, resolver: { value in
+      guard let path = value as? String else { XCTFail("No WAV path"); done.fulfill(); return }
+      defer { try? FileManager.default.removeItem(atPath: path) }
+      do {
+        let wav = try Data(contentsOf: URL(fileURLWithPath: path))
+        XCTAssertEqual(String(data: wav.prefix(4), encoding: .ascii), "RIFF")
+        XCTAssertEqual(Array(wav[22..<24]), [1, 0])
+        XCTAssertEqual(Array(wav[24..<28]), [128, 62, 0, 0])
+        XCTAssertGreaterThan(wav.count, 44)
+      } catch { XCTFail("Could not inspect converted WAV") }
+      done.fulfill()
+    }, rejecter: { _, message, _ in XCTFail(message ?? "Audio failed"); done.fulfill() })
+    wait(for: [done], timeout: 20)
+  }
+
+  func testRecognizesPhotoAndScannedPDFLocally() throws {
+    let folder = try makeTempDirectory()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let image = UIGraphicsImageRenderer(size: CGSize(width: 800, height: 200)).image { context in
+      UIColor.white.setFill(); context.fill(CGRect(x: 0, y: 0, width: 800, height: 200))
+      ("ORCHID 123" as NSString).draw(at: CGPoint(x: 40, y: 50), withAttributes: [.font: UIFont.systemFont(ofSize: 60), .foregroundColor: UIColor.black])
+    }
+    let photo = folder.appendingPathComponent("scan.png")
+    try XCTUnwrap(image.pngData()).write(to: photo)
+    let pdf = folder.appendingPathComponent("scan.pdf")
+    try UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 800, height: 200)).writePDF(to: pdf) { context in
+      context.beginPage(); image.draw(at: .zero)
+    }
+    let photoDone = expectation(description: "photo OCR")
+    let pdfDone = expectation(description: "scanned PDF OCR")
+    PDFExtractorModule().extractImageText(photo.path, maxChars: 1000, resolver: { value in
+      XCTAssertTrue((value as? String ?? "").contains("ORCHID")); photoDone.fulfill()
+    }, rejecter: { _, message, _ in XCTFail(message ?? "OCR failed"); photoDone.fulfill() })
+    PDFExtractorModule().extractText(pdf.path, maxChars: 1000, resolver: { value in
+      XCTAssertTrue((value as? String ?? "").contains("ORCHID")); pdfDone.fulfill()
+    }, rejecter: { _, message, _ in XCTFail(message ?? "PDF OCR failed"); pdfDone.fulfill() })
+    wait(for: [photoDone, pdfDone], timeout: 30)
   }
 }

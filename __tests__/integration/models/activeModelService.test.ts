@@ -840,7 +840,7 @@ describe('ActiveModelService Integration', () => {
 
       expect(mockLlmService.loadModel).toHaveBeenCalledWith(
         model.filePath,
-        expect.any(String) // mmproj path should be found
+        undefined // Unlinked projectors must not be inferred by filename
       );
     });
   });

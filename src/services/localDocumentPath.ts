@@ -1,7 +1,7 @@
 import RNFS from 'react-native-fs';
 
 /** Keep the exact relative target when iOS relocates an application's sandbox. */
-export function localDocumentPath(storedPath: string): string {
+export function localDocumentPath(storedPath: string, relocate = true): string {
   let path = storedPath;
   if (path.startsWith('file://')) {
     try { path = decodeURIComponent(path.slice(7)); }
@@ -12,6 +12,7 @@ export function localDocumentPath(storedPath: string): string {
       path.split('/').some(part => part === '.' || part === '..')) {
     throw new Error('The original document cannot be opened.');
   }
+  if (!relocate) return path;
   // Match a complete iOS app-container boundary, never a filename or a loose suffix.
   const moved = path.match(/^.*\/Containers\/Data\/Application\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\/(Documents|Library\/Caches|tmp)\/(.+)$/i);
   if (!moved) return path;

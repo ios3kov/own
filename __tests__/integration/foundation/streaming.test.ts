@@ -1,5 +1,6 @@
 import { NativeModules,Platform } from 'react-native';
 import { waitFor } from '@testing-library/react-native';
+import { useAppStore } from '../../../src/stores';
 import { foundationModelService } from '../../../src/services/foundationModels';
 
 const mockListeners = new Map<string, (event: any) => void>();
@@ -18,6 +19,7 @@ const messages: any = [
 describe('Foundation stream ownership and existing tools', () => {
   beforeEach(() => {
     Platform.OS = 'ios';
+    useAppStore.getState().updateSettings({enabledTools:['calculator']});
     mockListeners.clear();
     NativeModules.OwnFoundationModels = {
       availability: jest.fn().mockResolvedValue({available: true, reason: 'available'}),

@@ -1,3 +1,4 @@
+import { projectorCandidates } from './modelManager/projectorAssociation';
 import { HFModelSearchResult, ModelInfo, ModelFile, ModelCredibility } from '../types';
 import { HF_API, QUANTIZATION_INFO, LMSTUDIO_AUTHORS, OFFICIAL_MODEL_AUTHORS, VERIFIED_QUANTIZERS } from '../constants';
 
@@ -42,7 +43,7 @@ class HuggingFaceService {
           size: file.lfs?.size || file.size || 0,
           quantization: this.extractQuantization(file.path),
           downloadUrl: this.getDownloadUrl(modelId, file.path),
-          mmProjFile: this.findMatchingMMProj(file.path, mmProjFiles, modelId),
+          mmProjFile: this.findMatchingMMProj(file.path, projectorCandidates(file.path, mmProjFiles, modelFiles.map(model => model.path)), modelId),
         }))
         .sort((a, b) => a.size - b.size);
     } catch {
@@ -58,7 +59,7 @@ class HuggingFaceService {
     const modelFiles = allGguf.filter(f => !this.isMMProjFile(f.rfilename));
     const mmProjForMatch = mmProjFiles.map(f => ({ path: f.rfilename, size: f.size, lfs: f.lfs }));
     return modelFiles
-      .map(file => ({ ...this.transformFileInfo(modelId, file), mmProjFile: this.findMatchingMMProj(file.rfilename, mmProjForMatch, modelId) }))
+      .map(file => ({ ...this.transformFileInfo(modelId, file), mmProjFile: this.findMatchingMMProj(file.rfilename, projectorCandidates(file.rfilename, mmProjForMatch, modelFiles.map(model => model.rfilename)), modelId) }))
       .sort((a, b) => a.size - b.size);
   }
 
@@ -144,8 +145,9 @@ class HuggingFaceService {
   private findMatchingMMProj(
     modelFileName: string,
     mmProjFiles: Array<{ path: string; size?: number; lfs?: { size: number } }>,
-    modelId: string
+    modelId: string,
   ): { name: string; size: number; downloadUrl: string } | undefined {
+    mmProjFiles = projectorCandidates(modelFileName, mmProjFiles, [modelFileName]);
     if (mmProjFiles.length === 0) {
       return undefined;
     }
@@ -159,17 +161,19 @@ class HuggingFaceService {
     // Exact symmetric match: model quant === mmproj quant
     const modelQuant = this.extractQuantization(modelFileName);
     if (modelQuant !== 'Unknown') {
-      const exactMatch = mmProjFiles.find(f => this.extractQuantization(f.path) === modelQuant);
-      if (exactMatch) return toResult(exactMatch);
+      const exact = mmProjFiles.filter(f => this.extractQuantization(f.path) === modelQuant);
+      if (exact.length > 1) return undefined;
+      if (exact.length === 1) return toResult(exact[0]);
     }
 
     // Fallback: prefer F16/FP16, exclude BF16 (can be incompatible with some runtimes)
-    const f16 = mmProjFiles.find(f => {
+    const f16 = mmProjFiles.filter(f => {
       const lower = f.path.toLowerCase();
       return (lower.includes('f16') || lower.includes('fp16')) && !lower.includes('bf16');
     });
 
-    return toResult(f16 ?? mmProjFiles[0]);
+    if (f16.length === 1) return toResult(f16[0]);
+    return mmProjFiles.length === 1 ? toResult(mmProjFiles[0]) : undefined;
   }
 
   private detectModelType(name: string, tags: string[]): string {

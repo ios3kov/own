@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		03E65A037168124A22F9E8FB /* AudioImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40B23A0E07EDD24BDED1FFE /* AudioImport.swift */; };
 		049521652F390D4500AA4EB4 /* CoreMLDiffusionModule.m in Sources */ = {isa = PBXBuildFile; fileRef = 049521632F390D4500AA4EB4 /* CoreMLDiffusionModule.m */; };
 		049521662F390D4500AA4EB4 /* CoreMLDiffusionModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 049521642F390D4500AA4EB4 /* CoreMLDiffusionModule.swift */; };
 		04B9D63D2F38E6C400F1A435 /* StableDiffusion in Frameworks */ = {isa = PBXBuildFile; productRef = 04B9D63C2F38E6C400F1A435 /* StableDiffusion */; };
@@ -20,10 +21,13 @@
 		0A7B3D072F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */; };
 		0EF868326BB9865CB6F23136 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F29C303990E5070C677BE5A4 /* Foundation.framework */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
+		18A771FFE70125987307C489 /* AudioImport.m in Sources */ = {isa = PBXBuildFile; fileRef = CAF6A55BE1AA26C747D1A7D3 /* AudioImport.m */; };
 		553E18B7CCC207C0885499E4 /* libPods-OwnTests.a in Frameworks */ = {isa = PBXBuildFile; fileRef = D1B1541769AADA563D6CC44E /* libPods-OwnTests.a */; };
 		761780ED2CA45674006654EE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 761780EC2CA45674006654EE /* AppDelegate.swift */; };
+		765558687944CD7CEEEE2A38 /* PublicWebFetcher.m in Sources */ = {isa = PBXBuildFile; fileRef = 158DC582A8D4DB4C025E8FB4 /* PublicWebFetcher.m */; };
 		80EE15520A374D84DFA0E523 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */; };
 		81AB9BB82411601600AC10FF /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */; };
+		8F892F281F5A61129C9D4AB5 /* PublicWebFetcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90927DB0D1E016D105E130E7 /* PublicWebFetcher.swift */; };
 		A084C602C3B4A415DC74D43F /* libPods-Own.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 3A3BA1A946E10FA48AA4C0EB /* libPods-Own.a */; };
 		A20261024000000000000001 /* OwnPrivacyCrypto.m in Sources */ = {isa = PBXBuildFile; fileRef = A20261024000000000000002 /* OwnPrivacyCrypto.m */; };
 		A20261024000000000000021 /* OwnFoundationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20261024000000000000011 /* OwnFoundationModels.swift */; };
@@ -66,11 +70,13 @@
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = Own/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = Own/Info.plist; sourceTree = "<group>"; };
 		13B07FB81A68108700A75B9A /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = PrivacyInfo.xcprivacy; path = Own/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		158DC582A8D4DB4C025E8FB4 /* PublicWebFetcher.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = PublicWebFetcher.m; sourceTree = SOURCE_ROOT; };
 		2BD3167161334CCC189096E3 /* Pods-Own.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Own.debug.xcconfig"; path = "Target Support Files/Pods-Own/Pods-Own.debug.xcconfig"; sourceTree = "<group>"; };
 		37BD4C6C3858A907C678B5B4 /* Pods-Own.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Own.release.xcconfig"; path = "Target Support Files/Pods-Own/Pods-Own.release.xcconfig"; sourceTree = "<group>"; };
 		3A3BA1A946E10FA48AA4C0EB /* libPods-Own.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-Own.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		761780EC2CA45674006654EE /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Own/AppDelegate.swift; sourceTree = "<group>"; };
 		81AB9BB72411601600AC10FF /* LaunchScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = LaunchScreen.storyboard; path = Own/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		90927DB0D1E016D105E130E7 /* PublicWebFetcher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PublicWebFetcher.swift; sourceTree = SOURCE_ROOT; };
 		A20261024000000000000002 /* OwnPrivacyCrypto.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = OwnPrivacyCrypto.m; sourceTree = "<group>"; };
 		A20261024000000000000011 /* OwnFoundationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnFoundationModels.swift; sourceTree = "<group>"; };
 		A20261024000000000000012 /* OwnFoundationModels.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = OwnFoundationModels.m; sourceTree = "<group>"; };
@@ -82,11 +88,13 @@
 		B0006CA84F436531B144BD28 /* OwnUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OwnUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B9DE36A1FFE10AF8CD81DBD2 /* Pods-OwnTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OwnTests.release.xcconfig"; path = "Target Support Files/Pods-OwnTests/Pods-OwnTests.release.xcconfig"; sourceTree = "<group>"; };
 		BF917FB3D1F3BB5EC38DF437 /* OwnReplySpeech.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = OwnReplySpeech.m; sourceTree = "<group>"; };
+		CAF6A55BE1AA26C747D1A7D3 /* AudioImport.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = AudioImport.m; sourceTree = SOURCE_ROOT; };
 		D0917E571600B3FFEDA59EF7 /* Pods-OwnTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-OwnTests.debug.xcconfig"; path = "Target Support Files/Pods-OwnTests/Pods-OwnTests.debug.xcconfig"; sourceTree = "<group>"; };
 		D1B1541769AADA563D6CC44E /* libPods-OwnTests.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-OwnTests.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		D2630146B2C42E4B6B7372D9 /* OwnReplySpeech.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OwnReplySpeech.swift; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F29C303990E5070C677BE5A4 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		F40B23A0E07EDD24BDED1FFE /* AudioImport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioImport.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -190,6 +198,10 @@
 				1C8F1434A31DDBDD0E566DC4 /* OwnUITests */,
 				D2630146B2C42E4B6B7372D9 /* OwnReplySpeech.swift */,
 				BF917FB3D1F3BB5EC38DF437 /* OwnReplySpeech.m */,
+				90927DB0D1E016D105E130E7 /* PublicWebFetcher.swift */,
+				158DC582A8D4DB4C025E8FB4 /* PublicWebFetcher.m */,
+				F40B23A0E07EDD24BDED1FFE /* AudioImport.swift */,
+				CAF6A55BE1AA26C747D1A7D3 /* AudioImport.m */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -473,6 +485,10 @@
 				761780ED2CA45674006654EE /* AppDelegate.swift in Sources */,
 				FB65B66C5F0F648EF80E01BB /* OwnReplySpeech.swift in Sources */,
 				06926BEDCC5191BA645937B2 /* OwnReplySpeech.m in Sources */,
+				8F892F281F5A61129C9D4AB5 /* PublicWebFetcher.swift in Sources */,
+				765558687944CD7CEEEE2A38 /* PublicWebFetcher.m in Sources */,
+				03E65A037168124A22F9E8FB /* AudioImport.swift in Sources */,
+				18A771FFE70125987307C489 /* AudioImport.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -516,7 +532,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 5U2ZS7H265;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = Own/Info.plist;
@@ -548,7 +564,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_TEAM = 5U2ZS7H265;
 				INFOPLIST_FILE = Own/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Own - Local AI";

@@ -1,7 +1,7 @@
 import { sourcesFromChunks } from '../documentSources';
 import type { DocumentSource } from '../../types';
 import { googleSearchUrl,parseGoogleResults } from './googleSearch';
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
 import { ToolCall,ToolResult } from './types';
 import logger from '../../utils/logger';
@@ -305,28 +305,12 @@ async function handleReadUrl(rawUrl: string): Promise<string> {
   if (!/^https?:\/\//i.test(url)) throw new Error('Invalid URL: must start with http:// or https://');
   if (isPrivateUrl(url)) throw new Error('Blocked: cannot fetch private/local network URLs');
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-  try {
-    // On-device fetch + parse (privacy-preserving — no third-party proxy)
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-        'Accept': 'text/html, text/plain, */*',
-      },
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    const html = await response.text();
-    const text = htmlToMarkdown(html);
-
-    if (!text) return `The page at ${url} returned no readable content.`;
-
-    return text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}\n\n[Content truncated]` : text;
-  } catch (e: any) {
-    logger.error(`[Tools] read_url FAILED for "${url}": ${e?.message || e}`);
-    throw e;
-  } finally { clearTimeout(timeout); }
+  const fetcher = NativeModules.PublicWebFetcher;
+  if (!fetcher) throw new Error('Safe page reading is unavailable in this build.');
+  const html = await fetcher.fetch(url);
+  const text = htmlToMarkdown(html);
+  if (!text) return `The page at ${url} returned no readable content.`;
+  return text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}\n\n[Content truncated]` : text;
 }
 
 async function handleSearchKnowledgeBase(query: string, projectId?: string): Promise<{content:string; documentSources?:DocumentSource[]}> {

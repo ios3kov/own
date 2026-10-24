@@ -1,3 +1,4 @@
+import { useScrollToTop } from '@react-navigation/native';
 import React,{ useState } from 'react';
 import {
 View,
@@ -30,6 +31,8 @@ type NavigationProp = CompositeNavigationProp<
 >;
 
 export const ProjectsScreen: React.FC = () => {
+  const scrollRef = React.useRef<FlatList<any>>(null);
+  useScrollToTop(scrollRef);
   const navigation = useNavigation<NavigationProp>();
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
@@ -161,6 +164,7 @@ export const ProjectsScreen: React.FC = () => {
         </View>
       ) : (
         <FlatList
+          ref={scrollRef}
           data={projects}
           renderItem={renderProject}
           keyExtractor={(item) => item.id}

@@ -1,14 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Linking, ScrollView, Image, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Image, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { SPACING, TYPOGRAPHY } from '../constants';
-import { AnimatedListItem } from '../components/AnimatedListItem';
-import { useFocusTrigger } from '../hooks/useFocusTrigger';
-import { GITHUB_URL } from '../utils/sharePrompt';
 import packageJson from '../../package.json';
 
 
@@ -16,12 +13,11 @@ export const AboutScreen: React.FC = () => {
   const navigation = useNavigation();
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const focusTrigger = useFocusTrigger();
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()} style={styles.backButton}>
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>About</Text>
@@ -39,25 +35,6 @@ export const AboutScreen: React.FC = () => {
           </Text>
         </View>
 
-        {/* Open Source row */}
-        <View style={styles.navSection}>
-          <AnimatedListItem
-            index={0}
-            staggerMs={40}
-            trigger={focusTrigger}
-            style={[styles.navItem, styles.navItemLast]}
-            onPress={() => Linking.openURL(GITHUB_URL)}
-          >
-            <View style={styles.navItemIcon}>
-              <Icon name="github" size={16} color={colors.textSecondary} />
-            </View>
-            <View style={styles.navItemContent}>
-              <Text style={styles.navItemTitle}>Open Source</Text>
-              <Text style={styles.navItemDesc}>View the source on GitHub</Text>
-            </View>
-            <Icon name="external-link" size={14} color={colors.textMuted} />
-          </AnimatedListItem>
-        </View>
 
       </ScrollView>
 

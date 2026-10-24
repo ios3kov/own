@@ -12,7 +12,6 @@ import { runToolLoop } from './generationToolLoop';
 import type { ToolResult } from './tools/types';
 import { providerRegistry } from './providers';
 import logger from '../utils/logger';
-import { shouldShowSharePrompt,emitSharePrompt } from '../utils/sharePrompt';
 import {
 buildGenerationMetaImpl,
 buildToolLoopHandlersImpl,
@@ -23,7 +22,6 @@ generateRemoteWithToolsImpl,
 type GenerationWithToolsRequest,
 } from './generationServiceHelpers';
 
-const SHARE_PROMPT_DELAY_MS = 1500;
 type StreamChunk = string | { content?: string; reasoningContent?: string };
 
 export interface QueuedMessage {
@@ -133,12 +131,6 @@ class GenerationService {
     this.notifyListeners();
   }
 
-  private checkSharePrompt(delayMs = SHARE_PROMPT_DELAY_MS): void {
-    const s = useAppStore.getState();
-    const count = s.incrementTextGenerationCount();
-    if (!s.hasEngagedSharePrompt && shouldShowSharePrompt(count)) setTimeout(() => emitSharePrompt('text'), delayMs);
-  }
-
   private buildToolLoopHandlers() { return buildToolLoopHandlersImpl(this); }
   private buildGenerationMeta(): GenerationMeta { return buildGenerationMetaImpl(this); }
   private async prepareGeneration(conversationId: string, messages: Message[] = []): Promise<boolean> {
@@ -203,7 +195,6 @@ class GenerationService {
         const generationTime = this.state.startTime ? Date.now() - this.state.startTime : undefined;
         store.finalizeStreamingMessage(conversationId, generationTime, this.buildGenerationMeta());
         logger.log(`[GenService][ToolLoop] finalizeStreamingMessage called — convId=${conversationId}`);
-        this.checkSharePrompt();
         this.resetState(true);
       }
     } catch (error) {
@@ -250,7 +241,6 @@ class GenerationService {
     const chatStore = useChatStore.getState();
     if (conversationId && streamingContent.trim()) {
       chatStore.finalizeStreamingMessage(conversationId, generationTime, this.buildGenerationMeta());
-      this.checkSharePrompt();
     } else {
       chatStore.clearStreamingMessage();
     }
@@ -319,8 +309,12 @@ class GenerationService {
 
   private processNextInQueue(): void {
     if (this.state.queuedMessages.length === 0 || !this.queueProcessor) return;
-    const all = this.state.queuedMessages;
-    this.state = { ...this.state, queuedMessages: [] };
+    const pending = this.state.queuedMessages;
+    const conversationId = pending[0].conversationId;
+    const boundary = pending.findIndex(m => m.conversationId !== conversationId);
+    const count = boundary < 0 ? pending.length : boundary;
+    const all = pending.slice(0, count);
+    this.state = { ...this.state, queuedMessages: pending.slice(count) };
     this.notifyListeners();
     const combined: QueuedMessage = all.length === 1 ? all[0] : {
       id: all[0].id, conversationId: all[0].conversationId,

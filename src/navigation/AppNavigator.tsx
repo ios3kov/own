@@ -1,17 +1,11 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
-import Icon from 'react-native-vector-icons/Feather';
+import { TabIcon } from './TabIcon';
 import { SpotlightTourProvider } from 'react-native-spotlight-tour';
-import { useTheme, useThemedStyles } from '../theme';
-import type { ThemeColors, ThemeShadows } from '../theme';
+import { useTheme } from '../theme';
 import { triggerHaptic } from '../utils/haptics';
 import { useAppStore } from '../stores';
 import { createSpotlightSteps } from '../components/onboarding/spotlightConfig';
@@ -47,73 +41,29 @@ import {
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-// Animated tab icon with scale spring on focus
-const TAB_ICON_MAP: Record<string, string> = {
-  HomeTab: 'home',
-  ChatsTab: 'message-circle',
-  ProjectsTab: 'folder',
-  ModelsTab: 'cpu',
-  SettingsTab: 'settings',
-};
-
-const TabBarIcon: React.FC<{ name: string; focused: boolean }> = ({ name, focused }) => {
-  const { colors } = useTheme();
-  const tabStyles = useThemedStyles(createTabBarStyles);
-  const scale = useSharedValue(focused ? 1.1 : 1);
-
-  useEffect(() => {
-    scale.value = withSpring(focused ? 1.1 : 1, { damping: 15, stiffness: 150 });
-
-  }, [focused]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  return (
-    <View style={tabStyles.iconContainer}>
-      <Animated.View style={animatedStyle}>
-        <Icon
-          name={TAB_ICON_MAP[name] || 'circle'}
-          size={22}
-          color={focused ? colors.primary : colors.textMuted}
-        />
-      </Animated.View>
-      {focused && <View style={tabStyles.focusDot} />}
-    </View>
-  );
-};
-
-const createTabBarStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
-  iconContainer: {
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  focusDot: {
-    position: 'absolute' as const,
-    top: -6,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.primary,
-  },
-});
-
 const mainTabsStyles = StyleSheet.create({
+  label: { fontSize: 11, lineHeight: 14, textAlign: 'center', paddingHorizontal: 2 },
+  selectedLabel: { fontWeight: '600' },
+  plainLabel: { fontWeight: '400' },
   container: { flex: 1 },
 });
 
 // Main Tab Navigator
 const MainTabs: React.FC = () => {
-  const { colors, shadows } = useTheme();
+  const { colors } = useTheme();
+  const { width, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const bottomInset = Math.max(insets.bottom, 20);
-  const tabBarHeight = 60 + bottomInset;
+  const bottomInset = Math.max(insets.bottom, 8);
+  const labelLines = Math.max(1, Math.ceil(8 * 6 * fontScale / Math.max(40, width / 5 - 12)));
+  const tabBarHeight = 36 + labelLines * 14 * fontScale + bottomInset;
 
   return (
     <View style={mainTabsStyles.container}>
       <Tab.Navigator
         backBehavior="history"
+        screenListeners={({ navigation }) => ({
+          tabPress: () => { if (!navigation.isFocused()) triggerHaptic('selection'); },
+        })}
         screenOptions={({ route }) => ({
           headerShown: false,
           animation: 'fade',
@@ -124,59 +74,48 @@ const MainTabs: React.FC = () => {
             borderTopWidth: 1,
             height: tabBarHeight,
             paddingBottom: bottomInset,
-            paddingTop: 10,
-            ...shadows.medium,
+            paddingTop: 6,
           },
+          tabBarHideOnKeyboard: true,
+          tabBarActiveBackgroundColor: `${colors.primary}12`,
+          tabBarItemStyle: { borderRadius: 12, marginHorizontal: 2 },
           tabBarActiveTintColor: colors.primary,
           tabBarInactiveTintColor: colors.textMuted,
           tabBarIcon: ({ focused }) => (
-            <TabBarIcon name={route.name} focused={focused} />
+            <TabIcon name={route.name} color={focused ? colors.primary : colors.textMuted} />
           ),
-          tabBarLabelStyle: {
-            fontSize: 11,
-            fontWeight: '500' as const,
-          },
+          tabBarLabel: ({ focused, children }) => (
+            <Text style={[mainTabsStyles.label, focused ? mainTabsStyles.selectedLabel : mainTabsStyles.plainLabel,
+              { color: focused ? colors.primary : colors.textMuted }]}>
+              {children}
+            </Text>
+          ),
         })}
       >
         <Tab.Screen
           name="HomeTab"
           component={HomeScreen}
-          options={{ tabBarLabel: 'Home', tabBarButtonTestID: 'home-tab' }}
-          listeners={() => ({
-            tabPress: () => { triggerHaptic('selection'); },
-          })}
+          options={{ title: 'Home', tabBarButtonTestID: 'home-tab' }}
         />
         <Tab.Screen
           name="ChatsTab"
           component={ChatsListScreen}
-          options={{ tabBarLabel: 'Chats', tabBarButtonTestID: 'chats-tab' }}
-          listeners={() => ({
-            tabPress: () => { triggerHaptic('selection'); },
-          })}
+          options={{ title: 'Chats', tabBarButtonTestID: 'chats-tab' }}
         />
         <Tab.Screen
           name="ProjectsTab"
           component={ProjectsScreen}
-          options={{ tabBarLabel: 'Projects', tabBarButtonTestID: 'projects-tab' }}
-          listeners={() => ({
-            tabPress: () => { triggerHaptic('selection'); },
-          })}
+          options={{ title: 'Projects', tabBarButtonTestID: 'projects-tab' }}
         />
         <Tab.Screen
           name="ModelsTab"
           component={ModelsScreen}
-          options={{ tabBarLabel: 'Models', tabBarButtonTestID: 'models-tab' }}
-          listeners={() => ({
-            tabPress: () => { triggerHaptic('selection'); },
-          })}
+          options={{ title: 'Models', tabBarButtonTestID: 'models-tab' }}
         />
         <Tab.Screen
           name="SettingsTab"
           component={SettingsScreen}
-          options={{ tabBarLabel: 'Settings', tabBarButtonTestID: 'settings-tab' }}
-          listeners={() => ({
-            tabPress: () => { triggerHaptic('selection'); },
-          })}
+          options={{ title: 'Settings', tabBarButtonTestID: 'settings-tab' }}
         />
       </Tab.Navigator>
     </View >

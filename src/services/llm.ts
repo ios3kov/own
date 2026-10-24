@@ -1,3 +1,4 @@
+import { beginModelLoad, finishModelLoad } from '../stores/modelLoadStore';
 import { measureLocalContext } from './contextUsage';
 import { LlamaContext,RNLlamaOAICompatibleMessage } from 'llama.rn';
 import { Platform } from 'react-native';
@@ -90,6 +91,7 @@ class LLMService {
   }
   async loadModel(modelPath: string, mmProjPath?: string): Promise<void> {
     const mutex = this.acquireContextMutex();
+    const loadTicket = beginModelLoad('text');
     try {
       await mutex.ready;
       // Re-check after acquiring mutex — another call may have loaded the same model
@@ -113,6 +115,7 @@ class LLMService {
         throw new Error(error?.message || 'Unknown error loading model');
       }
     } finally {
+      finishModelLoad(loadTicket);
       mutex.release();
     }
   }

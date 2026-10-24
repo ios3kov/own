@@ -81,7 +81,7 @@ describe('resolveMmProjPath', () => {
     expect(result).toBeUndefined();
   });
 
-  it('finds mmproj file via directory scan when stored path is stale (vision model)', async () => {
+  it('does not attach an unrelated projector when the stored path is stale', async () => {
     mockedRNFS.exists.mockResolvedValue(false);
     mockedRNFS.readDir.mockResolvedValue([
       { name: 'mmproj-model-f16.gguf', path: '/models/mmproj-model-f16.gguf', isFile: () => true, size: 500 } as any,
@@ -96,7 +96,8 @@ describe('resolveMmProjPath', () => {
     // isVisionModel: true so the guard allows the scan
     const model = { filePath: '/models/m.gguf', mmProjPath: '/stale/path.gguf', isVisionModel: true } as any;
     const result = await resolveMmProjPath(model, 'model-1');
-    expect(result).toBe('/models/mmproj-model-f16.gguf');
+    expect(result).toBeUndefined();
+    expect(mockedRNFS.readDir).not.toHaveBeenCalled();
   });
 
   it('returns undefined for text-only model when no mmproj file exists in the directory', async () => {
@@ -125,7 +126,7 @@ describe('resolveMmProjPath', () => {
     const result = await resolveMmProjPath(model, 'ggml-org/SmolVLM2');
 
     expect(result).toBeUndefined(); // mmproj not on disk → scan found nothing
-    expect(mockedRNFS.readDir).toHaveBeenCalled(); // guard did NOT block the scan
+    expect(mockedRNFS.readDir).not.toHaveBeenCalled();
   });
 });
 

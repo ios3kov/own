@@ -97,6 +97,7 @@ jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
+    useScrollToTop: jest.fn(),
     useNavigation: () => ({
       navigate: jest.fn(),
       goBack: mockGoBack,
@@ -397,6 +398,19 @@ describe('GalleryScreen', () => {
     expect(mockRemoveGeneratedImage).toHaveBeenCalledWith('img-1');
   });
 
+  it('shows delete confirmation inside the active viewer and retains the image after failure', async () => {
+    mockGeneratedImages.push(...sampleImages);
+    mockDeleteGeneratedImage.mockResolvedValueOnce(false as never);
+    const result=render(<GalleryScreen/>);
+    fireEvent.press(getGridItems(result)[0]);
+    fireEvent.press(result.getByText('Delete'));
+    expect(result.getByTestId('gallery-viewer-alert')).toBeTruthy();
+    await act(async()=>{fireEvent.press(result.getByTestId('alert-button-Delete'));});
+    expect(mockRemoveGeneratedImage).not.toHaveBeenCalled();
+    expect(result.getByText('Could not delete image')).toBeTruthy();
+    expect(result.getByText('Your image is still in the gallery. Please try again.')).toBeTruthy();
+  });
+
   it('toggling select mode off clears selected IDs', () => {
     mockGeneratedImages.push(...sampleImages);
 
@@ -668,7 +682,7 @@ describe('GalleryScreen', () => {
     fireEvent.press(result.getByText('Delete'));
 
     // Close alert
-    fireEvent.press(result.getByTestId('alert-close'));
+    fireEvent.press(result.getByTestId('alert-button-Cancel'));
     expect(mockHideAlert).toHaveBeenCalled();
   });
 

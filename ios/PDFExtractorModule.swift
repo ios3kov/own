@@ -1,5 +1,8 @@
 import Foundation
 import PDFKit
+import Vision
+import UIKit
+import ImageIO
 
 // Do not even evaluate private diagnostic payloads in a Release build.
 func pdfDebugLog(_ message: @autoclosure () -> String) {
@@ -105,14 +108,23 @@ class PDFExtractorModule: NSObject {
 
       pdfDebugLog("[PDFExtractor] Successfully opened PDF with \(document.pageCount) pages")
 
-      let limit = Int(maxChars)
+      let limit = max(1, min(200_000, Int(maxChars)))
       var fullText = ""
+      guard document.pageCount <= 200 else {
+        reject("PDF_ERROR", "Choose a PDF with no more than 200 pages.", nil)
+        return
+      }
       for pageIndex in 0..<document.pageCount {
-        if let page = document.page(at: pageIndex), let pageText = page.string {
-          fullText += pageText
-          if pageIndex < document.pageCount - 1 {
-            fullText += "\n\n"
+        if let page = document.page(at: pageIndex) {
+          var pageText = page.string ?? ""
+          if pageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let image = page.thumbnail(of: CGSize(width: 1600, height: 1600), for: .mediaBox)
+            if let cgImage = image.cgImage {
+              do { pageText = try Self.recognize(cgImage) }
+              catch { reject("OCR_ERROR", "Could not read scanned PDF page \(pageIndex + 1).", error); return }
+            }
           }
+          fullText += pageText + "\n\n"
         }
 
         if fullText.count >= limit {
@@ -126,4 +138,38 @@ class PDFExtractorModule: NSObject {
       resolve(fullText)
     }
   }
+  static func recognize(_ image: CGImage) throws -> String {
+    let request = VNRecognizeTextRequest()
+    request.recognitionLevel = .accurate
+    request.usesLanguageCorrection = true
+    request.automaticallyDetectsLanguage = true
+    try VNImageRequestHandler(cgImage: image).perform([request])
+    return (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
+  }
+
+  @objc func extractImageText(_ filePath: String, maxChars: Double,
+                              resolver resolve: @escaping RCTPromiseResolveBlock,
+                              rejecter reject: @escaping RCTPromiseRejectBlock) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      let url = filePath.hasPrefix("file://") ? URL(string: filePath) : URL(fileURLWithPath: filePath)
+      guard let url = url, url.isFileURL else { reject("OCR_ERROR", "Invalid image file.", nil); return }
+      let scoped = url.startAccessingSecurityScopedResource()
+      defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+      do {
+        // Thumbnail decoding bounds memory for large camera images and respects EXIF orientation.
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 3000
+              ] as CFDictionary) else { throw NSError(domain: "OwnOCR", code: 1) }
+        let text = try Self.recognize(image)
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+          reject("OCR_ERROR", "No readable text found in this image.", nil); return
+        }
+        resolve(String(text.prefix(max(1, min(200_000, Int(maxChars))))))
+      } catch { reject("OCR_ERROR", "Could not read text from this image.", error) }
+    }
+  }
+
 }

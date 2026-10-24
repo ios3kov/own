@@ -1,3 +1,4 @@
+import { runImageFinalization } from './imageFinalization';
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
 import { modelManager, backgroundDownloadService } from '../../services';
@@ -171,6 +172,10 @@ async function resumeMultifileDownload(ctx: ResumeCtx): Promise<void> {
 }
 
 export async function resumeImageDownload(entry: DownloadEntry, deps: ImageDownloadDeps): Promise<void> {
+  return runImageFinalization(entry.modelId.replace(/^image:/, ''), () => resumeImageDownloadImpl(entry, deps));
+}
+
+async function resumeImageDownloadImpl(entry: DownloadEntry, deps: ImageDownloadDeps): Promise<void> {
   const modelId = entry.modelId.replace('image:', '');
   logger.log(`[ImageDownload] resumeImageDownload modelId=${modelId} downloadId=${entry.downloadId}`);
 

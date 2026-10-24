@@ -12,8 +12,11 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { GeneratedImage } from '../../types';
 import { createStyles } from './styles';
 import { formatDate } from './useGalleryActions';
+import type { AlertState } from '../../components/CustomAlert';
 
 interface FullscreenViewerProps {
+  alert?: AlertState;
+  onDismissAlert?: () => void;
   image: GeneratedImage | null;
   showDetails: boolean;
   onClose: () => void;
@@ -24,6 +27,7 @@ interface FullscreenViewerProps {
 
 export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
   image,
+  alert, onDismissAlert,
   showDetails,
   onClose,
   onToggleDetails,
@@ -38,16 +42,16 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
       visible={!!image}
       transparent
       animationType="fade"
-      onRequestClose={onClose}
+      onRequestClose={alert?.visible ? onDismissAlert : onClose}
     >
       <View style={styles.viewerContainer}>
         <TouchableOpacity
           style={styles.viewerBackdrop}
           activeOpacity={1}
-          onPress={onClose}
+          onPress={alert?.visible ? onDismissAlert : onClose}
         />
         {image && (
-          <View style={styles.viewerContent}>
+          <View style={styles.viewerContent} accessibilityElementsHidden={!!alert?.visible} importantForAccessibility={alert?.visible ? 'no-hide-descendants' : 'auto'}>
             {!showDetails && (
               <Image
                 source={{ uri: `file://${image.imagePath}` }}
@@ -59,7 +63,7 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
               <View style={styles.detailsSheet}>
                 <View style={styles.detailsSheetHeader}>
                   <Text style={styles.detailsSheetTitle}>Image Details</Text>
-                  <TouchableOpacity onPress={onToggleDetails}>
+                  <TouchableOpacity accessibilityRole="button" accessibilityLabel="Done" onPress={onToggleDetails}>
                     <Text style={styles.detailsSheetClose}>Done</Text>
                   </TouchableOpacity>
                 </View>
@@ -96,7 +100,7 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
             )}
             <View style={styles.viewerActions}>
               <TouchableOpacity
-                style={[styles.viewerButton, showDetails && styles.viewerButtonActive]}
+                accessibilityRole="button" accessibilityLabel="Image details" style={[styles.viewerButton, showDetails && styles.viewerButtonActive]}
                 onPress={onToggleDetails}
               >
                 <Icon name="info" size={22} color={showDetails ? colors.primary : colors.text} />
@@ -104,21 +108,31 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
                   Info
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.viewerButton} onPress={() => onSave(image)}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Save image" style={styles.viewerButton} onPress={() => onSave(image)}>
                 <Icon name="download" size={22} color={colors.text} />
                 <Text style={styles.viewerButtonText}>Save</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.viewerButton} onPress={() => onDelete(image)}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Delete image" style={styles.viewerButton} onPress={() => onDelete(image)}>
                 <Icon name="trash-2" size={22} color={colors.error} />
                 <Text style={styles.viewerButtonTextError}>Delete</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.viewerButton} onPress={onClose}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close image" style={styles.viewerButton} onPress={onClose}>
                 <Icon name="x" size={22} color={colors.text} />
                 <Text style={styles.viewerButtonText}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
+        {alert?.visible && <View testID="gallery-viewer-alert" accessibilityViewIsModal style={styles.alertOverlay}>
+          <View style={styles.alertCard}>
+            <Text testID="alert-title" accessibilityRole="header" style={styles.alertTitle}>{alert.title}</Text>
+            <Text testID="alert-message" style={{color:colors.text}}>{alert.message}</Text>
+            {(alert.buttons || [{text:'OK'}]).map(button => <TouchableOpacity key={button.text} testID={`alert-button-${button.text}`} accessibilityRole="button"
+              onPress={() => { button.onPress?.(); onDismissAlert?.(); }} style={styles.alertButton}>
+              <Text style={[styles.alertButtonText,{color:button.style==='destructive'?colors.error:colors.primary}]}>{button.text}</Text>
+            </TouchableOpacity>)}
+          </View>
+        </View>}
       </View>
     </Modal>
   );

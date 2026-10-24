@@ -9,7 +9,6 @@ import { generationService, GenerationState } from '../../../src/services/genera
 import { llmService } from '../../../src/services/llm';
 import { useChatStore } from '../../../src/stores/chatStore';
 import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
-import { useAppStore } from '../../../src/stores/appStore';
 import { providerRegistry } from '../../../src/services/providers';
 import { resetStores, setupWithActiveModel, setupWithConversation } from '../../utils/testHelpers';
 import { createMessage } from '../../utils/factories';
@@ -37,12 +36,6 @@ jest.mock('../../../src/services/activeModelService', () => ({
   activeModelService: {
     getActiveModels: jest.fn(() => ({ text: null, image: null })),
   },
-}));
-
-// Mock sharePrompt utility
-jest.mock('../../../src/utils/sharePrompt', () => ({
-  shouldShowSharePrompt: jest.fn(() => false),
-  emitSharePrompt: jest.fn(),
 }));
 
 // Mock provider registry
@@ -1004,31 +997,6 @@ describe('generationService', () => {
   });
 
   // ============================================================================
-  // Share Prompt Check
-  // ============================================================================
-  describe('share prompt check', () => {
-    it('does not trigger share prompt if already engaged', async () => {
-      const { emitSharePrompt } = require('../../../src/utils/sharePrompt');
-      const convId = setupWithConversation();
-      setupWithActiveModel();
-
-      useAppStore.setState({ hasEngagedSharePrompt: true });
-
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, onStream: any, onComplete: any) => {
-        onStream?.('Response');
-        onComplete?.('Response');
-        return 'Response';
-      });
-
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      expect(emitSharePrompt).not.toHaveBeenCalled();
-    });
-  });
-
-  // ============================================================================
   // Additional branch coverage
   // ============================================================================
   describe('reasoning content in local generateResponse', () => {
@@ -1196,34 +1164,6 @@ describe('generationService', () => {
       await Promise.resolve(); // flush microtasks
 
       expect(processor).toHaveBeenCalledWith(expect.objectContaining({ id: 'q1' }));
-      jest.useRealTimers();
-    });
-  });
-
-  // ============================================================================
-  // checkSharePrompt — true branch (emitSharePrompt called)
-  // ============================================================================
-  describe('checkSharePrompt — triggers share', () => {
-    it('calls emitSharePrompt when shouldShowSharePrompt returns true', async () => {
-      jest.useFakeTimers();
-      const { shouldShowSharePrompt, emitSharePrompt } = require('../../../src/utils/sharePrompt');
-      (shouldShowSharePrompt as jest.Mock).mockReturnValueOnce(true);
-
-      const convId = setupWithConversation();
-      setupWithActiveModel();
-
-      mockedLlmService.generateResponse.mockImplementation(async (_msgs: any, onStream: any, onComplete: any) => {
-        onStream?.({ content: 'Hi' });
-        onComplete?.('Hi');
-        return 'Hi';
-      });
-
-      await generationService.generateResponse(convId, [
-        createMessage({ role: 'user', content: 'Hi' }),
-      ]);
-
-      jest.advanceTimersByTime(2000);
-      expect(emitSharePrompt).toHaveBeenCalledWith('text');
       jest.useRealTimers();
     });
   });

@@ -335,7 +335,7 @@ describe('ModelSettingsScreen', () => {
 
     it('shows Image Size slider label', () => {
       const { getByText } = renderWithSections('image');
-      expect(getByText('Image Size')).toBeTruthy();
+      expect(getByText('Saved Image Size')).toBeTruthy();
     });
 
     it('shows Detection Method buttons when auto mode enabled', () => {

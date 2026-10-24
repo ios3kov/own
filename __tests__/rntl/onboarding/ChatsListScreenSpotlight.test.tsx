@@ -89,8 +89,8 @@ describe('ChatsListScreen Spotlight Integration', () => {
       renderScreen();
 
       act(() => { jest.advanceTimersByTime(800); });
-      expect(mockGoTo).toHaveBeenCalledWith(14);
-      expect(useAppStore.getState().shownSpotlights.imageNewChat).toBe(true);
+      expect(mockGoTo).not.toHaveBeenCalledWith(14);
+      expect(useAppStore.getState().shownSpotlights.imageNewChat).toBeFalsy();
     });
 
     it('does NOT fire when no image model is loaded', () => {
@@ -135,7 +135,7 @@ describe('ChatsListScreen Spotlight Integration', () => {
       });
 
       act(() => { jest.advanceTimersByTime(800); });
-      expect(mockGoTo).toHaveBeenCalledWith(14);
+      expect(mockGoTo).not.toHaveBeenCalledWith(14);
     });
   });
 

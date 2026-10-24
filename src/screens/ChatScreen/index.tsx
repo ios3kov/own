@@ -4,11 +4,9 @@ import { FlatList,Keyboard,KeyboardAvoidingView,InteractionManager } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSpotlightTour } from 'react-native-spotlight-tour';
-import { CustomAlert,hideAlert,SharePromptSheet } from '../../components';
+import { CustomAlert,hideAlert } from '../../components';
 import { consumePendingSpotlight } from '../../components/onboarding/spotlightState';
-import { subscribeSharePrompt } from '../../utils/sharePrompt';
-import { VOICE_HINT_STEP_INDEX,IMAGE_SETTINGS_STEP_INDEX } from '../../components/onboarding/spotlightConfig';
-import { useAppStore } from '../../stores/appStore';
+import { VOICE_HINT_STEP_INDEX } from '../../components/onboarding/spotlightConfig';
 import type { Conversation,Message } from '../../types';
 import { useTheme,useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
@@ -31,15 +29,10 @@ export const ChatScreen: React.FC = () => {
   const { goTo, current } = useSpotlightTour();
   const pendingNextRef = useRef<number | null>(null);
 
-  const [sharePromptVisible, setSharePromptVisible] = useState(false);
-  useEffect(() => subscribeSharePrompt(() => setSharePromptVisible(true)), []);
 
   // Only ONE AttachStep mounted at a time to avoid waypoint dots/lines.
   // chatSpotlight controls which index is active (3, 12, 15, or 16).
   const [chatSpotlight, setChatSpotlight] = useState<number | null>(null);
-  const onboardingChecklist = useAppStore(s => s.onboardingChecklist);
-  const shownSpotlights = useAppStore(s => s.shownSpotlights);
-  const markSpotlightShown = useAppStore(s => s.markSpotlightShown);
   const step3ShownRef = useRef(false);
   // If user arrived here via onboarding spotlight flow, show input spotlight
   useEffect(() => {
@@ -86,18 +79,6 @@ export const ChatScreen: React.FC = () => {
       }
     }, [goTo]),
   );
-  const generatedImages = useAppStore(s => s.generatedImages);
-  useEffect(() => {
-    if (
-      generatedImages.length > 0 &&
-      !shownSpotlights.imageSettings &&
-      onboardingChecklist.triedImageGen
-    ) {
-      markSpotlightShown('imageSettings');
-      InteractionManager.runAfterInteractions(() => goTo(IMAGE_SETTINGS_STEP_INDEX));
-    }
-  }, [generatedImages.length, shownSpotlights, onboardingChecklist.triedImageGen, markSpotlightShown, goTo]);
-
   React.useEffect(() => {
     if (chat.activeConversation?.messages.length && isNearBottomRef.current) {
       setTimeout(() => { flatListRef.current?.scrollToEnd({ animated: true }); }, 100);
@@ -238,7 +219,6 @@ export const ChatScreen: React.FC = () => {
         />
       </KeyboardAvoidingView>
       {alertEl}
-      <SharePromptSheet visible={sharePromptVisible} onClose={() => setSharePromptVisible(false)} />
 
     </SafeAreaView>
   );

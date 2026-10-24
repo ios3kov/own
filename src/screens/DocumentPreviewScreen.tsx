@@ -17,6 +17,9 @@ import { TYPOGRAPHY,SPACING } from '../constants';
 import { documentService } from '../services';
 import { RootStackParamList } from '../navigation/types';
 import logger from '../utils/logger';
+import { TableInspector } from '../components/TableInspector';
+import { readLocalTables } from '../services/localFileContent';
+import type { LocalTable } from '../services/tableData';
 import { localDocumentPath } from '../services/localDocumentPath';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -91,6 +94,7 @@ export const DocumentPreviewScreen: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
+  const [tables, setTables] = useState<LocalTable[]>([]);
   const [content, setContent] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -99,6 +103,7 @@ export const DocumentPreviewScreen: React.FC = () => {
     try {
       setIsLoading(true);
       setError(null);
+      setTables([]);
 
       const foundPath = localDocumentPath(filePath);
       if (!await RNFS.exists(foundPath)) {
@@ -106,6 +111,12 @@ export const DocumentPreviewScreen: React.FC = () => {
         return;
       }
 
+      const extension = `.${fileName.split('.').pop()?.toLowerCase()}`;
+      if (extension === '.csv' || extension === '.xlsx') {
+        setTables(await readLocalTables(foundPath, extension));
+        setContent('Table data');
+        return;
+      }
       const attachment = await documentService.processDocumentFromPath(foundPath, fileName);
       logger.log('[DocumentPreview] Attachment result:', attachment ? 'success' : 'null');
 
@@ -163,7 +174,7 @@ export const DocumentPreviewScreen: React.FC = () => {
         </View>
       ) : content ? (
         <ScrollView style={styles.content} showsVerticalScrollIndicator>
-          <Text style={styles.contentText}>{content}</Text>
+          {tables.length ? <TableInspector tables={tables} /> : <Text style={styles.contentText}>{content}</Text>}
         </ScrollView>
       ) : (
         <View style={styles.centered}>

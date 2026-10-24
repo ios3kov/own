@@ -96,6 +96,8 @@ jest.mock('../../../src/components/Button', () => ({
 const mockVerifyPassphrase = jest.fn();
 jest.mock('../../../src/services/authService', () => ({
   authService: {
+    getLockKind: jest.fn().mockResolvedValue('passphrase'),
+    biometricName: jest.fn().mockResolvedValue(null),
     verifyPassphrase: (...args: any[]) => mockVerifyPassphrase(...args),
   },
 }));
@@ -442,7 +444,7 @@ describe('LockScreen', () => {
     // handleUnlock ran the empty-passphrase guard and showed an alert
     expect(mockShowAlert).toHaveBeenCalledWith(
       'Error',
-      'Please enter your passphrase',
+      'Enter your current passphrase.',
     );
     expect(mockVerifyPassphrase).not.toHaveBeenCalled();
   });

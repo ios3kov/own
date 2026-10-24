@@ -13,8 +13,6 @@ import { llmService } from '../../../src/services/llm';
 import { resetStores,setupWithActiveModel,setupWithConversation } from '../../utils/testHelpers';
 
 jest.mock('../../../src/services/llm');
-
-jest.mock('../../../src/utils/sharePrompt',()=>({shouldShowSharePrompt:()=>false,emitSharePrompt:jest.fn()}));
 describe('understandable model settings to real generation state',()=>{
   beforeEach(()=>{resetStores();jest.clearAllMocks();useResponseProfilesStore.setState({profiles:[],active:{}});useAppStore.getState().setActiveModelId(APPLE_MODEL_ID);});
   it('changes supported Apple controls, saves a custom profile, restores it and resets in one action',async()=>{

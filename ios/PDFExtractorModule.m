@@ -7,4 +7,6 @@ RCT_EXTERN_METHOD(extractText:(NSString *)filePath
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(extractImageText:(NSString *)filePath maxChars:(double)maxChars resolver:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject)
+
 @end

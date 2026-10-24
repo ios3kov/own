@@ -1,10 +1,10 @@
+import { useScrollToTop } from '@react-navigation/native';
 import React, { useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
@@ -21,7 +21,6 @@ import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAppStore } from '../stores';
 import { RootStackParamList, MainTabParamList } from '../navigation/types';
-import { GITHUB_URL, SHARE_ON_X_URL } from '../utils/sharePrompt';
 import packageJson from '../../package.json';
 
 
@@ -31,6 +30,8 @@ type NavigationProp = CompositeNavigationProp<
 >;
 
 export const SettingsScreen: React.FC = () => {
+  const scrollRef = React.useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const navigation = useNavigation<NavigationProp>();
   const focusTrigger = useFocusTrigger();
   const { colors } = useTheme();
@@ -62,7 +63,7 @@ export const SettingsScreen: React.FC = () => {
       <View style={styles.header}>
         <Text style={styles.title}>Settings</Text>
       </View>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} style={styles.scrollView} contentContainerStyle={styles.content}>
 
         {/* Theme Selector */}
         <AnimatedEntry index={0} staggerMs={40} trigger={focusTrigger}>
@@ -101,7 +102,7 @@ export const SettingsScreen: React.FC = () => {
               { icon: 'wifi', title: 'Remote Servers', desc: 'Connect to Ollama, LM Studio, and more', screen: 'RemoteServers' as const },
             //  { icon: 'search', title: 'Web Search', desc: 'Configure search API key for reliable results', screen: 'WebSearchSettings' as const },
               { icon: 'mic', title: 'Voice', desc: 'Voice input and spoken replies', screen: 'VoiceSettings' as const },
-              { icon: 'lock', title: 'Security', desc: 'Passphrase and app lock', screen: 'SecuritySettings' as const },
+              { icon: 'lock', title: 'Security', desc: 'PIN and biometric app lock', screen: 'SecuritySettings' as const },
               { icon: 'smartphone', title: 'Device Information', desc: 'Hardware and compatibility', screen: 'DeviceInfo' as const },
               { icon: 'hard-drive', title: 'Storage', desc: 'Models and data usage', screen: 'StorageSettings' as const },
             ].map((item, index, arr) => (
@@ -127,37 +128,12 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </AttachStep>
 
-        {/* Community */}
-        <AnimatedEntry index={7} staggerMs={40} trigger={focusTrigger}>
-          <View style={styles.navSection}>
-            <TouchableOpacity style={styles.navItem} onPress={() => Linking.openURL(GITHUB_URL)}>
-              <View style={styles.navItemIcon}>
-                <Icon name="star" size={16} color={colors.textSecondary} />
-              </View>
-              <View style={styles.navItemContent}>
-                <Text style={styles.navItemTitle}>Star on GitHub</Text>
-                <Text style={styles.navItemDesc}>Support the open-source project</Text>
-              </View>
-              <Icon name="external-link" size={14} color={colors.textMuted} />
-            </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.navItem, styles.navItemLast]} onPress={() => Linking.openURL(SHARE_ON_X_URL)}>
-              <View style={styles.navItemIcon}>
-                <Icon name="share-2" size={16} color={colors.textSecondary} />
-              </View>
-              <View style={styles.navItemContent}>
-                <Text style={styles.navItemTitle}>Share on X</Text>
-                <Text style={styles.navItemDesc}>Tell others about Own</Text>
-              </View>
-              <Icon name="external-link" size={14} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-        </AnimatedEntry>
 
         {/* About */}
         <AnimatedEntry index={8} staggerMs={40} trigger={focusTrigger}>
           <View style={styles.navSection}>
-            <TouchableOpacity style={[styles.navItem, styles.navItemLast]} onPress={() => navigation.navigate('About')}>
+            <TouchableOpacity testID="settings-About" accessibilityRole="button" accessibilityLabel="About" style={[styles.navItem, styles.navItemLast]} onPress={() => navigation.navigate('About')}>
               <View style={styles.navItemIcon}>
                 <Icon name="info" size={16} color={colors.textSecondary} />
               </View>

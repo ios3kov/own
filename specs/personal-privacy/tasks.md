@@ -2,7 +2,11 @@
 
 Requirements and acceptance: [plan](plan.md), R01-R14 / T01-T18. Host completion and physical-device acceptance are separate.
 
-| Task | Current result | Still unverified |
+## Historical baseline before the iPhone follow-up
+
+The table below records the earlier candidate, not the newly installed follow-up build.
+
+| Task | Baseline result | Still unverified at that handoff |
 |---|---|---|
 | T01 setup | PASS clean installation, four retained patches, Pods and resolved consumer APIs | Uploaded-candidate CI results |
 | T02-T06 privacy/auth/search/speech consent | PASS scoped host tests and repaired source paths; Release logging guards and inactivity cover checked | Real app traffic, phone lock/capture/permissions and optional-provider behavior |
@@ -24,4 +28,43 @@ Provider keys are kept out of preferences and migrate safely to Keychain. Failed
 
 These are bounded mechanisms and checks, not a guarantee against all attacks. Direct address validation does not establish DNS/redirect enforcement. Local storage is not a separate encrypted vault. See [privacy limits and the exact phone checklist](../../docs/privacy-and-phone-checks.md).
 
-The current app is Own 0.1.0 (1), on the existing review branch. Recovery archives and Own Git history are preserved. Shared upstream packages and their third-party notices remain intact. No phone installation, merge, public release or account-setting change is claimed.
+The earlier host-only candidate was Own 0.1.0 (1), on the existing review branch. Recovery archives and Own Git history are preserved. Shared upstream packages and their third-party notices remain intact. No phone installation, merge, public release or account-setting change is claimed.
+
+
+## Follow-up acceptance, 2026-10-24 (in progress)
+
+F01: No LAN scan or server additions on onboarding/home startup; discovery requires an explicit action.
+F02: Every model tool execution obeys requested and current permissions; empty search never substitutes private chat text.
+F03: Queues preserve chat ownership and arrival order. Interleaved tool arguments stay with their indexed call.
+F04: Image jobs become busy before enhancement; cancellation stays effective across enhancement/load/native/save and blocks overlapping jobs. Saved dimensions match the selected export size; fixed native rendering is explained.
+F05: Unlinked vision files are never attached by fuzzy filename scan. Document content preserves mathematical operators and quoted markup.
+F06: URL reading checks all DNS answers and every redirect, pins a checked public address, verifies TLS for the original hostname, caps body/redirects and fails closed. Website compatibility and native network behavior require runtime proof.
+F07: Local OCR for photos and scanned PDF pages; bounded CSV/XLSX table import, deterministic sum/group/filter/duplicates and charts; local audio file decoding/transcription with a user-installed Whisper model. Original files stay local; no formula execution or automatic model download. Unit, integration and representative native/UI checks required.
+F08: Remove GitHub stars, About project link and X sharing/prompts.
+F09: Four-digit PIN setup/change/disable, optional supported Face ID/Touch ID, secure Keychain storage, preserved legacy passphrase fallback and lockout. Correct Security/setup safe areas, including Dynamic Island and large text. Hardware biometric acceptance stays separate.
+
+Installation gate: run the applicable host checks before an in-place update. The first phone build was cda65cd; current follow-up status is recorded below.
+
+F10: Updated bottom navigation preserves native history, avoids keyboard overlap and supports tab reselect scrolling. Review normal and large text renderings.
+F11: Model guidance recommends only real available files, explains size/memory tradeoffs and never downloads automatically.
+F12: One image finalization prompt per owned job; nested registered Core ML folders are not recovered as duplicate models. Model-loading phases/progress are visible and never fabricate a percentage.
+F13: No automatic image onboarding or rating/share promotion popups. Manual help remains intentional.
+F14: Russian image requests are translated locally even with optional prompt improvement off. Translation-only preserves the subject; failure stops with an actionable message. Actual puppy output needs semantic phone review.
+F15: Apple changes from ORCHID to a newer request in the same conversation. Actual supported-device execution is required.
+F16: Back up chat preferences and inventory model files, install build 5 without uninstalling, compare retained data after launch. Preserve legacy credentials and do not change user's lock configuration.
+
+Exact 17-item mapping: [iPhone follow-up acceptance](../../docs/iphone-followup-2026-10-24.md). Earlier T01–T18 results describe the previous candidate, not these changed bytes.
+
+## Follow-up status, 2026-10-25
+
+- Implemented F01–F16 and the additional whole-app gallery/composer fixes. Exact mapping and limitations: [iPhone QA ledger](../../docs/iphone-followup-2026-10-24.md).
+- PASS: latest JavaScript coverage suite, 214 suites / 5,307 tests; types; lint with warnings; resolved-dependency audit, zero known advisories.
+- PASS: complete native/simulator suite, 62 native tests and 11 UI user-flow tests, with synthetic model/document/gallery fixtures loaded. Actual Apple inference remains separate. Final Hugging Face pairing adjustment is covered by the later full JS suite and its new unit/integration cases; native/UI behavior was unchanged.
+- PASS: reviewed normal navigation, gallery confirmation, composer with keyboard and corrected large-text Security/PIN renderings. Dedicated simulator state restored from its backups.
+- PASS: final signed Release build 0.1.0 (5), deep/strict signature verification, existing bundle identifier and iPhone provisioning. Installed as an update without uninstalling.
+- BLOCKED: live phone startup and model-output checks require unlocking the Mac/iPhone. The launch attempt was rejected by iOS with Device Locked; this is not a successful launch or an observed app crash.
+- NOT RUN on the installed candidate: actual Apple changed-turn/tool-history replies; Russian puppy semantic output; real background downloads/connectivity/termination; network traffic; real Files/media-provider flows and imported speech recognition; PIN/biometric hardware and interruptions/memory pressure. Touch ID requires suitable hardware.
+
+Do not mark phone acceptance or release readiness complete from the host checks above. Preserve existing chats/models/images and do not enroll credentials during automated checks.
+
+Final address-boundary correction was rechecked by all 62 native tests after the complete UI run. Build 5 preserves the original two chats/eight messages, all saved model records and all pre-existing document file paths/sizes after installation. Live phone launch remains blocked by the lock; no post-launch retention or runtime semantic claim is made.

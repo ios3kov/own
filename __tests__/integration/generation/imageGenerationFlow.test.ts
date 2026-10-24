@@ -32,6 +32,7 @@ const mockLlmService = llmService as jest.Mocked<typeof llmService>;
 
 describe('Image Generation Flow Integration', () => {
   beforeEach(async () => {
+    (imageGenerationService as any).resetState();
     resetStores();
     jest.clearAllMocks();
 
@@ -133,7 +134,6 @@ describe('Image Generation Flow Integration', () => {
 
       await generatePromise;
 
-      // Should no longer be generating
       expect(imageGenerationService.getState().isGenerating).toBe(false);
     });
 
@@ -342,7 +342,7 @@ describe('Image Generation Flow Integration', () => {
         });
       });
 
-      imageGenerationService.generateImage({
+      const operation = imageGenerationService.generateImage({
         prompt: 'Long prompt',
       });
 
@@ -357,7 +357,10 @@ describe('Image Generation Flow Integration', () => {
       // Should have called native cancel
       expect(mockLocalDreamService.cancelGeneration).toHaveBeenCalled();
 
-      // Should no longer be generating
+      // Cancellation remains busy until the native operation settles.
+      expect(imageGenerationService.getState().isGenerating).toBe(true);
+      _resolveGeneration!({ imagePath: '/mock/cancelled.png' });
+      expect(await operation).toBeNull();
       expect(imageGenerationService.getState().isGenerating).toBe(false);
     });
   });
@@ -974,7 +977,7 @@ describe('Image Generation Flow Integration', () => {
   });
 
   describe('enhancement with LLM currently generating', () => {
-    it('should still attempt enhancement even if LLM was generating', async () => {
+    it('does not interrupt another active text generation for enhancement', async () => {
       const imageModel = setupImageModelState();
 
       mockActiveModelService.getActiveModels.mockReturnValue({
@@ -1424,4 +1427,53 @@ describe('Image Generation Flow Integration', () => {
       expect(imageGenerationService.getState().error).toBe('No image model selected');
     });
   });
+  describe('automatic local image prompt translation', () => {
+    it('translates a Russian puppy request even with optional improvement off', async () => {
+      setupImageModelState();
+      getAppState().updateSettings({enhanceImagePrompts:false});
+      mockLlmService.isModelLoaded.mockReturnValue(true);
+      mockLlmService.generateResponse.mockResolvedValue('A small puppy');
+      await imageGenerationService.generateImage({prompt:'Нарисуй собачку'});
+      expect(mockLlmService.generateResponse).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.objectContaining({role:'system', content:expect.stringContaining('Do not add artistic details')})]), expect.any(Function));
+      expect(mockLocalDreamService.generateImage).toHaveBeenCalledWith(expect.objectContaining({prompt:'A small puppy'}), expect.any(Function), expect.any(Function));
+    });
+    it('does not send untranslated Russian to the image model if translation is unavailable', async () => {
+      setupImageModelState();
+      getAppState().updateSettings({enhanceImagePrompts:false});
+      mockLlmService.isModelLoaded.mockReturnValue(false);
+      expect(await imageGenerationService.generateImage({prompt:'Нарисуй собачку'})).toBeNull();
+      expect(mockLocalDreamService.generateImage).not.toHaveBeenCalled();
+      expect(imageGenerationService.getState().isGenerating).toBe(false);
+      expect(imageGenerationService.getState().error).toBeTruthy();
+    });
+  });
+
+  describe('enhancement cancellation ownership', () => {
+    it('does not start or save an image after cancellation while enhancement is pending', async () => {
+      setupImageModelState();
+      getAppState().updateSettings({enhanceImagePrompts:true});
+      mockLlmService.isModelLoaded.mockReturnValue(true);
+      let finish!: (value:string)=>void;
+      mockLlmService.generateResponse.mockImplementation(()=>new Promise<string>(resolve=>{finish=resolve;}));
+      const operation=imageGenerationService.generateImage({prompt:'Synthetic sunset'});
+      await flushPromises();
+      expect(imageGenerationService.getState().isGenerating).toBe(true);
+      await imageGenerationService.cancelGeneration();
+      finish('Enhanced synthetic sunset');
+      expect(await operation).toBeNull();
+      expect(mockLocalDreamService.generateImage).not.toHaveBeenCalled();
+      expect(getAppState().generatedImages).toHaveLength(0);
+    });
+    it('marks the operation busy even when enhancement is enabled without a text model', async () => {
+      setupImageModelState();getAppState().updateSettings({enhanceImagePrompts:true});
+      let finish!:(value:any)=>void;
+      mockLocalDreamService.generateImage.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+      const operation=imageGenerationService.generateImage({prompt:'Synthetic sunset'});
+      expect(imageGenerationService.getState().isGenerating).toBe(true);
+      await flushPromises();await imageGenerationService.cancelGeneration();finish({imagePath:'/mock/cancelled.png'});
+      expect(await operation).toBeNull();expect(getAppState().generatedImages).toHaveLength(0);
+    });
+  });
+
 });

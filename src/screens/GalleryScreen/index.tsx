@@ -80,6 +80,7 @@ export const GalleryScreen: React.FC = () => {
               <Text style={styles.headerButtonText}>All</Text>
             </TouchableOpacity>
             <TouchableOpacity
+              accessibilityRole="button" accessibilityLabel="Delete selected images"
               style={[styles.headerButton, selectedIds.size === 0 && styles.headerButtonDisabled]}
               onPress={handleDeleteSelected}
               disabled={selectedIds.size === 0}
@@ -99,7 +100,7 @@ export const GalleryScreen: React.FC = () => {
             <Text style={styles.title}>{screenTitle}</Text>
             <Text style={styles.countBadge}>{displayImages.length}</Text>
             {displayImages.length > 0 && (
-              <TouchableOpacity style={styles.headerButton} onPress={toggleSelectMode}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Select images" style={styles.headerButton} onPress={toggleSelectMode}>
                 <Icon name="check-square" size={20} color={colors.text} />
               </TouchableOpacity>
             )}
@@ -170,6 +171,8 @@ export const GalleryScreen: React.FC = () => {
 
       <FullscreenViewer
         image={selectedImage}
+        alert={alertState}
+        onDismissAlert={() => setAlertState(hideAlert())}
         showDetails={showDetails}
         onClose={closeViewer}
         onToggleDetails={() => setShowDetails(prev => !prev)}
@@ -177,7 +180,7 @@ export const GalleryScreen: React.FC = () => {
         onDelete={handleDelete}
       />
       <CustomAlert
-        visible={alertState.visible}
+        visible={alertState.visible && !selectedImage}
         title={alertState.title}
         message={alertState.message}
         buttons={alertState.buttons}

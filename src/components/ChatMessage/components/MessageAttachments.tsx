@@ -1,4 +1,7 @@
 import React from 'react';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../../navigation/types';
 import {
   View,
   Text,
@@ -75,6 +78,7 @@ export function MessageAttachments({
   colors,
   onImagePress,
 }: MessageAttachmentsProps) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   return (
     <View testID="message-attachments" style={styles.attachmentsContainer}>
       {attachments.map((attachment, index) =>
@@ -89,6 +93,10 @@ export function MessageAttachments({
             onPress={() => {
               if (!attachment.uri) { return; }
               const ext = (attachment.fileName || '').split('.').pop()?.toLowerCase();
+              if (ext === 'csv' || ext === 'xlsx') {
+                navigation.navigate('DocumentPreview', { filePath: attachment.uri, fileName: attachment.fileName || 'Table', fileSize: attachment.fileSize || 0 });
+                return;
+              }
               const mimeMap: Record<string, string> = {
                 pdf: 'application/pdf',
                 txt: 'text/plain',

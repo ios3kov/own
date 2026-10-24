@@ -181,25 +181,11 @@ describe('OnboardingScreen', () => {
     expect(getByTestId('onboarding-next')).toBeTruthy();
   });
 
-  it('kicks off LAN discovery on mount', async () => {
-    const { act: reactAct } = require('@testing-library/react-native');
-    mockDiscoverLANServers.mockResolvedValue([
-      { endpoint: 'http://192.168.1.10:11434', type: 'ollama', name: 'Ollama (192.168.1.10)' },
-    ]);
-
+  it('never scans or adds LAN servers on mount', async () => {
     render(<OnboardingScreen navigation={navigation} />);
-
-    await reactAct(async () => {
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(mockDiscoverLANServers).toHaveBeenCalled();
-    expect(mockAddServer).toHaveBeenCalledWith({
-      name: 'Ollama (192.168.1.10)',
-      endpoint: 'http://192.168.1.10:11434',
-      providerType: 'openai-compatible',
-    });
+    await Promise.resolve();
+    expect(mockDiscoverLANServers).not.toHaveBeenCalled();
+    expect(mockAddServer).not.toHaveBeenCalled();
   });
 
   it('does not add duplicate servers during LAN discovery', async () => {
@@ -234,7 +220,7 @@ describe('OnboardingScreen', () => {
     });
 
     // Should not throw — error is caught
-    expect(mockDiscoverLANServers).toHaveBeenCalled();
+    expect(mockDiscoverLANServers).not.toHaveBeenCalled();
   });
 
   it('does not show source-author attribution or a promotional link', () => {

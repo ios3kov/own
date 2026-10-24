@@ -7,198 +7,86 @@ ScrollView,
 KeyboardAvoidingView,TouchableOpacity
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Icon from 'react-native-vector-icons/Feather';
 import { Button,Card } from '../components';
 import { CustomAlert,showAlert,hideAlert,AlertState,initialAlertState } from '../components/CustomAlert';
-import { useTheme,useThemedStyles } from '../theme';
+import { useThemedStyles } from '../theme';
 import type { ThemeColors,ThemeShadows } from '../theme';
 import { TYPOGRAPHY,SPACING } from '../constants';
 import { authService } from '../services/authService';
 import { useAuthStore } from '../stores/authStore';
-import logger from '../utils/logger';
 
 interface PassphraseSetupScreenProps {
   isChanging?: boolean;
+  action?: 'set' | 'change' | 'disable' | 'biometric';
   onComplete: () => void;
   onCancel: () => void;
 }
 
-export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({
-  isChanging = false,
-  onComplete,
-  onCancel,
-}) => {
-  const [currentPassphrase, setCurrentPassphrase] = useState('');
-  const [newPassphrase, setNewPassphrase] = useState('');
-  const [confirmPassphrase, setConfirmPassphrase] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+export const PassphraseSetupScreen: React.FC<PassphraseSetupScreenProps> = ({ isChanging = false, action, onComplete, onCancel }) => {
+  const mode = action ?? (isChanging ? 'change' : 'set');
+  const [current, setCurrent] = useState('');
+  const [pin, setPIN] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [busy, setBusy] = useState(false);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
-  const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
-
-  const { setEnabled } = useAuthStore();
-
-  const validatePassphrase = (passphrase: string): string | null => {
-    if (passphrase.length < 6) {
-      return 'Passphrase must be at least 6 characters';
-    }
-    if (passphrase.length > 50) {
-      return 'Passphrase must be 50 characters or less';
-    }
-    return null;
-  };
-
-  const handleSubmit = async () => {
-    // Validate new passphrase
-    const error = validatePassphrase(newPassphrase);
-    if (error) {
-      setAlertState(showAlert('Invalid Passphrase', error));
-      return;
-    }
-
-    // Check confirmation matches
-    if (newPassphrase !== confirmPassphrase) {
-      setAlertState(showAlert('Mismatch', 'Passphrases do not match'));
-      return;
-    }
-
-    setIsSubmitting(true);
-
+  const auth = useAuthStore();
+  const needsNewPIN = mode === 'set' || mode === 'change';
+  const title = mode === 'disable' ? 'Disable app lock' : mode === 'biometric' ? 'Enable biometric unlock' : mode === 'change' ? 'Change PIN' : 'Set up PIN';
+  const submit = async () => {
+    if (busy || auth.checkLockout()) return;
+    if (needsNewPIN && !/^[0-9]{4}$/.test(pin)) { setAlertState(showAlert('Invalid PIN', 'Enter exactly four digits.')); return; }
+    if (needsNewPIN && pin !== confirmation) { setAlertState(showAlert('PINs do not match', 'Enter the same four digits twice.')); return; }
+    setBusy(true);
     try {
-      if (isChanging) {
-        // Verify current passphrase and change
-        const success = await authService.changePassphrase(currentPassphrase, newPassphrase);
-        if (!success) {
-          setAlertState(showAlert('Error', 'Current passphrase is incorrect'));
-          setIsSubmitting(false);
-          return;
-        }
-        setAlertState(showAlert('Success', 'Passphrase changed successfully'));
-      } else {
-        // Set new passphrase
-        const success = await authService.setPassphrase(newPassphrase);
-        if (!success) {
-          setAlertState(showAlert('Error', 'Failed to set passphrase'));
-          setIsSubmitting(false);
-          return;
-        }
-        setEnabled(true);
-        setAlertState(showAlert('Success', 'Passphrase lock enabled'));
+      if (mode !== 'set' && !await authService.verifyPassphrase(current)) {
+        auth.recordFailedAttempt();
+        setAlertState(showAlert('Incorrect code', 'Enter your current PIN or existing passphrase. Too many attempts cause a five-minute lockout.'));
+        return;
       }
-
+      let saved = false;
+      if (mode === 'disable') {
+        saved = await authService.removePassphrase();
+        if (saved) auth.setEnabled(false);
+      } else if (mode === 'biometric') {
+        saved = await authService.enableBiometrics(current);
+        if (saved) auth.setBiometricEnabled(true);
+      } else {
+        saved = await authService.setPIN(pin);
+        if (saved) { auth.setBiometricEnabled(false); auth.setEnabled(true); auth.setLocked(false); }
+      }
+      if (!saved) { setAlertState(showAlert('Could not save', 'Your current lock stays in place. Please try again.')); return; }
+      auth.resetFailedAttempts();
+      setCurrent(''); setPIN(''); setConfirmation('');
       onComplete();
-    } catch (err) {
-      logger.warn('[PassphraseSetup] Operation failed:', err);
-      setAlertState(showAlert('Error', 'An error occurred. Please try again.'));
-    } finally {
-      setIsSubmitting(false);
-    }
+    } finally { setBusy(false); }
   };
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={('padding')}
-        style={styles.flex}
-      >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onCancel}>
-            <Text style={styles.cancelButton}>Cancel</Text>
-          </TouchableOpacity>
-          <Text style={styles.title}>
-            {isChanging ? 'Change Passphrase' : 'Set Up Passphrase'}
-          </Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
-          <View style={styles.iconContainer}>
-            <View style={styles.iconBox}>
-              <Icon name="lock" size={48} color={colors.primary} />
-            </View>
-          </View>
-
-          <Text style={styles.description}>
-            {isChanging
-              ? 'Enter your current passphrase and then set a new one.'
-              : 'Create a passphrase to lock the app. You will need to enter it each time you open the app.'}
-          </Text>
-
-          <Card style={styles.inputCard}>
-            {isChanging && (
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Current Passphrase</Text>
-                <TextInput
-                  style={styles.input}
-                  value={currentPassphrase}
-                  onChangeText={setCurrentPassphrase}
-                  placeholder="Enter current passphrase"
-                  placeholderTextColor={colors.textMuted}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-            )}
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>
-                {isChanging ? 'New Passphrase' : 'Passphrase'}
-              </Text>
-              <TextInput
-                style={styles.input}
-                value={newPassphrase}
-                onChangeText={setNewPassphrase}
-                placeholder="Enter passphrase (min 6 characters)"
-                placeholderTextColor={colors.textMuted}
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Confirm Passphrase</Text>
-              <TextInput
-                style={styles.input}
-                value={confirmPassphrase}
-                onChangeText={setConfirmPassphrase}
-                placeholder="Re-enter passphrase"
-                placeholderTextColor={colors.textMuted}
-                secureTextEntry
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
-          </Card>
-
-          <View style={styles.tips}>
-            <Text style={styles.tipsTitle}>Tips for a good passphrase:</Text>
-            <Text style={styles.tipItem}>• Use a mix of words and numbers</Text>
-            <Text style={styles.tipItem}>• Make it memorable but not obvious</Text>
-            <Text style={styles.tipItem}>• Avoid personal information</Text>
-          </View>
-
-          <Button
-            title={(() => {
-              if (isSubmitting) return 'Saving...';
-              return isChanging ? 'Change Passphrase' : 'Enable Lock';
-            })()}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-            style={styles.submitButton}
-          />
-        </ScrollView>
-      </KeyboardAvoidingView>
-      <CustomAlert
-        visible={alertState.visible}
-        title={alertState.title}
-        message={alertState.message}
-        buttons={alertState.buttons}
-        onClose={() => setAlertState(hideAlert())}
-      />
-    </SafeAreaView>
-  );
+  return <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={onCancel} disabled={busy} accessibilityRole="button"><Text maxFontSizeMultiplier={1.35} style={styles.cancelButton}>Cancel</Text></TouchableOpacity>
+        <Text accessibilityRole="header" maxFontSizeMultiplier={1.5} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.7} style={styles.title}>{title}</Text>
+      </View>
+      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
+        <Card style={styles.inputCard}>
+          {mode !== 'set' && <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Current PIN or existing passphrase</Text>
+            <TextInput accessibilityLabel="Current PIN or existing passphrase" style={styles.input} value={current} onChangeText={setCurrent} secureTextEntry editable={!busy} autoCapitalize="none" autoCorrect={false} />
+          </View>}
+          {needsNewPIN && <>
+            <Text style={styles.inputLabel}>Four-digit PIN</Text>
+            <TextInput accessibilityLabel="Four-digit PIN" maxFontSizeMultiplier={1.5} style={styles.input} value={pin} onChangeText={text => setPIN(text.replace(/[^0-9]/g, ''))} keyboardType="number-pad" maxLength={4} secureTextEntry editable={!busy} />
+            <Text style={styles.inputLabel}>Confirm PIN</Text>
+            <TextInput accessibilityLabel="Confirm PIN" maxFontSizeMultiplier={1.5} style={styles.input} value={confirmation} onChangeText={text => setConfirmation(text.replace(/[^0-9]/g, ''))} keyboardType="number-pad" maxLength={4} secureTextEntry editable={!busy} />
+          </>}
+        </Card>
+        <Text style={styles.description}>Face ID or Touch ID is optional. You can enable it in Security.</Text>
+        <Text style={styles.description}>After five incorrect attempts, wait five minutes. Remember your PIN: there is no online reset. The app lock does not separately encrypt files.</Text>
+        <Button title={busy ? 'Saving…' : title} onPress={submit} disabled={busy || (mode !== 'set' && !current) || (needsNewPIN && (!pin || !confirmation))} />
+      </ScrollView>
+    </KeyboardAvoidingView>
+    <CustomAlert visible={alertState.visible} title={alertState.title} message={alertState.message} buttons={alertState.buttons} onClose={() => setAlertState(hideAlert())} />
+  </SafeAreaView>;
 };
 
 const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
@@ -226,6 +114,9 @@ const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   title: {
     ...TYPOGRAPHY.h2,
+    flex: 1,
+    textAlign: 'right' as const,
+    marginLeft: SPACING.md,
     color: colors.text,
   },
   content: {

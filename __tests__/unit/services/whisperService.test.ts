@@ -622,7 +622,7 @@ describe('WhisperService', () => {
 
       expect(result).toBe('transcribed text');
       expect(mockContext.transcribe).toHaveBeenCalledWith('/audio.wav', expect.objectContaining({
-        language: 'en',
+        language: 'auto',
       }));
     });
   });

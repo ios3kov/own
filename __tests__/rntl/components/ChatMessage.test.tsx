@@ -1236,11 +1236,22 @@ describe('ChatMessage', () => {
       expect(() => fireEvent.press(getByTestId('document-badge-0'))).not.toThrow();
     });
 
-    it('maps known extensions correctly (md, csv, py, js, ts, html, xml)', () => {
+    it.each(['csv','xlsx'])('opens %s attachments in the local table inspector', ext => {
+      const navigation=require('@react-navigation/native');
+      const navigate=jest.fn();
+      const spy=jest.spyOn(navigation,'useNavigation').mockReturnValue({navigate});
+      try {
+        const attachment=createDocumentAttachment({uri:`/path/data.${ext}`,fileName:`data.${ext}`,fileSize:123});
+        const ui=render(<ChatMessage message={createUserMessage('Open table',{attachments:[attachment]})}/>);
+        fireEvent.press(ui.getByTestId('document-badge-0'));
+        expect(navigate).toHaveBeenCalledWith('DocumentPreview',{filePath:`/path/data.${ext}`,fileName:`data.${ext}`,fileSize:123});
+      } finally { spy.mockRestore(); }
+    });
+
+    it('maps system-viewer extensions correctly (md, py, js, ts, html, xml)', () => {
       const { viewDocument } = require('@react-native-documents/viewer');
       const extensions = [
         { ext: 'md', mime: 'text/markdown' },
-        { ext: 'csv', mime: 'text/csv' },
         { ext: 'py', mime: 'text/x-python' },
         { ext: 'js', mime: 'text/javascript' },
         { ext: 'ts', mime: 'text/typescript' },

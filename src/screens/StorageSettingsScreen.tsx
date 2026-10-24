@@ -89,6 +89,7 @@ export const StorageSettingsScreen: React.FC = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity
+          accessibilityRole="button" accessibilityLabel="Back"
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >

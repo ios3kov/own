@@ -41,60 +41,15 @@ export async function deleteOrphanedFile(filePath: string): Promise<void> {
   }
 }
 
-function looksLikeVisionModel(model: DownloadedModel): boolean {
-  const nameLower = model.name.toLowerCase();
-  const fileLower = model.fileName.toLowerCase();
-  return nameLower.includes('vl') || nameLower.includes('vision') || nameLower.includes('smolvlm') ||
-    fileLower.includes('vl') || fileLower.includes('vision');
-}
-
 export function extractBaseName(fileName: string): string {
   const match = fileName.match(/^(.+?)[-_](?:Q\d|q\d|F\d|f\d)/i);
   return match ? match[1].toLowerCase() : fileName.toLowerCase().replace('.gguf', '');
-}
-
-export function findMatchingMmProj(
-  baseName: string,
-  mmProjFiles: RNFS.ReadDirItem[],
-): RNFS.ReadDirItem | undefined {
-  const noSeparators = baseName.replaceAll('-', '').replaceAll('_', '');
-  return mmProjFiles.find(mf => {
-    const lower = mf.name.toLowerCase();
-    return lower.includes(noSeparators) || lower.includes(baseName);
-  });
-}
-
-function linkMmProjToModel(model: DownloadedModel, mmProjFiles: RNFS.ReadDirItem[]): void {
-  if (model.engine !== 'llama') return;
-  if (model.mmProjPath) return;
-  if (!looksLikeVisionModel(model)) return;
-  const baseName = extractBaseName(model.fileName);
-  const match = findMatchingMmProj(baseName, mmProjFiles);
-  if (match) {
-    model.mmProjPath = match.path;
-    model.mmProjFileName = match.name;
-    model.mmProjFileSize = parseSizeInt(match.size);
-    model.isVisionModel = true;
-  }
 }
 
 export async function cleanupMMProjEntries(modelsDir: string): Promise<number> {
   const models = await loadDownloadedModels(modelsDir);
   const cleanedModels = models.filter(m => !isMMProjFile(m.fileName));
   const removedCount = models.length - cleanedModels.length;
-
-  try {
-    const dirExists = await RNFS.exists(modelsDir);
-    if (dirExists) {
-      const files = await RNFS.readDir(modelsDir);
-      const mmProjFiles = files.filter(f => f.isFile() && isMMProjFile(f.name));
-      for (const model of cleanedModels) {
-        linkMmProjToModel(model, mmProjFiles);
-      }
-    }
-  } catch {
-    // Scan errors are non-fatal
-  }
 
   await saveModelsList(cleanedModels);
   return removedCount;
@@ -283,7 +238,7 @@ export async function scanForUntrackedImageModels(opts: ScanImageModelsOpts): Pr
   const items = await RNFS.readDir(imageModelsDir);
 
   for (const item of items) {
-    if (!item.isDirectory() || registeredPaths.has(item.path)) continue;
+    if (!item.isDirectory() || registeredPaths.has(item.path) || registeredModels.some(model => model.modelPath.startsWith(`${item.path}/`))) continue;
 
     const totalSize = await getDirSize(item.path);
     if (totalSize === 0) continue;

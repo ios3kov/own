@@ -9,7 +9,6 @@ import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MainTabParamList, RootStackParamList } from '../../../navigation/types';
 import { useModelLoading } from './useModelLoading';
-import { useLANDiscovery } from './useLANDiscovery';
 import { useRemoteModelHandlers } from './useRemoteModelHandlers';
 import { useActiveTextModel } from '../../../hooks/useActiveTextModel';
 import logger from '../../../utils/logger';
@@ -29,7 +28,6 @@ export type LoadingState = {
 
 // Track if we've synced native state to avoid repeated calls
 let hasInitializedNativeSync = false;
-let hasRunLANDiscovery = false;
 
 function deleteConversationWithAlert(
   conversation: Conversation,
@@ -120,7 +118,6 @@ export const useHomeScreen = (navigation: HomeScreenNavigationProp) => {
 
   const { model: activeTextModel, modelId: activeTextModelId } = useActiveTextModel();
 
-  const { runLANDiscovery } = useLANDiscovery({ navigation, setAlertState });
 
   const {
     handleSelectRemoteTextModel,
@@ -136,11 +133,7 @@ export const useHomeScreen = (navigation: HomeScreenNavigationProp) => {
         hasInitializedNativeSync = true;
         activeModelService.syncWithNativeState();
       }
-      if (!hasRunLANDiscovery) {
-        hasRunLANDiscovery = true;
-        // Delay LAN scan so the home screen is fully rendered and interactive first
-        setTimeout(runLANDiscovery, 3000);
-      }
+
     });
     isFirstMount.current = false;
     return () => task.cancel();

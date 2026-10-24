@@ -1,10 +1,10 @@
-import React,{ useEffect } from 'react';
+import { chooseModelFile, downloadableChoices, choiceSize } from '../../utils/modelFileChoice';
+import React,{ useEffect, useState } from 'react';
 import { View,Text,FlatList,TextInput,ActivityIndicator,RefreshControl,TouchableOpacity,InteractionManager } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AttachStep,useSpotlightTour } from 'react-native-spotlight-tour';
 import { Card,ModelCard } from '../../components';
 import { AnimatedEntry } from '../../components/AnimatedEntry';
-import { CustomAlert,hideAlert } from '../../components/CustomAlert';
 import { consumePendingSpotlight,peekPendingSpotlight,setPendingSpotlight } from '../../components/onboarding/spotlightState';
 import { DOWNLOAD_MANAGER_STEP_INDEX } from '../../components/onboarding/spotlightConfig';
 import { useTheme,useThemedStyles } from '../../theme';
@@ -63,13 +63,15 @@ type DetailProps = Pick<Props,
 
 const ModelDetailView: React.FC<DetailProps> = ({
   selectedModel, modelFiles, isLoadingFiles, filterState, ramGB,
-  alertState, setAlertState, onBack,
+  onBack,
   getDownloadedModel, isModelDownloaded, isRepairingVisionModel,
   handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel,
 }) => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { goTo } = useSpotlightTour();
+  const [goal, setGoal] = useState<'balanced' | 'smaller' | 'larger'>('balanced');
+  const bestFile = chooseModelFile(modelFiles, ramGB, goal);
 
   // If user arrived here via onboarding spotlight flow, show file card spotlight
   // Pre-set the next pending (Download Manager icon) so it fires regardless of
@@ -123,7 +125,7 @@ const ModelDetailView: React.FC<DetailProps> = ({
       : undefined;
 
     const displayName = item.name.replace(/\.gguf$/i, '');
-    const recommended = undefined;
+    const recommended = item.name === bestFile?.name ? { pillLabel: 'Suggested file', highlightText: `${choiceSize(item)} download. A balanced starting point from the files actually available. Memory use is estimated, not guaranteed.` } : undefined;
     const storeEntry = storeDownloads[s.downloadKey];
     const failedState = s.hasFailed && s.errorMessage && storeEntry?.downloadId
       ? {
@@ -187,10 +189,20 @@ const ModelDetailView: React.FC<DetailProps> = ({
           </View>
         )}
       </Card>
+      <Text style={styles.sectionTitle}>Choose a starting point</Text>
+      <View style={styles.filterChipWrap}>
+        {([['smaller', 'Smaller download'], ['balanced', 'Balanced'], ['larger', 'Larger file']] as const).map(([key, label]) => (
+          <TouchableOpacity key={key} accessibilityRole="button" accessibilityState={{selected: goal === key}}
+            style={[styles.filterChip, goal === key && styles.filterChipActive]} onPress={() => setGoal(key)}>
+            <Text style={styles.filterChipText}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={styles.sectionSubtitle}>{goal === 'smaller' ? 'Uses less download space and usually less memory.' : goal === 'larger' ? 'Uses more space and memory. A larger file does not guarantee better answers.' : 'A practical first file from the available versions. Actual speed and quality depend on the model.'}</Text>
       <Text style={styles.sectionTitle}>Available Files</Text>
       {(
         <Text style={styles.sectionSubtitle}>
-          Choose a quantization level. Q4_K_M is recommended for mobile.
+          Start with the suggested file below. Other files trade download size, memory and answer quality.
           {modelFiles.some(f => f.mmProjFile) && ' Vision files include mmproj.'}
         </Text>
       )}
@@ -198,30 +210,24 @@ const ModelDetailView: React.FC<DetailProps> = ({
         <View style={styles.loadingContainer}><ActivityIndicator size="large" color={colors.primary} /></View>
       ) : (
         <FlatList
-          data={modelFiles
-            .filter(f => f.size > 0 && f.size / (1024 ** 3) < ramGB * 0.6 && (filterState.quant === 'all' || f.name.includes(filterState.quant)))
-            .sort((a, b) => {
-              const aRec = a.name.includes('Q4_K_M') ? 0 : 1;
-              const bRec = b.name.includes('Q4_K_M') ? 0 : 1;
-              if (aRec !== bRec) return aRec - bRec;
-              return b.size - a.size;
-            })}
+          data={downloadableChoices(modelFiles, ramGB)
+            .filter(f => filterState.quant === 'all' || f.name.includes(filterState.quant))
+            .sort((a, b) => Number(b.name === bestFile?.name) - Number(a.name === bestFile?.name) || a.size - b.size)}
           renderItem={renderFileItem}
           keyExtractor={item => item.name}
           contentContainerStyle={styles.listContent}
-          ListEmptyComponent={<Card style={styles.emptyCard}><Text style={styles.emptyText}>No compatible files found for this model.</Text></Card>}
+          ListEmptyComponent={<Card style={styles.emptyCard}><Text style={styles.emptyText}>No files fit the current filter and estimated memory budget. Clear the file filter or choose a smaller model.</Text></Card>}
         />
       )}
-      <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />
     </View>
   );
 };
 
 
-const DeviceBanner: React.FC<{ ramGB: number; rec: { maxParameters: number; recommendedQuantization: string }; showTitle: boolean; styles: any }> = ({ ramGB, rec, showTitle, styles }) => (
+const DeviceBanner: React.FC<{ ramGB: number; rec: { maxParameters: number; recommendedQuantization: string }; showTitle: boolean; styles: any }> = ({ ramGB, showTitle, styles }) => (
   <View>
-    <View style={styles.deviceBanner}><Text style={styles.deviceBannerText}>{Math.round(ramGB)}GB RAM — models up to {rec.maxParameters}B recommended ({rec.recommendedQuantization})</Text></View>
-    {showTitle && <Text style={styles.recommendedTitle}>Recommended for your device</Text>}
+    <View style={styles.deviceBanner}><Text style={styles.deviceBannerText}>{Math.round(ramGB)} GB memory. Start with a smaller model; fit is estimated and other apps also use memory.</Text></View>
+    {showTitle && <Text style={styles.recommendedTitle}>Start here</Text>}
   </View>
 );
 
@@ -378,7 +384,19 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           testID="models-list"
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
           ListHeaderComponent={hasSearched ? null : (
-            <DeviceBanner ramGB={ramGB} rec={deviceRecommendation} showTitle={recommendedAsModelInfo.length > 0} styles={styles} />
+            <View>
+              <DeviceBanner ramGB={ramGB} rec={deviceRecommendation} showTitle={recommendedAsModelInfo.length > 0} styles={styles} />
+              <Text style={styles.sectionTitle}>What would you like to do?</Text>
+              <View style={styles.filterChipWrap}>
+                {([['text', 'Everyday chat'], ['vision', 'Ask about photos'], ['code', 'Write code']] as const).map(([type, label]) => (
+                  <TouchableOpacity key={type} accessibilityRole="button" accessibilityState={{selected: filterState.type === type}}
+                    style={[styles.filterChip, filterState.type === type && styles.filterChipActive]} onPress={() => setTypeFilter(type)}>
+                    <Text style={styles.filterChipText}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={styles.sectionSubtitle}>Smaller models usually need less memory and download space. Open a model to see a suggested available file and its size. Nothing downloads until you confirm.</Text>
+            </View>
           )}
           ListEmptyComponent={
             <Card style={styles.emptyCard}>

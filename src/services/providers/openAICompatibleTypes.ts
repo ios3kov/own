@@ -44,6 +44,7 @@ export interface OpenAIStreamState {
   fullContent: string;
   fullReasoningContent: string;
   toolCalls: OpenAIToolCall[];
+  toolCallsByIndex?: Record<number, OpenAIToolCall>;
   currentToolCall: Partial<OpenAIToolCall> | null;
   completeCalled: boolean;
   streamErrorOccurred: boolean;

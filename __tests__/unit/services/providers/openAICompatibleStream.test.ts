@@ -160,6 +160,7 @@ describe('processDelta', () => {
     const state = makeState();
     state.toolCalls = [{ id: 'call-1', type: 'function', function: { name: 'get_weather', arguments: '{"city"' } }];
     state.currentToolCall = state.toolCalls[0];
+    state.toolCallsByIndex = { 0: state.toolCalls[0] };
     const { thinkTagParser, callbacks } = makeCtx();
     processDelta({
       tool_calls: [{ function: { arguments: ':"NY"}' } }],
@@ -323,5 +324,22 @@ describe('generateOllamaChatImpl', () => {
 
     await generateOllamaChatImpl([], req);
     expect(req.callbacks.onReasoning).toHaveBeenCalledWith('internal thought');
+  });
+});
+
+describe('interleaved tool arguments', () => {
+  it('routes continuations by index, including an index received before its id', () => {
+    const state = makeState();
+    const context = makeCtx();
+    processDelta({ tool_calls: [
+      { index: 1, function: { arguments: '{"b":' } },
+      { index: 0, id: 'a', function: { name: 'first', arguments: '{"a":' } },
+    ] }, state, { ...context, thinkingEnabled: true });
+    processDelta({ tool_calls: [
+      { index: 1, id: 'b', function: { name: 'second', arguments: '2}' } },
+      { index: 0, function: { arguments: '1}' } },
+    ] }, state, { ...context, thinkingEnabled: true });
+    expect(state.toolCalls.find(c => c.id === 'a')?.function.arguments).toBe('{"a":1}');
+    expect(state.toolCalls.find(c => c.id === 'b')?.function.arguments).toBe('{"b":2}');
   });
 });

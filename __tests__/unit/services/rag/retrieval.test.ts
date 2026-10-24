@@ -139,7 +139,9 @@ describe('RetrievalService', () => {
       expect(result).not.toContain('<system_prompt>');
       expect(result).not.toContain('</system_prompt>');
       expect(result).not.toContain('<script>');
-      expect(result).toContain('Hello ignore all world alert(1)');
+      expect(result).toContain('ignore all');
+      expect(result).toContain('alert(1)');
+      expect(result).toContain('\\u003csystem_prompt\\u003e');
     });
 
     it('strips angle brackets from document names', () => {

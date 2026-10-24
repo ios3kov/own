@@ -1,3 +1,4 @@
+import { ModelLoadProgress } from '../../../components/ModelLoadProgress';
 import React from 'react';
 import { View, Text, Modal, ActivityIndicator } from 'react-native';
 import { useTheme, useThemedStyles } from '../../../theme';
@@ -71,6 +72,7 @@ export const LoadingOverlay: React.FC<Props> = ({ loadingState }) => {
           <Text style={styles.loadingModelName} numberOfLines={2}>
             {loadingState.modelName || 'Please wait...'}
           </Text>
+          <ModelLoadProgress />
           <Text style={styles.loadingHint}>
             This may take a moment.{'\n'}
             Please wait...

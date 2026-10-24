@@ -38,7 +38,6 @@ import {
   reconcileFinishedImageDownloads as reconcileImageDownloads,
   isMMProjFile,
   extractBaseName,
-  findMatchingMmProj,
   ImportLocalModelOpts,
 } from './scan';
 import { resolveStoredPath, determineCredibility } from './storage';
@@ -71,34 +70,13 @@ class ModelManager {
 
   async linkOrphanMmProj(): Promise<void> {
     const models = await this.getDownloadedModels();
-    let dirFiles: RNFS.ReadDirItem[] = [];
-    try {
-      dirFiles = await RNFS.readDir(this.modelsDir);
-    } catch {
-      return;
-    }
-    const mmProjFiles = dirFiles.filter(f => f.isFile() && this.isMMProjFile(f.name));
-    if (mmProjFiles.length === 0) return;
-
+    // Only validate an existing explicit association. Filename similarity cannot
+    // establish projector compatibility, and must never create an association.
     const toSave: typeof models = [];
-    for (const m of models) {
-      if (m.engine !== 'llama') continue;
-      const baseName = extractBaseName(m.fileName);
-      const match = findMatchingMmProj(baseName, mmProjFiles);
-
-      if (m.mmProjPath) {
-        // Clear link if the stored file no longer exists OR doesn't name-match this model
-        const nameMatch = findMatchingMmProj(baseName, [{ name: m.mmProjPath.split('/').pop() ?? '', path: m.mmProjPath, isFile: () => true } as RNFS.ReadDirItem]);
-        const fileExists = await RNFS.exists(m.mmProjPath).catch(() => false);
-        if (!fileExists || !nameMatch) {
-          logger.log(`[linkOrphanMmProj] ${m.id} — clearing bad link: ${m.mmProjPath}`);
-          toSave.push({ ...m, mmProjPath: undefined, mmProjFileName: undefined, mmProjFileSize: undefined, isVisionModel: false });
-        }
-        // If link is valid, leave it alone
-      } else if (match) {
-        logger.log(`[linkOrphanMmProj] ${m.id} — linking ${match.path}`);
-        await this.saveModelWithMmproj(m.id, match.path);
-      }
+    for (const model of models) {
+      if (model.engine !== 'llama' || !model.mmProjPath) continue;
+      const exists = await RNFS.exists(model.mmProjPath).catch(() => false);
+      if (!exists) toSave.push({...model, mmProjPath:undefined, mmProjFileName:undefined, mmProjFileSize:undefined, isVisionModel:false});
     }
 
     if (toSave.length > 0) {

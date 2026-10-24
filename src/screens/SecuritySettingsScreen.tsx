@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,72 +7,51 @@ import {
   Switch,
   Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { Button } from '../components/Button';
 import { useNavigation } from '@react-navigation/native';
 import { Card } from '../components';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
+import { CustomAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
 import { useTheme, useThemedStyles } from '../theme';
 import type { ThemeColors, ThemeShadows } from '../theme';
 import { TYPOGRAPHY, SPACING } from '../constants';
 import { useAuthStore } from '../stores';
-import { authService } from '../services';
+import { authService } from '../services/authService';
 import { PassphraseSetupScreen } from './PassphraseSetupScreen';
 
 export const SecuritySettingsScreen: React.FC = () => {
   const navigation = useNavigation();
   const [showPassphraseSetup, setShowPassphraseSetup] = useState(false);
-  const [isChangingPassphrase, setIsChangingPassphrase] = useState(false);
+  const [action, setAction] = useState<'set' | 'change' | 'disable' | 'biometric'>('set');
+  const [biometricName, setBiometricName] = useState<string | null>(null);
+  useEffect(() => { authService.biometricName().then(setBiometricName); }, []);
   const [alertState, setAlertState] = useState<AlertState>(initialAlertState);
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
 
   const {
     isEnabled: authEnabled,
-    setEnabled: setAuthEnabled,
+    biometricEnabled, setBiometricEnabled,
   } = useAuthStore();
 
-  const handleTogglePassphrase = async () => {
-    if (authEnabled) {
-      setAlertState(showAlert(
-        'Disable Passphrase Lock',
-        'Are you sure you want to disable passphrase protection?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Disable',
-            style: 'destructive',
-            onPress: () => {
-              setAlertState(hideAlert());
-              authService.removePassphrase().then(() => {
-                setAuthEnabled(false);
-              }).catch(() => {});
-            },
-          },
-        ]
-      ));
-    } else {
-      setIsChangingPassphrase(false);
-      setShowPassphraseSetup(true);
-    }
-  };
-
-  const handleChangePassphrase = () => {
-    setIsChangingPassphrase(true);
+  const handleTogglePassphrase = () => {
+    setAction(authEnabled ? 'disable' : 'set');
     setShowPassphraseSetup(true);
   };
+  const handleChangePassphrase = () => { setAction('change'); setShowPassphraseSetup(true); };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <TouchableOpacity
+          accessibilityRole="button" accessibilityLabel="Back"
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Security</Text>
+        <Text accessibilityRole="header" maxFontSizeMultiplier={1.5} numberOfLines={1} adjustsFontSizeToFit style={styles.title}>Security</Text>
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
@@ -80,8 +59,8 @@ export const SecuritySettingsScreen: React.FC = () => {
           <Text style={styles.sectionTitle}>App Lock</Text>
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
-              <Text style={styles.settingLabel}>Passphrase Lock</Text>
-              <Text style={styles.settingHint}>Require passphrase to open app</Text>
+              <Text style={styles.settingLabel}>PIN lock</Text>
+              <Text style={styles.settingHint}>Use a four-digit PIN to open Own</Text>
             </View>
             <Switch
               value={authEnabled}
@@ -91,9 +70,17 @@ export const SecuritySettingsScreen: React.FC = () => {
             />
           </View>
 
+          {authEnabled && biometricName && <View style={styles.settingRow}>
+            <View style={styles.settingInfo}><Text style={styles.settingLabel}>{biometricName}</Text><Text style={styles.settingHint}>Use your PIN as a fallback</Text></View>
+            <Switch accessibilityLabel={`Unlock with ${biometricName}`} value={biometricEnabled} onValueChange={async enabled => {
+              if (enabled) { setAction('biometric'); setShowPassphraseSetup(true); }
+              else if (await authService.disableBiometrics()) setBiometricEnabled(false);
+            }} />
+          </View>}
+
           {authEnabled && (
             <Button
-              title="Change Passphrase"
+              title="Change PIN"
               variant="primary"
               size="medium"
               onPress={handleChangePassphrase}
@@ -106,7 +93,7 @@ export const SecuritySettingsScreen: React.FC = () => {
         <Card style={styles.infoCard}>
           <Icon name="info" size={18} color={colors.textMuted} />
           <Text style={styles.infoText}>
-            When enabled, the app will lock automatically when you switch away or close it. Your passphrase is stored securely on device and never transmitted.
+            When enabled, the app will lock automatically when you switch away or close it. Your PIN verifier stays in Keychain. Face ID and Touch ID are handled by iOS; Own does not receive biometric data.
           </Text>
         </Card>
       </ScrollView>
@@ -114,13 +101,16 @@ export const SecuritySettingsScreen: React.FC = () => {
       <Modal
         visible={showPassphraseSetup}
         animationType="slide"
+        presentationStyle="fullScreen"
         onRequestClose={() => setShowPassphraseSetup(false)}
       >
+        <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <PassphraseSetupScreen
-          isChanging={isChangingPassphrase}
+          action={action}
           onComplete={() => setShowPassphraseSetup(false)}
           onCancel={() => setShowPassphraseSetup(false)}
         />
+        </SafeAreaProvider>
       </Modal>
       <CustomAlert
         visible={alertState.visible}

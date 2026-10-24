@@ -385,8 +385,8 @@ describe('HomeScreen Spotlight Integration', () => {
       });
 
       act(() => { jest.advanceTimersByTime(800); });
-      expect(mockGoTo).toHaveBeenCalledWith(13);
-      expect(useAppStore.getState().shownSpotlights.imageLoad).toBe(true);
+      expect(mockGoTo).not.toHaveBeenCalledWith(13);
+      expect(useAppStore.getState().shownSpotlights.imageLoad).toBeFalsy();
     });
 
     it('does NOT fire when image model is already loaded', () => {

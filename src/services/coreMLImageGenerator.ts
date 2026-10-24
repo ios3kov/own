@@ -1,3 +1,4 @@
+import { beginModelLoad, reportModelLoad, finishModelLoad } from '../stores/modelLoadStore';
 import { NativeModules,NativeEventEmitter } from 'react-native';
 import {
 ImageGenerationParams,
@@ -68,9 +69,15 @@ class CoreMLImageGeneratorService {
       params.attentionVariant = opts.attentionVariant;
     }
 
-    const result = await DiffusionModule.loadModel(params);
-    this.loadedThreads = typeof threads === 'number' ? threads : this.loadedThreads;
-    return result;
+    const ticket=beginModelLoad('image');
+    const listener=this.getEmitter().addListener('OwnImageLoadProgress',(event:{modelPath:string;phase:string})=>{
+      if(event.modelPath===modelPath)reportModelLoad(ticket,event.phase);
+    });
+    try {
+      const result=await DiffusionModule.loadModel(params);
+      this.loadedThreads=typeof threads==='number'?threads:this.loadedThreads;
+      return result;
+    } finally { listener.remove();finishModelLoad(ticket); }
   }
 
   getLoadedThreads(): number | null {
