@@ -7,7 +7,7 @@
  * - Refresh handling
  */
 
-import { renderHook, act } from '@testing-library/react-native';
+import { renderHook,act } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { useModelsScreen } from '../../../../src/screens/ModelsScreen/useModelsScreen';
 
@@ -25,7 +25,7 @@ jest.mock('@react-navigation/native', () => ({
 // Mock RNFS
 jest.mock('react-native-fs', () => ({
   DocumentDirectoryPath: '/docs',
-  exists: jest.fn().mockResolvedValue(true),
+  exists: jest.fn(async(path:string)=>path==='/models/images'),
   mkdir: jest.fn().mockResolvedValue(undefined),
   moveFile: jest.fn().mockResolvedValue(undefined),
   copyFile: jest.fn().mockResolvedValue(undefined),
@@ -439,7 +439,7 @@ describe('useModelsScreen', () => {
         setActiveImageModelId: jest.fn(),
         addDownloadedImageModel: jest.fn(),
       });
-      RNFS.readDir.mockResolvedValueOnce([{ name: 'model.mnn', isDirectory: () => false }]);
+      RNFS.readDir.mockResolvedValueOnce([{ name: 'model.mlmodelc', isDirectory: () => false }]);
 
       const { result } = renderHook(() => useModelsScreen());
 
@@ -447,7 +447,7 @@ describe('useModelsScreen', () => {
         await result.current.handleImportLocalModel();
       });
 
-      expect(RNFS.moveFile).toHaveBeenCalled();
+      expect(RNFS.copyFile).toHaveBeenCalled();
       expect(result.current.alertState.title).toBe('Success');
     });
 
@@ -493,24 +493,6 @@ describe('useModelsScreen', () => {
       expect(resolveCoreMLModelDir).toHaveBeenCalled();
     });
 
-    it('imports image model with QNN backend (bin files)', async () => {
-      require('../../../../src/services');
-      const RNFS = require('react-native-fs');
-
-      (Platform as any).OS = 'android';
-      mockPick.mockResolvedValueOnce([{ uri: 'file://qnn.zip', name: 'QNNModel.zip' }]);
-      RNFS.readDir.mockResolvedValueOnce([
-        { name: 'model.bin', isDirectory: () => false },
-      ]);
-
-      const { result } = renderHook(() => useModelsScreen());
-
-      await act(async () => {
-        await result.current.handleImportLocalModel();
-      });
-
-      expect(RNFS.copyFile).toHaveBeenCalled();
-    });
 
     it('sets active image model id when none is active', async () => {
       require('../../../../src/services');
@@ -525,7 +507,7 @@ describe('useModelsScreen', () => {
         setActiveImageModelId: mockSetActiveImageModelId,
         addDownloadedImageModel: jest.fn(),
       });
-      RNFS.readDir.mockResolvedValueOnce([{ name: 'model.mnn', isDirectory: () => false }]);
+      RNFS.readDir.mockResolvedValueOnce([{ name: 'model.mlmodelc', isDirectory: () => false }]);
 
       const { result } = renderHook(() => useModelsScreen());
 
@@ -549,7 +531,7 @@ describe('useModelsScreen', () => {
         setActiveImageModelId: mockSetActiveImageModelId,
         addDownloadedImageModel: jest.fn(),
       });
-      RNFS.readDir.mockResolvedValueOnce([{ name: 'model.mnn', isDirectory: () => false }]);
+      RNFS.readDir.mockResolvedValueOnce([{ name: 'model.mlmodelc', isDirectory: () => false }]);
 
       const { result } = renderHook(() => useModelsScreen());
 
@@ -609,7 +591,7 @@ describe('useModelsScreen', () => {
       const { result } = renderHook(() => useModelsScreen());
       const mockImageModel: any = {
         id: 'img-model', name: 'Test Model', description: 'Test',
-        downloadUrl: 'http://test', size: 100, style: 'default', backend: 'mnn',
+        downloadUrl: 'http://test', size: 100, style: 'default', backend: 'coreml',
       };
 
       act(() => {
@@ -713,5 +695,25 @@ describe('useModelsScreen', () => {
       // Should not load since models exist
       expect(mockLoadHFModels).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('failed Core ML archive import cleanup',()=>{
+  it('preserves the selected source and removes only the new failed import',async()=>{
+    const RNFS=require('react-native-fs');
+    const {resolveCoreMLModelDir}=require('../../../../src/utils/coreMLModelUtils');
+    jest.clearAllMocks();
+    RNFS.exists.mockImplementation(async(path:string)=>path==='/models/images');
+    mockPick.mockResolvedValueOnce([{uri:'file:///picked/model.zip',name:'model.zip',size:500}]);
+    resolveCoreMLModelDir.mockRejectedValueOnce(new Error('No Core ML model found'));
+    const {result}=renderHook(()=>useModelsScreen());
+    await act(async()=>{await result.current.handleImportLocalModel();});
+    expect(result.current.alertState.title).toBe('Import Failed');
+    expect(RNFS.moveFile).not.toHaveBeenCalled();
+    expect(RNFS.copyFile).toHaveBeenCalled();
+    const removed=RNFS.unlink.mock.calls.map(([path]:string[])=>path);
+    expect(removed).toHaveLength(2);
+    expect(removed.every((path:string)=>path.startsWith('/models/images/local_'))).toBe(true);
+    expect(removed).not.toContain('/picked/model.zip');
   });
 });

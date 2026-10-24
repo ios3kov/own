@@ -2,9 +2,9 @@ import { CompositeNavigationProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { ModelSource } from '../../types';
-import { RootStackParamList, MainTabParamList } from '../../navigation/types';
+import { RootStackParamList,MainTabParamList } from '../../navigation/types';
 
-export type BackendFilter = 'all' | 'mnn' | 'qnn' | 'coreml';
+export type BackendFilter = 'all' | 'coreml';
 
 export interface ImageModelDescriptor {
   id: string;
@@ -13,7 +13,7 @@ export interface ImageModelDescriptor {
   downloadUrl: string;
   size: number;
   style: string;
-  backend: 'mnn' | 'qnn' | 'coreml';
+  backend: 'coreml';
   variant?: string;
   huggingFaceRepo?: string;
   huggingFaceFiles?: { path: string; size: number }[];

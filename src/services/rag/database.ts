@@ -90,25 +90,44 @@ class RagDatabase {
     return result.insertId;
   }
 
-  insertChunks(docId: number, chunks: Chunk[]): number[] {
-    const db = this.getDb();
+  private insertChunkRows(docId: number, chunks: Chunk[]): number[] {
     const rowIds: number[] = [];
-    db.executeSync('BEGIN');
-    try {
-      for (const chunk of chunks) {
-        const result = db.executeSync(
-          'INSERT INTO rag_chunks (content, doc_id, position) VALUES (?, ?, ?)',
-          [chunk.content, docId, chunk.position]
-        );
-        if (result.insertId == null) throw new Error(`Failed to insert chunk at position ${chunk.position}`);
-        rowIds.push(result.insertId);
-      }
-      db.executeSync('COMMIT');
-    } catch (e) {
-      db.executeSync('ROLLBACK');
-      throw e;
+    for (const chunk of chunks) {
+      const result = this.getDb().executeSync(
+        'INSERT INTO rag_chunks (content, doc_id, position) VALUES (?, ?, ?)',
+        [chunk.content, docId, chunk.position]
+      );
+      if (result.insertId == null) throw new Error(`Failed to insert chunk at position ${chunk.position}`);
+      rowIds.push(result.insertId);
     }
     return rowIds;
+  }
+
+  insertChunks(docId: number, chunks: Chunk[]): number[] {
+    const db = this.getDb();
+    db.executeSync('BEGIN');
+    try {
+      const rowIds = this.insertChunkRows(docId, chunks);
+      db.executeSync('COMMIT');
+      return rowIds;
+    } catch (error) {
+      db.executeSync('ROLLBACK');
+      throw error;
+    }
+  }
+
+  insertDocumentWithChunks(doc: Parameters<RagDatabase['insertDocument']>[0], chunks: Chunk[]): {docId:number;rowIds:number[]} {
+    const db = this.getDb();
+    db.executeSync('BEGIN');
+    try {
+      const docId = this.insertDocument(doc);
+      const rowIds = this.insertChunkRows(docId, chunks);
+      db.executeSync('COMMIT');
+      return {docId,rowIds};
+    } catch (error) {
+      db.executeSync('ROLLBACK');
+      throw error;
+    }
   }
 
   private embeddingToBlob(embedding: number[]): ArrayBuffer {

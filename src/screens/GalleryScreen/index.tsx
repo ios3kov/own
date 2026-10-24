@@ -1,13 +1,13 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, FlatList, Platform } from 'react-native';
+import { View,Text,Image,TouchableOpacity,FlatList } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { CustomAlert, hideAlert } from '../../components/CustomAlert';
-import { useTheme, useThemedStyles } from '../../theme';
+import { useNavigation,useRoute,RouteProp } from '@react-navigation/native';
+import { CustomAlert,hideAlert } from '../../components/CustomAlert';
+import { useTheme,useThemedStyles } from '../../theme';
 import { GeneratedImage } from '../../types';
 import { RootStackParamList } from '../../navigation/types';
-import { createStyles, COLUMN_COUNT } from './styles';
+import { createStyles,COLUMN_COUNT } from './styles';
 import { useGalleryActions } from './useGalleryActions';
 import { GalleryGridItem } from './GridItem';
 import { FullscreenViewer } from './FullscreenViewer';
@@ -164,7 +164,7 @@ export const GalleryScreen: React.FC = () => {
           contentContainerStyle={styles.gridContainer}
           columnWrapperStyle={styles.gridRow}
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={Platform.OS !== 'android'}
+          removeClippedSubviews={true}
         />
       )}
 

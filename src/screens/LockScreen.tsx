@@ -1,23 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React,{ useState,useEffect,useCallback } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
+View,
+Text,
+TextInput,
+KeyboardAvoidingView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { Button, CustomAlert } from '../components';
+import { Button,CustomAlert } from '../components';
 import {
-  showAlert,
-  hideAlert,
-  initialAlertState,
-  type AlertState,
+showAlert,
+hideAlert,
+initialAlertState,
+type AlertState,
 } from '../components/CustomAlert';
-import { useTheme, useThemedStyles } from '../theme';
-import type { ThemeColors, ThemeShadows } from '../theme';
-import { TYPOGRAPHY, SPACING } from '../constants';
+import { useTheme,useThemedStyles } from '../theme';
+import type { ThemeColors,ThemeShadows } from '../theme';
+import { TYPOGRAPHY,SPACING } from '../constants';
 import { authService } from '../services/authService';
 import { useAuthStore } from '../stores/authStore';
 import logger from '../utils/logger';
@@ -114,7 +113,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onUnlock }) => {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={('padding')}
         style={styles.content}
       >
         <View style={styles.header}>

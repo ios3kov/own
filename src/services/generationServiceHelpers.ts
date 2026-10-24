@@ -1,30 +1,25 @@
 import { buildGenerationMetaImpl } from './generationMetadata';
-export { buildGenerationMetaImpl } from './generationMetadata';
 import { beginContextUsage } from './contextUsage';
 import { mergeDocumentSources } from './documentSources';
 import { replySpeech } from './replySpeech';
-import { foundationModelService, isAppleModelSelected } from './foundationModels';
+import { foundationModelService,isAppleModelSelected } from './foundationModels';
+export { buildGenerationMetaImpl } from './generationMetadata';
 /**
  * GenerationService helper implementations — extracted to keep generationService.ts under 350 lines.
  * All functions receive the GenerationService instance as `svc: any` and mutate its internal state.
  */
 import { llmService } from './llm';
-import { liteRTService } from './litert';
-import { getActiveEngineService } from './engines';
-import { useAppStore, useChatStore, useRemoteServerStore } from '../stores';
+
+import { useAppStore,useChatStore,useRemoteServerStore } from '../stores';
 import type { Message } from '../types';
-import { runToolLoop, buildLiteRTHistory } from './generationToolLoop';
+import { runToolLoop } from './generationToolLoop';
 import type { ToolResult } from './tools/types';
-import type { GenerationOptions, CompletionResult } from './providers/types';
+import type { GenerationOptions,CompletionResult } from './providers/types';
 import logger from '../utils/logger';
 
 export const FLUSH_INTERVAL_MS = 50; // ~20 updates/sec
 type StreamChunk = string | { content?: string; reasoningContent?: string };
 
-/** Returns true when the currently active model uses LiteRT engine. */
-function isLiteRTActive(): boolean {
-  return getActiveEngineService() === liteRTService;
-}
 
 export interface GenerationRequest {
   conversationId: string;
@@ -103,8 +98,6 @@ async function checkProviderReadiness(svc: any): Promise<string | null> {
     if (!provider) return 'Remote provider not found';
     const ready = await provider.isReady();
     if (!ready) return 'Remote provider not ready';
-  } else if (isLiteRTActive()) {
-    if (!liteRTService.isModelLoaded()) return 'No LiteRT model loaded';
   } else {
     if (!llmService.isModelLoaded()) return 'No model loaded';
     if (llmService.isCurrentlyGenerating()) return 'LLM service busy';
@@ -144,115 +137,6 @@ export async function prepareGenerationImpl(svc: any, conversationId: string, me
   return true;
 }
 
-function assertLiteRTImageSupport(
-  imageUris: string[] | undefined,
-  svc: any,
-  chatStore: ReturnType<typeof useChatStore.getState>,
-): void {
-  if (!imageUris || imageUris.length === 0) return;
-  const { downloadedModels, activeModelId } = useAppStore.getState();
-  const activeModel = downloadedModels.find((m: any) => m.id === activeModelId);
-  const liteRTActiveModel = activeModel?.engine === 'litert' ? activeModel : null;
-  if (!liteRTActiveModel?.liteRTVision) {
-    chatStore.clearStreamingMessage();
-    svc.resetState();
-    throw new Error('This model does not support images. Import it with vision enabled, or remove the image.');
-  }
-}
-
-async function runLiteRTResponseImpl(svc: any, req: GenerationRequest): Promise<void> {
-  const { conversationId, messages, onFirstToken } = req;
-  const sequence = svc.generationSequence;
-  const chatStore = useChatStore.getState();
-  let callbackError: Error | null = null;
-  let firstTokenReceived = false;
-  let jsTtftSeconds: number | undefined;
-
-  const lastUser = [...messages].reverse().find(m => m.role === 'user');
-  if (!lastUser) {
-    chatStore.clearStreamingMessage();
-    svc.resetState();
-    return;
-  }
-  const systemMsg = messages.find(m => m.role === 'system');
-  const systemPrompt = typeof systemMsg?.content === 'string' ? systemMsg.content : '';
-  const allAttachments = lastUser.attachments ?? [];
-  const imageUris = allAttachments
-    .filter((a: any) => a.type === 'image' && typeof a.uri === 'string' && a.uri.trim().length > 0)
-    .map((a: any) => a.uri);
-
-  assertLiteRTImageSupport(imageUris, svc, chatStore);
-
-  const history = buildLiteRTHistory(messages);
-
-  try {
-    const { settings } = useAppStore.getState();
-    await liteRTService.prepareConversation(conversationId, systemPrompt, {
-      samplerConfig: { temperature: settings.liteRTTemperature, topP: settings.liteRTTopP },
-      history,
-    });
-
-    await liteRTService.sendMessage(
-      typeof lastUser.content === 'string' ? lastUser.content : '',
-      {
-        onToken: (token: string) => {
-          if (svc.abortRequested || sequence !== svc.generationSequence) return;
-          if (jsTtftSeconds === undefined && svc.state.startTime) {
-            jsTtftSeconds = (Date.now() - svc.state.startTime) / 1000;
-          }
-          if (!firstTokenReceived) {
-            firstTokenReceived = true;
-            svc.updateState({ isThinking: false });
-            onFirstToken?.();
-          }
-          svc.state.streamingContent += token;
-          svc.tokenBuffer += token;
-          if (!svc.flushTimer) {
-            svc.flushTimer = setTimeout(() => svc.flushTokenBuffer(), FLUSH_INTERVAL_MS);
-          }
-        },
-        onReasoning: (token: string) => {
-          if (svc.abortRequested || sequence !== svc.generationSequence) return;
-          // Capture TTFT on first thinking token so it reflects time-to-first-visible-output
-          if (jsTtftSeconds === undefined && svc.state.startTime) {
-            jsTtftSeconds = (Date.now() - svc.state.startTime) / 1000;
-          }
-          svc.reasoningBuffer += token;
-          if (!svc.flushTimer) {
-            svc.flushTimer = setTimeout(() => svc.flushTokenBuffer(), FLUSH_INTERVAL_MS);
-          }
-        },
-        onComplete: (_content: string, _reasoning: string, stats) => {
-          if (svc.abortRequested || sequence !== svc.generationSequence) return;
-          svc.forceFlushTokens();
-          svc.liteRTBenchmarkStats = stats ? { ...stats, ttft: jsTtftSeconds ?? stats.ttft } : stats;
-          const generationTime = svc.state.startTime ? Date.now() - svc.state.startTime : undefined;
-          chatStore.finalizeStreamingMessage(conversationId, generationTime, buildGenerationMetaImpl(svc));
-          svc.checkSharePrompt();
-          svc.resetState(true);
-        },
-        onError: (err: Error) => {
-          if (svc.abortRequested || sequence !== svc.generationSequence) return;
-          callbackError = err;
-          logger.error('[LiteRT] sendMessage error:', err.message);
-          if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
-          svc.tokenBuffer = '';
-          chatStore.clearStreamingMessage();
-          svc.resetState();
-        },
-      },
-      imageUris,
-    );
-  } catch (error: any) {
-    if (callbackError) throw callbackError;
-    if (svc.abortRequested || sequence !== svc.generationSequence) return;
-    if (svc.flushTimer) { clearTimeout(svc.flushTimer); svc.flushTimer = null; }
-    svc.tokenBuffer = '';
-    chatStore.clearStreamingMessage();
-    svc.resetState();
-    throw error;
-  }
-}
 
 export async function generateResponseImpl(
   svc: any,
@@ -262,9 +146,7 @@ export async function generateResponseImpl(
   if (!(await prepareGenerationImpl(svc, conversationId, messages))) return;
   const sequence = svc.generationSequence;
 
-  if (isLiteRTActive()) {
-    return runLiteRTResponseImpl(svc, req);
-  }
+  ;
 
   const chatStore = useChatStore.getState();
   let firstTokenReceived = false;

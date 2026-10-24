@@ -3,7 +3,7 @@
  *
  * Tests the integration between:
  * - activeModelService ↔ llmService (text model loading/unloading)
- * - activeModelService ↔ localDreamGeneratorService (image model loading/unloading)
+ * - activeModelService ↔ coreMLImageGeneratorService (image model loading/unloading)
  * - activeModelService ↔ useAppStore (model state persistence)
  *
  * These tests verify the model lifecycle management works correctly
@@ -13,22 +13,22 @@
 import { useAppStore } from '../../../src/stores/appStore';
 import { activeModelService } from '../../../src/services/activeModelService';
 import { llmService } from '../../../src/services/llm';
-import { localDreamGeneratorService } from '../../../src/services/localDreamGenerator';
+import { coreMLImageGeneratorService } from '../../../src/services/coreMLImageGenerator';
 import { hardwareService } from '../../../src/services/hardware';
 import {
-  resetStores,
-  flushPromises,
-  getAppState,
+resetStores,
+flushPromises,
+getAppState,
 } from '../../utils/testHelpers';
-import { createDownloadedModel, createONNXImageModel, createDeviceInfo } from '../../utils/factories';
+import { createDownloadedModel,createONNXImageModel,createDeviceInfo } from '../../utils/factories';
 
 // Mock the services
 jest.mock('../../../src/services/llm');
-jest.mock('../../../src/services/localDreamGenerator');
+jest.mock('../../../src/services/coreMLImageGenerator');
 jest.mock('../../../src/services/hardware');
 
 const mockLlmService = llmService as jest.Mocked<typeof llmService>;
-const mockLocalDreamService = localDreamGeneratorService as jest.Mocked<typeof localDreamGeneratorService>;
+const mockLocalDreamService = coreMLImageGeneratorService as jest.Mocked<typeof coreMLImageGeneratorService>;
 const mockHardwareService = hardwareService as jest.Mocked<typeof hardwareService>;
 
 function expectLoadedSettings(expected: Record<string, unknown>) {
@@ -282,7 +282,7 @@ describe('ActiveModelService Integration', () => {
   });
 
   describe('Image Model Loading', () => {
-    it('should load image model via localDreamGeneratorService', async () => {
+    it('should load image model via coreMLImageGeneratorService', async () => {
       const imageModel = createONNXImageModel({ id: 'img-model-1' });
       useAppStore.setState({
         downloadedImageModels: [imageModel],
@@ -296,7 +296,7 @@ describe('ActiveModelService Integration', () => {
       expect(mockLocalDreamService.loadModel).toHaveBeenCalledWith(
         imageModel.modelPath,
         4,
-        { backend: 'auto', cpuOnly: false, attentionVariant: undefined },
+        { cpuOnly: false, attentionVariant: undefined },
       );
 
       expect(getAppState().activeImageModelId).toBe('img-model-1');
@@ -322,7 +322,7 @@ describe('ActiveModelService Integration', () => {
       expect(mockLocalDreamService.loadModel).toHaveBeenLastCalledWith(
         imgModel2.modelPath,
         4,
-        { backend: 'auto', cpuOnly: false, attentionVariant: undefined },
+        { cpuOnly: false, attentionVariant: undefined },
       );
     });
   });
@@ -1405,7 +1405,7 @@ describe('ActiveModelService Integration', () => {
   });
 
   describe('loadImageModel with coreml backend', () => {
-    it('uses auto backend for coreml models', async () => {
+    it('loads Core ML models without a backend selector', async () => {
       const coremlModel = createONNXImageModel({ id: 'coreml-model', backend: 'coreml' });
       useAppStore.setState({
         downloadedImageModels: [coremlModel],
@@ -1420,7 +1420,7 @@ describe('ActiveModelService Integration', () => {
       expect(mockLocalDreamService.loadModel).toHaveBeenCalledWith(
         coremlModel.modelPath,
         4,
-        { backend: 'auto', cpuOnly: false }, // coreml backend should map to 'auto'
+        { cpuOnly: false }, // coreml backend should map to 'auto'
       );
     });
 
@@ -1443,7 +1443,7 @@ describe('ActiveModelService Integration', () => {
       expect(mockLocalDreamService.loadModel).toHaveBeenCalledWith(
         coremlModel.modelPath,
         4,
-        { backend: 'auto', cpuOnly: false, attentionVariant: 'split_einsum' },
+        { cpuOnly: false, attentionVariant: 'split_einsum' },
       );
     });
   });
@@ -1475,37 +1475,7 @@ describe('ActiveModelService Integration', () => {
   // ============================================================================
   // QNN / NPU guard (lines 321-323)
   // ============================================================================
-  describe('QNN model NPU guard', () => {
-    it('throws when loading a QNN model on a device without NPU (lines 321-323)', async () => {
-      const qnnModel = createONNXImageModel({ id: 'qnn-model-1', backend: 'qnn' });
-      useAppStore.setState({
-        downloadedImageModels: [qnnModel],
-        settings: { imageThreads: 4 } as any,
-      });
 
-      mockLocalDreamService.isModelLoaded.mockResolvedValue(false);
-      // Provide getSoCInfo mock returning no NPU
-      mockHardwareService.getSoCInfo = jest.fn().mockResolvedValue({ hasNPU: false });
-
-      await expect(activeModelService.loadImageModel('qnn-model-1')).rejects.toThrow(
-        'NPU models require a Qualcomm Snapdragon processor',
-      );
-    });
-
-    it('loads QNN model when device has NPU', async () => {
-      const qnnModel = createONNXImageModel({ id: 'qnn-model-2', backend: 'qnn' });
-      useAppStore.setState({
-        downloadedImageModels: [qnnModel],
-        settings: { imageThreads: 4 } as any,
-      });
-
-      mockLocalDreamService.isModelLoaded.mockResolvedValue(true);
-      mockHardwareService.getSoCInfo = jest.fn().mockResolvedValue({ hasNPU: true });
-      mockLocalDreamService.loadModel.mockResolvedValue(true);
-
-      await expect(activeModelService.loadImageModel('qnn-model-2')).resolves.not.toThrow();
-    });
-  });
 
   // ============================================================================
   // getCurrentlyLoadedMemoryGB private method (lines 527-545)
@@ -1718,7 +1688,7 @@ describe('ActiveModelService Integration', () => {
       expect(mockLocalDreamService.loadModel).toHaveBeenCalledWith(
         imageModel.modelPath,
         4,
-        { backend: 'auto', cpuOnly: false, attentionVariant: undefined },
+        { cpuOnly: false, attentionVariant: undefined },
       );
     });
 

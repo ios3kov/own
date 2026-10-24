@@ -1,20 +1,20 @@
 import { ChatScreenContext } from '../../components/ChatScreenContext';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, Keyboard, KeyboardAvoidingView, InteractionManager, Platform } from 'react-native';
+import React,{ useCallback,useEffect,useRef,useState } from 'react';
+import { FlatList,Keyboard,KeyboardAvoidingView,InteractionManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSpotlightTour } from 'react-native-spotlight-tour';
-import { CustomAlert, hideAlert, SharePromptSheet } from '../../components';
+import { CustomAlert,hideAlert,SharePromptSheet } from '../../components';
 import { consumePendingSpotlight } from '../../components/onboarding/spotlightState';
 import { subscribeSharePrompt } from '../../utils/sharePrompt';
-import { VOICE_HINT_STEP_INDEX, IMAGE_SETTINGS_STEP_INDEX } from '../../components/onboarding/spotlightConfig';
+import { VOICE_HINT_STEP_INDEX,IMAGE_SETTINGS_STEP_INDEX } from '../../components/onboarding/spotlightConfig';
 import { useAppStore } from '../../stores/appStore';
-import type { Conversation, Message } from '../../types';
-import { useTheme, useThemedStyles } from '../../theme';
+import type { Conversation,Message } from '../../types';
+import { useTheme,useThemedStyles } from '../../theme';
 import { createStyles } from './styles';
 import { useChatScreen } from './useChatScreen';
 import { MessageRenderer } from './MessageRenderer';
-import { NoModelScreen, LoadingScreen, ChatHeader } from './ChatScreenComponents';
+import { NoModelScreen,LoadingScreen,ChatHeader } from './ChatScreenComponents';
 import { ChatModalSection } from './ChatModalSection';
 import { ChatMessageArea } from './ChatMessageArea';
 
@@ -105,7 +105,7 @@ export const ChatScreen: React.FC = () => {
   }, [chat.activeConversation?.messages.length]);
 
   React.useEffect(() => {
-    const event = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const event = ('keyboardWillShow');
     const sub = Keyboard.addListener(event, () => {
       flatListRef.current?.scrollToEnd({ animated: true });
     });

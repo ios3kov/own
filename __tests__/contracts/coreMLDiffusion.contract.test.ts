@@ -2,11 +2,11 @@
  * Contract Tests: CoreMLDiffusion Native Module (iOS Image Generation)
  *
  * These tests verify that the CoreMLDiffusion native module interface
- * maintains parity with the Android LocalDreamModule so the shared
- * TypeScript bridge (localDreamGenerator.ts) works on both platforms.
+ * maintains parity with the Android CoreMLDiffusionModule so the shared
+ * TypeScript bridge (coreMLImageGenerator.ts) works on both platforms.
  */
 
-// The CoreMLDiffusionModule must expose the same methods as LocalDreamModule
+// The CoreMLDiffusionModule must expose the same methods as CoreMLDiffusionModule
 export interface CoreMLDiffusionModuleInterface {
   loadModel(params: {
     modelPath: string;
@@ -79,7 +79,7 @@ jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
 }));
 
-describe('CoreMLDiffusion Contract (iOS parity with LocalDreamModule)', () => {
+describe('CoreMLDiffusion Contract (iOS parity with CoreMLDiffusionModule)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -261,8 +261,8 @@ describe('CoreMLDiffusion Contract (iOS parity with LocalDreamModule)', () => {
     });
   });
 
-  describe('Progress Events (same event names as Android)', () => {
-    it('should emit LocalDreamProgress events', () => {
+  describe('Progress events', () => {
+    it('should emit OwnImageProgress events', () => {
       const progressEvent = {
         step: 10,
         totalSteps: 20,
@@ -276,7 +276,7 @@ describe('CoreMLDiffusion Contract (iOS parity with LocalDreamModule)', () => {
       expect(progressEvent.progress).toBeLessThanOrEqual(1);
     });
 
-    it('should emit LocalDreamError events', () => {
+    it('should emit OwnImageError events', () => {
       const errorEvent = {
         error: 'Core ML pipeline failed',
       };
@@ -286,7 +286,7 @@ describe('CoreMLDiffusion Contract (iOS parity with LocalDreamModule)', () => {
     });
   });
 
-  describe('Interface parity with LocalDreamModule', () => {
+  describe('Interface parity with CoreMLDiffusionModule', () => {
     it('should expose all required methods', () => {
       const requiredMethods = [
         'loadModel',

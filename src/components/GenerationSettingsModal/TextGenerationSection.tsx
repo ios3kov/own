@@ -1,20 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import React,{ useState } from 'react';
+import { View,Text,TouchableOpacity } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { AdvancedToggle } from '../AdvancedToggle';
-import { useTheme, useThemedStyles } from '../../theme';
-import { useAppStore, selectIsLiteRT } from '../../stores';
-import { hardwareService } from '../../services';
+import { useTheme,useThemedStyles } from '../../theme';
+import { useAppStore } from '../../stores';
 import { createStyles } from './styles';
-import {
-  CpuThreadsSlider,
-  BatchSizeSlider,
-  BackendSelector,
-  LiteRTBackendSelector,
-  FlashAttentionToggle,
-  KvCacheTypeToggle,
-  ModelLoadingStrategyToggle,
-} from './TextGenerationAdvanced';
+import { CpuThreadsSlider,BatchSizeSlider,BackendSelector,FlashAttentionToggle,KvCacheTypeToggle,ModelLoadingStrategyToggle } from './TextGenerationAdvanced';
 
 interface SettingConfig {
   key: string;
@@ -36,9 +27,8 @@ const DEFAULT_SETTINGS: Record<string, number> = {
   topP: 0.9,
   repeatPenalty: 1.1,
   contextLength: 4096,
-  liteRTTemperature: 0.7,
-  liteRTTopP: 0.9,
-  liteRTMaxTokens: 4096,
+
+
 };
 
 // ─── Config builders ──────────────────────────────────────────────────────────
@@ -85,36 +75,6 @@ function buildLlamaConfig(modelMaxContext: number | null = null): SettingConfig[
   ];
 }
 
-function buildLiteRTConfig(modelMaxContext: number | null = null): SettingConfig[] {
-  const isLargeRam = hardwareService.getTotalMemoryGB() > 8;
-  const contextMax = modelMaxContext ?? (isLargeRam ? 32768 : 12288);
-  const contextWarn = isLargeRam ? 16384 : 8192;
-  return [
-    {
-      key: 'liteRTTemperature',
-      label: 'Temperature',
-      min: 0, max: 2, step: 0.05,
-      format: (v) => v.toFixed(2),
-      description: 'Higher = more creative, Lower = more focused',
-    },
-    {
-      key: 'liteRTTopP',
-      label: 'Top P',
-      min: 0.1, max: 1, step: 0.05,
-      format: (v) => v.toFixed(2),
-      description: 'Nucleus sampling threshold',
-    },
-    {
-      key: 'liteRTMaxTokens',
-      label: 'Max Tokens',
-      min: 512, max: contextMax, step: 1024,
-      format: formatContext,
-      description: 'Total token budget — input, history, and output combined (requires reload)',
-      warning: (v) => v > contextWarn ? 'High context uses significant RAM — may slow or crash on some devices' : null,
-      warningColor: '#F59E0B',
-    },
-  ];
-}
 
 // ─── Shared slider component ──────────────────────────────────────────────────
 
@@ -192,40 +152,6 @@ const ShowGenerationDetailsToggle: React.FC = () => {
   );
 };
 
-// ─── LiteRT Section ───────────────────────────────────────────────────────────
-
-const LiteRTTextGenerationSection: React.FC = () => {
-  const styles = useThemedStyles(createStyles);
-  const modelMaxContext = useAppStore((s) => s.modelMaxContext);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-
-  const config = buildLiteRTConfig(modelMaxContext);
-  const basicKeys = new Set(['liteRTTemperature', 'liteRTMaxTokens']);
-  const advancedKeys = new Set(['liteRTTopP']);
-
-  const basicSettings = config.filter(c => basicKeys.has(c.key));
-  const advancedSettings = config.filter(c => advancedKeys.has(c.key));
-
-  return (
-    <View style={styles.sectionCard}>
-      {basicSettings.map((c) => (
-        <SettingSlider key={c.key} config={c} />
-      ))}
-      <ShowGenerationDetailsToggle />
-
-      <AdvancedToggle isExpanded={showAdvanced} onPress={() => setShowAdvanced(!showAdvanced)} testID="modal-text-advanced-toggle" />
-
-      {showAdvanced && (
-        <>
-          {advancedSettings.map((c) => (
-            <SettingSlider key={c.key} config={c} />
-          ))}
-          <LiteRTBackendSelector />
-        </>
-      )}
-    </View>
-  );
-};
 
 // ─── Llama Section ────────────────────────────────────────────────────────────
 
@@ -270,6 +196,6 @@ const LlamaTextGenerationSection: React.FC = () => {
 // ─── Dispatch ─────────────────────────────────────────────────────────────────
 
 export const TextGenerationSection: React.FC = () => {
-  const isLiteRT = useAppStore(selectIsLiteRT);
-  return isLiteRT ? <LiteRTTextGenerationSection /> : <LlamaTextGenerationSection />;
+
+  return (<LlamaTextGenerationSection />);
 };

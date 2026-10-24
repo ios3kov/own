@@ -11,14 +11,14 @@
  */
 
 import {
-  shouldRouteToImageGenerationFn,
-  handleImageGenerationFn,
-  startGenerationFn,
-  executeDeleteConversationFn,
-  regenerateResponseFn,
-  handleSendFn,
-  handleStopFn,
-  handleSelectProjectFn,
+shouldRouteToImageGenerationFn,
+handleImageGenerationFn,
+startGenerationFn,
+executeDeleteConversationFn,
+regenerateResponseFn,
+handleSendFn,
+handleStopFn,
+handleSelectProjectFn,
 } from '../../../src/screens/ChatScreen/useChatGenerationActions';
 import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
 import { createDownloadedModel } from '../../utils/factories';
@@ -69,8 +69,8 @@ jest.mock('../../../src/services/llm', () => ({
     clearKVCache: jest.fn(),
   },
 }));
-jest.mock('../../../src/services/localDreamGenerator', () => ({
-  localDreamGeneratorService: {
+jest.mock('../../../src/services/coreMLImageGenerator', () => ({
+  coreMLImageGeneratorService: {
     deleteGeneratedImage: jest.fn(),
   },
 }));
@@ -101,7 +101,7 @@ const { intentClassifier } = require('../../../src/services/intentClassifier');
 const { generationService } = require('../../../src/services/generationService');
 const { imageGenerationService } = require('../../../src/services/imageGenerationService');
 const { llmService } = require('../../../src/services/llm');
-const { localDreamGeneratorService } = require('../../../src/services/localDreamGenerator');
+const { coreMLImageGeneratorService } = require('../../../src/services/coreMLImageGenerator');
 
 // Typed references
 const mockClassifyIntent = intentClassifier.classifyIntent as jest.Mock;
@@ -117,7 +117,7 @@ const mockIsModelLoaded = llmService.isModelLoaded as jest.Mock;
 const mockStopLlmGeneration = llmService.stopGeneration as jest.Mock;
 const mockGetContextDebugInfo = llmService.getContextDebugInfo as jest.Mock;
 const mockClearKVCache = llmService.clearKVCache as jest.Mock;
-const mockDeleteGeneratedImage = localDreamGeneratorService.deleteGeneratedImage as jest.Mock;
+const mockDeleteGeneratedImage = coreMLImageGeneratorService.deleteGeneratedImage as jest.Mock;
 
 const { ragService } = require('../../../src/services/rag');
 const { retrievalService } = require('../../../src/services/rag');
@@ -203,6 +203,7 @@ function makeGenerationDeps(overrides: Record<string, unknown> = {}): any {
     imageGenState: { isGenerating: false, progress: null, status: null, previewPath: null, prompt: null, conversationId: null, error: null, result: null },
     settings: {
       showGenerationDetails: false,
+      enabledTools: ['search_knowledge_base'],
       imageGenerationMode: 'auto',
       autoDetectMethod: 'simple',
       classifierModelId: null,
@@ -589,7 +590,7 @@ describe('RAG context injection in startGenerationFn', () => {
     expect(mockGetDocsByProject).toHaveBeenCalledWith('proj-1');
     expect(mockSearchProject).toHaveBeenCalledWith('proj-1', 'hello');
     expect(mockFormatForPrompt).toHaveBeenCalled();
-    expect(mockGenerateWithTools).toHaveBeenCalled();
+    expect(mockGenerateResponse).toHaveBeenCalled();
   });
 
   it('injects doc list even when BM25 returns no chunks', async () => {
@@ -606,7 +607,7 @@ describe('RAG context injection in startGenerationFn', () => {
 
     expect(mockGetDocsByProject).toHaveBeenCalledWith('proj-1');
     expect(mockFormatForPrompt).not.toHaveBeenCalled();
-    expect(mockGenerateWithTools).toHaveBeenCalled();
+    expect(mockGenerateResponse).toHaveBeenCalled();
   });
 
   it('does not inject RAG context when conversation has no projectId', async () => {
@@ -641,10 +642,10 @@ describe('RAG context injection in startGenerationFn', () => {
     await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hello' });
 
     // Generation should still proceed despite RAG error
-    expect(mockGenerateWithTools).toHaveBeenCalled();
+    expect(mockGenerateResponse).toHaveBeenCalled();
   });
 
-  it('auto-enables search_knowledge_base tool for project conversations', async () => {
+  it('keeps knowledge search disabled in project conversations', async () => {
     const conv = { id: 'conv-1', projectId: 'proj-1', messages: [{ id: 'm1', role: 'user', content: 'hello', timestamp: 0 }] };
     mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
     mockProjectStoreGetProject.mockReturnValue({ id: 'proj-1', systemPrompt: 'Be helpful', name: 'Test' });
@@ -653,10 +654,11 @@ describe('RAG context injection in startGenerationFn', () => {
     const deps = makeGenerationDeps({ settings: { ...makeGenerationDeps().settings, enabledTools: ['web_search'] } });
     await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hello' });
 
-    // generateWithTools should have been called (not generateResponse) since tools are enabled
-    const { generationService: genSvc } = require('../../../src/services/generationService');
-    // The generation should include search_knowledge_base in the tool list
-    expect(genSvc.generateWithTools || genSvc.generateResponse).toBeDefined();
+    expect(mockGetDocsByProject).not.toHaveBeenCalled();
+    expect(mockSearchProject).not.toHaveBeenCalled();
+    expect(mockGenerateWithTools).toHaveBeenCalled();
+    const args = mockGenerateWithTools.mock.calls[0];
+    expect(JSON.stringify(args)).not.toContain('search_knowledge_base');
   });
 });
 
@@ -911,7 +913,7 @@ describe('regenerateResponseFn — model not loaded', () => {
       activeModelInfo: { isRemote: true, model: null, modelId: 'gpt-4', modelName: 'GPT-4' },
     });
     await regenerateResponseFn(deps, { setDebugInfo: jest.fn(), userMessage: userMsg });
-    expect(mockGenerateResponse).toHaveBeenCalled();
+    expect(mockGenerateWithTools).toHaveBeenCalled();
   });
 });
 

@@ -12,11 +12,9 @@ jest.mock('../../../src/stores/debugLogsStore', () => ({
 jest.mock('../../../src/services/llm', () => ({
   llmService: { loadModel: jest.fn(), unloadModel: jest.fn(), getMultimodalSupport: jest.fn(() => null) },
 }));
-jest.mock('../../../src/services/litert', () => ({
-  liteRTService: { loadModel: jest.fn(), unloadModel: jest.fn(), getActiveBackend: jest.fn(() => 'cpu') },
-}));
-jest.mock('../../../src/services/localDreamGenerator', () => ({
-  localDreamGeneratorService: { loadModel: jest.fn(), unloadModel: jest.fn() },
+
+jest.mock('../../../src/services/coreMLImageGenerator', () => ({
+  coreMLImageGeneratorService: { loadModel: jest.fn(), unloadModel: jest.fn() },
 }));
 jest.mock('../../../src/services/modelManager', () => ({
   modelManager: { saveModelWithMmproj: jest.fn(), clearMmProjLink: jest.fn() },
@@ -31,13 +29,12 @@ jest.mock('../../../src/utils/logger', () => ({
 }));
 
 import RNFS from 'react-native-fs';
-import { doLoadTextModel, resolveMmProjPath } from '../../../src/services/activeModelService/loaders';
-import { liteRTService } from '../../../src/services/litert';
+import { doLoadTextModel,resolveMmProjPath } from '../../../src/services/activeModelService/loaders';
+
 import { llmService } from '../../../src/services/llm';
 import { useAppStore } from '../../../src/stores';
 
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
-const mockedLiteRT = liteRTService as jest.Mocked<typeof liteRTService>;
 const mockedLlm = llmService as jest.Mocked<typeof llmService>;
 const mockedGetState = useAppStore.getState as jest.Mock;
 
@@ -171,35 +168,5 @@ describe('doLoadTextModel — llama.cpp path', () => {
 
     await doLoadTextModel(ctx);
     expect(mockedLlm.unloadModel).toHaveBeenCalled();
-  });
-});
-
-describe('doLoadTextModel — LiteRT path', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('routes to liteRTService when engine=litert', async () => {
-    mockedLiteRT.loadModel.mockResolvedValue(undefined);
-    mockedLiteRT.getActiveBackend.mockReturnValue('cpu');
-    const ctx = makeCtx({ model: { id: 'model-1', fileName: 'model.litertlm', filePath: '/models/model.litertlm', engine: 'litert' } });
-    const { useDebugLogsStore } = require('../../../src/stores/debugLogsStore');
-    useDebugLogsStore.getState.mockReturnValue({ addLog: jest.fn() });
-
-    await doLoadTextModel(ctx);
-
-    expect(mockedLiteRT.loadModel).toHaveBeenCalled();
-    expect(mockedLlm.loadModel).not.toHaveBeenCalled();
-    expect(ctx.onLoaded).toHaveBeenCalledWith('model-1');
-  });
-
-  it('calls onError and rethrows when liteRTService.loadModel fails', async () => {
-    mockedLiteRT.loadModel.mockRejectedValue(new Error('litert failed'));
-    mockedLiteRT.getActiveBackend.mockReturnValue('cpu');
-    const ctx = makeCtx({ model: { id: 'model-1', fileName: 'model.litertlm', filePath: '/models/model.litertlm', engine: 'litert' } });
-    const { useDebugLogsStore } = require('../../../src/stores/debugLogsStore');
-    useDebugLogsStore.getState.mockReturnValue({ addLog: jest.fn() });
-
-    await expect(doLoadTextModel(ctx)).rejects.toThrow('litert failed');
-    expect(ctx.onError).toHaveBeenCalled();
-    expect(ctx.onFinally).toHaveBeenCalled();
   });
 });

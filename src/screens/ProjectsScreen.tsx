@@ -1,29 +1,28 @@
-import React, { useState } from 'react';
+import React,{ useState } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Platform,
+View,
+Text,
+FlatList,
+TouchableOpacity
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
+import { useNavigation,CompositeNavigationProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import Icon from 'react-native-vector-icons/Feather';
 import { AttachStep } from 'react-native-spotlight-tour';
 import { Button } from '../components/Button';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
+import { CustomAlert,showAlert,hideAlert,AlertState,initialAlertState } from '../components/CustomAlert';
 import { AnimatedEntry } from '../components/AnimatedEntry';
 import { AnimatedListItem } from '../components/AnimatedListItem';
 import { useFocusTrigger } from '../hooks/useFocusTrigger';
-import { useTheme, useThemedStyles } from '../theme';
-import type { ThemeColors, ThemeShadows } from '../theme';
-import { TYPOGRAPHY, SPACING } from '../constants';
-import { useProjectStore, useChatStore } from '../stores';
+import { useTheme,useThemedStyles } from '../theme';
+import type { ThemeColors,ThemeShadows } from '../theme';
+import { TYPOGRAPHY,SPACING } from '../constants';
+import { useProjectStore,useChatStore } from '../stores';
 import { Project } from '../types';
-import { RootStackParamList, MainTabParamList } from '../navigation/types';
+import { RootStackParamList,MainTabParamList } from '../navigation/types';
 
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<MainTabParamList, 'ProjectsTab'>,
@@ -167,7 +166,7 @@ export const ProjectsScreen: React.FC = () => {
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
-          removeClippedSubviews={Platform.OS !== 'android'}
+          removeClippedSubviews={true}
         />
       )}
       <CustomAlert {...alertState} onClose={() => setAlertState(hideAlert())} />

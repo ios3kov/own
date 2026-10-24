@@ -1,8 +1,9 @@
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
-import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile, ONNXImageModel } from '../../types';
-import { buildDownloadedModel, persistDownloadedModel, loadDownloadedModels, saveModelsList } from './storage';
+import { DownloadedModel,LlamaDownloadedModel,ModelFile,ONNXImageModel } from '../../types';
+import { buildDownloadedModel,persistDownloadedModel,loadDownloadedModels,saveModelsList } from './storage';
 import { copyFileWithProgress } from './copyFile';
+import { localDocumentPath } from '../localDocumentPath';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
 
 export function isMMProjFile(fileName: string): boolean {
@@ -99,12 +100,6 @@ export async function cleanupMMProjEntries(modelsDir: string): Promise<number> {
   return removedCount;
 }
 
-function detectBackend(dirName: string): 'mnn' | 'qnn' | 'coreml' {
-  if (dirName.includes('qnn') || dirName.includes('8gen') || dirName.includes('npu')) return 'qnn';
-  if (dirName.includes('coreml')) return 'coreml';
-  return 'mnn';
-}
-
 const MIN_RECOVERED_TEXT_MODEL_BYTES = 100 * 1024 * 1024;
 
 function isUnknownLike(value: string): boolean {
@@ -179,9 +174,9 @@ export async function reconcileFinishedImageDownloads(opts: ReconcileImageModels
       if (legacyEntry) {
         try {
           await RNFS.writeFile(`${item.path}/_ready`, '', 'utf8').catch(() => {});
-          const backend = detectBackend(item.name);
+          const backend = 'coreml' as const;
           let modelPath = item.path;
-          if (backend === 'coreml') modelPath = await resolveCoreMLModelDir(item.path).catch(() => item.path);
+          if (backend === 'coreml') modelPath = await resolveCoreMLModelDir(item.path);
           const totalSize = await getDirSize(item.path);
           const migrated: ONNXImageModel = {
             id: item.name, name: legacyEntry.name || item.name.replaceAll('_', ' '),
@@ -205,10 +200,10 @@ export async function reconcileFinishedImageDownloads(opts: ReconcileImageModels
 
       if (hasReady) {
         // Unzip completed but registerAndNotify was killed — register now.
-        const backend = detectBackend(item.name);
+        const backend = 'coreml' as const;
         let modelPath = item.path;
         if (backend === 'coreml') {
-          modelPath = await resolveCoreMLModelDir(item.path).catch(() => item.path);
+          modelPath = await resolveCoreMLModelDir(item.path);
         }
         const totalSize = await getDirSize(item.path);
         const newModel: ONNXImageModel = {
@@ -239,10 +234,10 @@ export async function reconcileFinishedImageDownloads(opts: ReconcileImageModels
             await unzip(zipPath, item.path);
             await RNFS.unlink(zipPath).catch(() => {});
             await RNFS.writeFile(readyPath, '', 'utf8').catch(() => {});
-            const backend = detectBackend(item.name);
+            const backend = 'coreml' as const;
             let modelPath = item.path;
             if (backend === 'coreml') {
-              modelPath = await resolveCoreMLModelDir(item.path).catch(() => item.path);
+              modelPath = await resolveCoreMLModelDir(item.path);
             }
             const totalSize = await getDirSize(item.path);
             const newModel: ONNXImageModel = {
@@ -300,7 +295,7 @@ export async function scanForUntrackedImageModels(opts: ScanImageModelsOpts): Pr
       modelPath: item.path,
       size: totalSize,
       downloadedAt: new Date().toISOString(),
-      backend: detectBackend(item.name),
+      backend: 'coreml' as const,
     };
 
     await addImageModel(newModel);
@@ -382,7 +377,7 @@ export interface ImportLocalModelOpts {
   modelsDir: string;
   sourceSize?: number | null;
   engine?: import('../../types').ModelEngine;
-  liteRTVision?: boolean;
+
   onProgress?: (progress: { fraction: number; fileName: string }) => void;
   mmProjSourceUri?: string;
   mmProjFileName?: string;
@@ -390,21 +385,22 @@ export interface ImportLocalModelOpts {
 }
 
 function resolveUri(uri: string): string {
-  // Android content:// URIs are passed directly to RNFS.copyFile — no cache copy needed.
-  // iOS file:// URIs need decoding (%20 → space) so RNFS can find the file on disk.
-  if (uri.startsWith('content://')) {
-    return uri;
-  }
-  return decodeURIComponent(uri);
+  try { return localDocumentPath(uri); }
+  catch { throw new Error('The selected model file cannot be opened.'); }
 }
 
 
 export async function importLocalModel(opts: ImportLocalModelOpts): Promise<DownloadedModel> { // NOSONAR
-  const { sourceUri, fileName, modelsDir, sourceSize, engine: _engine, liteRTVision, onProgress, mmProjSourceUri, mmProjFileName, mmProjSourceSize } = opts;
 
-  const isLitert = fileName.toLowerCase().endsWith('.litertlm');
-  if (!fileName.toLowerCase().endsWith('.gguf') && !isLitert) {
-    throw new Error('Only .gguf and .litertlm files can be imported');
+
+  const { sourceUri, fileName, modelsDir, sourceSize, onProgress, mmProjSourceUri, mmProjFileName, mmProjSourceSize } = opts;
+  for (const name of [fileName, mmProjFileName]) {
+    if (name !== undefined && (!name || name === '.' || name === '..' || /[\\/\x00-\x1f\x7f]/.test(name))) {
+      throw new Error('Invalid model file name');
+    }
+  }
+  if (!fileName.toLowerCase().endsWith('.gguf')) {
+    throw new Error('Only .gguf files can be imported');
   }
 
   const resolvedSource = resolveUri(sourceUri);
@@ -426,7 +422,7 @@ export async function importLocalModel(opts: ImportLocalModelOpts): Promise<Down
 
   const quantMatch = fileName.match(/[_-](Q\d+[_\w]*|f16|f32)/i);
   const quantization = quantMatch ? quantMatch[1].toUpperCase() : 'Unknown';
-  const modelName = fileName.replace(/\.gguf$/i, '').replace(/\.litertlm$/i, '').replace(/[_-]Q\d+.*/i, '');
+  const modelName = fileName.replace(/\.gguf$/i, '').replace(/[_-]Q\d+.*/i, '');
   const destStat = await RNFS.stat(destPath);
   const fileSize = parseSizeInt(destStat.size);
 
@@ -439,13 +435,7 @@ export async function importLocalModel(opts: ImportLocalModelOpts): Promise<Down
     credibility: { source: 'community' as const, isOfficial: false, isVerifiedQuantizer: false },
   };
 
-  if (isLitert) {
-    const liteRTModel: LiteRTDownloadedModel = {
-      ...baseModel, ...baseFields, engine: 'litert', liteRTVision: liteRTVision ?? false,
-    };
-    await persistDownloadedModel(liteRTModel, modelsDir);
-    return liteRTModel;
-  }
+  ;
 
   const llamaModel: LlamaDownloadedModel = { ...baseModel, ...baseFields, engine: 'llama' };
 

@@ -1,17 +1,10 @@
-import { formatNumber, formatBytes, getDirectorySize, getModelType, matchesSdVersionFilter, getImageModelCompatibility, hfModelToDescriptor } from '../../../../src/screens/ModelsScreen/utils';
+import { formatNumber,formatBytes,getDirectorySize,getModelType,matchesSdVersionFilter,getImageModelCompatibility,hfModelToDescriptor } from '../../../../src/screens/ModelsScreen/utils';
 import RNFS from 'react-native-fs';
 
 jest.mock('react-native-fs', () => ({
   readDir: jest.fn(),
 }));
 
-jest.mock('../../../../src/services/huggingFaceModelBrowser', () => ({
-  guessStyle: jest.fn((name: string) => {
-    if (name.includes('anime')) return 'anime';
-    if (name.includes('real')) return 'photorealistic';
-    return 'creative';
-  }),
-}));
 
 describe('ModelsScreen/utils', () => {
   // ==========================================================================
@@ -294,7 +287,7 @@ describe('ModelsScreen/utils', () => {
       name: 'test',
       displayName: 'Test',
       size: 1000,
-      backend: overrides.backend ?? 'mnn',
+      backend: overrides.backend ?? 'coreml',
       variant: overrides.variant,
       downloadUrl: '',
       fileName: '',
@@ -309,7 +302,7 @@ describe('ModelsScreen/utils', () => {
 
     it('returns compatible when no compatibleBackends specified', () => {
       const result = getImageModelCompatibility(makeHFModel() as any, {
-        recommendedBackend: 'mnn',
+        recommendedBackend: 'coreml',
         maxModelSizeMB: 2048,
         canRunSD: true,
         canRunQNN: false,
@@ -318,117 +311,31 @@ describe('ModelsScreen/utils', () => {
     });
 
     it('returns incompatible when backend not in compatibleBackends', () => {
-      const result = getImageModelCompatibility(makeHFModel({ backend: 'qnn' }) as any, {
-        recommendedBackend: 'mnn',
-        compatibleBackends: ['mnn'],
+      const result = getImageModelCompatibility(makeHFModel({ backend: 'coreml' }) as any, {
+        recommendedBackend: 'coreml',
+        compatibleBackends: [],
       } as any);
       expect(result.isCompatible).toBe(false);
-      expect(result.incompatibleReason).toBe('Requires Snapdragon 888+');
+      expect(result.incompatibleReason).toBe('This model requires Core ML support.');
     });
 
-    it('returns "Requires newer Snapdragon" for old Qualcomm device', () => {
-      const result = getImageModelCompatibility(
-        makeHFModel({ backend: 'qnn' }) as any,
-        { recommendedBackend: 'mnn', compatibleBackends: ['mnn'] } as any,
-        { vendor: 'qualcomm', hasNPU: false } as any,
-      );
-      expect(result.isCompatible).toBe(false);
-      expect(result.incompatibleReason).toBe('Requires newer Snapdragon');
-    });
 
     it('returns compatible when backend in compatibleBackends', () => {
-      const result = getImageModelCompatibility(makeHFModel({ backend: 'mnn' }) as any, {
-        recommendedBackend: 'mnn',
-        compatibleBackends: ['mnn', 'qnn'],
+      const result = getImageModelCompatibility(makeHFModel({ backend: 'coreml' }) as any, {
+        recommendedBackend: 'coreml',
+        compatibleBackends: ['coreml'],
       } as any);
       expect(result.isCompatible).toBe(true);
     });
 
-    it('returns incompatible for wrong chip variant', () => {
-      const result = getImageModelCompatibility(
-        makeHFModel({ backend: 'qnn', variant: '8gen2' }) as any,
-        { recommendedBackend: 'qnn', compatibleBackends: ['qnn'], qnnVariant: '8gen1' } as any,
-      );
-      expect(result.isCompatible).toBe(false);
-      expect(result.incompatibleReason).toBe('Requires Snapdragon 8 Gen 2+');
-    });
 
-    it('8gen2 device is compatible with all variants', () => {
-      const result = getImageModelCompatibility(
-        makeHFModel({ backend: 'qnn', variant: 'min' }) as any,
-        { recommendedBackend: 'qnn', compatibleBackends: ['qnn'], qnnVariant: '8gen2' } as any,
-      );
-      expect(result.isCompatible).toBe(true);
-    });
-
-    it('8gen1 device is compatible with non-8gen2 variants', () => {
-      const result = getImageModelCompatibility(
-        makeHFModel({ backend: 'qnn', variant: 'min' }) as any,
-        { recommendedBackend: 'qnn', compatibleBackends: ['qnn'], qnnVariant: '8gen1' } as any,
-      );
-      expect(result.isCompatible).toBe(true);
-    });
-
-    it('same variant is compatible', () => {
-      const result = getImageModelCompatibility(
-        makeHFModel({ backend: 'qnn', variant: '8gen1' }) as any,
-        { recommendedBackend: 'qnn', compatibleBackends: ['qnn'], qnnVariant: '8gen1' } as any,
-      );
-      expect(result.isCompatible).toBe(true);
-    });
-
-    it('model without variant is always variant-compatible', () => {
-      const result = getImageModelCompatibility(
-        makeHFModel({ backend: 'qnn' }) as any,
-        { recommendedBackend: 'qnn', compatibleBackends: ['qnn'], qnnVariant: 'min' } as any,
-      );
-      expect(result.isCompatible).toBe(true);
-    });
   });
 
   // ==========================================================================
   // hfModelToDescriptor
   // ==========================================================================
   describe('hfModelToDescriptor', () => {
-    it('converts a standard mnn model', () => {
-      const hf = {
-        id: 'test-model',
-        name: 'test-model',
-        displayName: 'Test Model',
-        size: 500000,
-        backend: 'mnn' as const,
-        variant: undefined,
-        downloadUrl: 'https://example.com/model.zip',
-        fileName: 'model.zip',
-        repo: 'test/model',
-      };
 
-      const desc = hfModelToDescriptor(hf as any);
-      expect(desc.id).toBe('test-model');
-      expect(desc.name).toBe('Test Model');
-      expect(desc.description).toContain('GPU');
-      expect(desc.backend).toBe('mnn');
-      expect(desc.size).toBe(500000);
-    });
-
-    it('converts a qnn model', () => {
-      const hf = {
-        id: 'qnn-model',
-        name: 'qnn-model',
-        displayName: 'QNN Model',
-        size: 500000,
-        backend: 'qnn' as const,
-        variant: '8gen2',
-        downloadUrl: 'https://example.com/model.zip',
-        fileName: 'model.zip',
-        repo: 'test/qnn',
-      };
-
-      const desc = hfModelToDescriptor(hf as any);
-      expect(desc.description).toContain('NPU');
-      expect(desc.backend).toBe('qnn');
-      expect(desc.variant).toBe('8gen2');
-    });
 
     it('converts a coreml model', () => {
       const hf = {
@@ -441,7 +348,7 @@ describe('ModelsScreen/utils', () => {
         fileName: 'model.zip',
         repo: 'apple/coreml-sd',
         _coreml: true,
-        _coremlFiles: [{ path: 'a.mlmodelc', relativePath: 'a.mlmodelc', size: 100, downloadUrl: 'https://example.com/a' }],
+        files: [{ path: 'a.mlmodelc', relativePath: 'a.mlmodelc', size: 100, downloadUrl: 'https://example.com/a' }],
       };
 
       const desc = hfModelToDescriptor(hf as any);

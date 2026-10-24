@@ -251,3 +251,26 @@ describe('RagDatabase', () => {
 
   });
 });
+
+describe('atomic document/chunk creation',()=>{
+  beforeEach(async()=>{
+    jest.clearAllMocks();(ragDatabase as any).ready=false;(ragDatabase as any).db=null;
+    mockExecuteSync.mockReturnValue({rows:[],insertId:1});await ragDatabase.ensureReady();mockExecuteSync.mockClear();
+  });
+  const document={projectId:'qa',name:'Notes.txt',path:'/local/notes.txt',size:4};
+  it('commits document and chunk IDs in a single transaction',()=>{
+    expect(ragDatabase.insertDocumentWithChunks(document,[{content:'Text',position:0} as any])).toEqual({docId:1,rowIds:[1]});
+    const sql=mockExecuteSync.mock.calls.map(call=>call[0]);
+    expect(sql[0]).toBe('BEGIN');expect(sql[1]).toContain('INSERT INTO rag_documents');expect(sql[2]).toContain('INSERT INTO rag_chunks');expect(sql[3]).toBe('COMMIT');
+  });
+  it('rolls back the document when writing a chunk fails, rather than leaving a duplicate that blocks retry',()=>{
+    mockExecuteSync.mockImplementation((sql:string)=>{
+      if(sql.includes('INSERT INTO rag_chunks'))throw new Error('Disk full');return {rows:[],insertId:1};
+    });
+    expect(()=>ragDatabase.insertDocumentWithChunks(document,[{content:'Text',position:0} as any])).toThrow('Disk full');
+    expect(mockExecuteSync).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(mockExecuteSync.mock.calls.map(call=>call[0])).not.toContain('COMMIT');
+    mockExecuteSync.mockReset();mockExecuteSync.mockReturnValue({rows:[],insertId:2});
+    expect(ragDatabase.insertDocumentWithChunks(document,[])).toEqual({docId:2,rowIds:[]});
+  });
+});

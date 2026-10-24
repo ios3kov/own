@@ -1,5 +1,4 @@
-import { Platform } from 'react-native';
-import { DownloadedModel, ONNXImageModel } from '../../types';
+import { DownloadedModel,ONNXImageModel } from '../../types';
 
 export type ModelType = 'text' | 'image';
 
@@ -50,4 +49,4 @@ export const getMemoryWarningPercent = (totalMemoryGB: number): number =>
   totalMemoryGB <= 4 ? 0.30 : 0.50;
 export const TEXT_MODEL_OVERHEAD_MULTIPLIER = 1.5; // KV cache, activations, etc.
 // Core ML is more efficient than ONNX runtime
-export const IMAGE_MODEL_OVERHEAD_MULTIPLIER = Platform.OS === 'ios' ? 1.5 : 1.8;
+export const IMAGE_MODEL_OVERHEAD_MULTIPLIER = (1.5);

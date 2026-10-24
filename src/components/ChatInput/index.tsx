@@ -1,17 +1,17 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, TextInput, TouchableOpacity, Animated, StyleSheet, Platform, ActionSheetIOS } from 'react-native';
+import React,{ useState,useRef,useEffect } from 'react';
+import { View,TextInput,TouchableOpacity,Animated,StyleSheet,ActionSheetIOS } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { useTheme, useThemedStyles } from '../../theme';
-import { ImageModeState, MediaAttachment } from '../../types';
+import { useTheme,useThemedStyles } from '../../theme';
+import { ImageModeState,MediaAttachment } from '../../types';
 import { VoiceRecordButton } from '../VoiceRecordButton';
 import { AttachStep } from 'react-native-spotlight-tour';
 import { triggerHaptic } from '../../utils/haptics';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
-import { createStyles, PILL_ICONS_WIDTH, ANIM_DURATION_IN, ANIM_DURATION_OUT } from './styles';
+import { CustomAlert,showAlert,hideAlert,AlertState,initialAlertState } from '../CustomAlert';
+import { createStyles,PILL_ICONS_WIDTH,ANIM_DURATION_IN,ANIM_DURATION_OUT } from './styles';
 import { QueueRow } from './Toolbar';
-import { AttachmentPreview, useAttachments } from './Attachments';
+import { AttachmentPreview,useAttachments } from './Attachments';
 import { useVoiceInput } from './Voice';
-import { QuickSettingsPopover, AttachPickerPopover } from './Popovers';
+import { QuickSettingsPopover } from './Popovers';
 import { useKeyboardAwarePopover } from './useKeyboardAwarePopover';
 
 interface ChatInputProps {
@@ -142,7 +142,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleQuickSettingsPress = () => quickSettings.show();
 
   const handleAttachPress = () => {
-    if (Platform.OS === 'ios') {
+    {
       const options = supportsVision
         ? ['Photo', 'Document', 'Cancel']
         : ['Document', 'Cancel'];
@@ -157,8 +157,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           }
         },
       );
-    } else {
-      attachPicker.show();
     }
   };
 
@@ -268,17 +266,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         ) : actionButton}
       </View>
 
-      {Platform.OS !== 'ios' && (
-        <AttachPickerPopover
-          visible={attachPicker.visible}
-          onClose={attachPicker.hide}
-          anchorY={attachPicker.anchor.y}
-          anchorX={attachPicker.anchor.x}
-          supportsVision={supportsVision}
-          onPhoto={handleVisionPress}
-          onDocument={handlePickDocument}
-        />
-      )}
+      {false}
 
       <QuickSettingsPopover
         visible={quickSettings.visible}

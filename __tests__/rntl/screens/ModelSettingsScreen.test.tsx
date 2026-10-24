@@ -15,13 +15,13 @@
  */
 
 import React from 'react';
-
-// These legacy cases cover the technical editor; friendly settings have real-store integration tests.
-jest.mock('../../../src/components/SimpleModelSettings', () => ({SimpleModelSettings:({advancedContent}:any)=>advancedContent}));
-import { render, fireEvent } from '@testing-library/react-native';
+import { render,fireEvent } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAppStore } from '../../../src/stores/appStore';
 import { resetStores } from '../../utils/testHelpers';
+
+// These legacy cases cover the technical editor; friendly settings have real-store integration tests.
+jest.mock('../../../src/components/SimpleModelSettings', () => ({SimpleModelSettings:({advancedContent}:any)=>advancedContent}));
 
 // Mock Slider component
 jest.mock('@react-native-community/slider', () => {
@@ -600,64 +600,7 @@ describe('ModelSettingsScreen', () => {
       expect(queryByText('GPU Layers')).toBeNull();
     });
 
-    // Android-specific backend tests: mock Platform.OS before each, restore after
-    describe('on Android platform', () => {
-      let originalOS: string;
-      const { Platform } = require('react-native');
 
-      beforeEach(() => {
-        originalOS = Platform.OS;
-        Object.defineProperty(Platform, 'OS', { get: () => 'android', configurable: true });
-      });
-
-      afterEach(() => {
-        Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
-      });
-
-      it('shows Inference Backend section and GPU Layers slider when backend is OpenCL', () => {
-        useAppStore.getState().updateSettings({ inferenceBackend: 'opencl', gpuLayers: 6 });
-        const { getByText } = renderWithSections('text');
-        expect(getByText('Inference Backend')).toBeTruthy();
-        expect(getByText('GPU Layers')).toBeTruthy();
-      });
-
-      it('does not clamp gpuLayers when flashAttn turned on with layers > 1', () => {
-        useAppStore.getState().updateSettings({ inferenceBackend: 'opencl', flashAttn: false, gpuLayers: 8 });
-        const { getByTestId } = renderWithSections('text');
-        fireEvent(getByTestId('flash-attn-switch'), 'valueChange', true);
-        expect(useAppStore.getState().settings.flashAttn).toBe(true);
-        // GPU layers are no longer clamped when enabling flash attention
-        expect(useAppStore.getState().settings.gpuLayers).toBe(8);
-      });
-
-      it('updates inferenceBackend to cpu when CPU button is pressed', () => {
-        useAppStore.getState().updateSettings({ inferenceBackend: 'opencl', gpuLayers: 6 });
-        const { getByTestId } = renderWithSections('text');
-
-        fireEvent.press(getByTestId('backend-cpu-button'));
-
-        expect(useAppStore.getState().settings.inferenceBackend).toBe('cpu');
-      });
-
-      it('updates inferenceBackend to opencl when OpenCL button is pressed', () => {
-        useAppStore.getState().updateSettings({ inferenceBackend: 'cpu' });
-        const { getByTestId } = renderWithSections('text');
-
-        fireEvent.press(getByTestId('backend-opencl-button'));
-
-        expect(useAppStore.getState().settings.inferenceBackend).toBe('opencl');
-      });
-
-      it('updates gpuLayers when GPU Layers slider completes', () => {
-        useAppStore.getState().updateSettings({ inferenceBackend: 'opencl', flashAttn: false, gpuLayers: 6 });
-        const { getByTestId } = renderWithSections('text');
-
-        const slider = getByTestId('gpu-layers-slider');
-        fireEvent(slider, 'slidingComplete', 12);
-
-        expect(useAppStore.getState().settings.gpuLayers).toBe(12);
-      });
-    });
   });
 
   // ============================================================================
@@ -822,7 +765,6 @@ describe('ModelSettingsScreen', () => {
           imageThreads: undefined as any,
           imageWidth: undefined as any,
           imageHeight: undefined as any,
-          imageUseOpenCL: undefined as any,
           modelLoadingStrategy: undefined as any,
           enableGpu: undefined as any,
           inferenceBackend: undefined as any,
@@ -833,10 +775,6 @@ describe('ModelSettingsScreen', () => {
           enhanceImagePrompts: undefined as any,
           enabledTools: undefined as any,
           thinkingEnabled: undefined as any,
-          liteRTBackend: undefined as any,
-          liteRTTemperature: undefined as any,
-          liteRTTopP: undefined as any,
-          liteRTMaxTokens: undefined as any,
         },
       });
 
@@ -920,12 +858,7 @@ describe('ModelSettingsScreen', () => {
       expect(getByText(/4-bit quantized/)).toBeTruthy();
     });
 
-    // HTP is currently disabled via HTP_UI_ENABLED feature flag
-    it.skip('locks KV cache display to f16 on HTP backend', () => {
-      useAppStore.getState().updateSettings({ inferenceBackend: 'htp', cacheType: 'q4_0' });
-      const { getByText } = renderWithSections('text');
-      expect(getByText(/Full precision/)).toBeTruthy();
-    });
+
   });
 
   // ============================================================================
@@ -988,7 +921,7 @@ describe('ModelSettingsScreen', () => {
         nBatch: 64,
         cacheType: 'f16',
         flashAttn: false,
-        inferenceBackend: 'opencl',
+        inferenceBackend: 'metal',
         gpuLayers: 20,
       });
 

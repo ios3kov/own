@@ -18,8 +18,8 @@ jest.mock('../../../../src/stores', () => ({
   useAppStore: { getState: jest.fn(() => ({ downloadedModels: [], setDownloadedModels: jest.fn() })) },
 }));
 
-import { extractBaseName, findMatchingMmProj } from '../../../../src/services/modelManager/scan';
-import { getCuratedLiteRTEntry, buildCuratedLiteRTUrl, CURATED_LITERT_ENTRIES } from '../../../../src/services/curatedLiteRTRegistry';
+import { extractBaseName,findMatchingMmProj } from '../../../../src/services/modelManager/scan';
+
 import type RNFS from 'react-native-fs';
 
 function makeFile(name: string): RNFS.ReadDirItem {
@@ -27,32 +27,8 @@ function makeFile(name: string): RNFS.ReadDirItem {
 }
 
 // ---------------------------------------------------------------------------
-// curatedLiteRTRegistry
 // ---------------------------------------------------------------------------
 
-describe('getCuratedLiteRTEntry', () => {
-  it('returns the entry for a known curated filename', () => {
-    const entry = getCuratedLiteRTEntry(CURATED_LITERT_ENTRIES[0].fileName);
-    expect(entry).toBeDefined();
-    expect(entry?.fileName).toBe(CURATED_LITERT_ENTRIES[0].fileName);
-  });
-
-  it('returns undefined for an unknown filename', () => {
-    expect(getCuratedLiteRTEntry('unknown-model.litertlm')).toBeUndefined();
-  });
-
-  it('returns undefined when fileName is undefined', () => {
-    expect(getCuratedLiteRTEntry(undefined)).toBeUndefined();
-  });
-
-  it('buildCuratedLiteRTUrl produces a valid HuggingFace URL', () => {
-    const entry = CURATED_LITERT_ENTRIES[0];
-    const url = buildCuratedLiteRTUrl(entry);
-    expect(url).toContain(entry.hfRepoId);
-    expect(url).toContain(entry.commitHash);
-    expect(url).toContain(entry.fileName);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // extractBaseName

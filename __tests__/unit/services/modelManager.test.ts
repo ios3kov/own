@@ -11,7 +11,7 @@ import { modelManager } from '../../../src/services/modelManager';
 import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
 import { huggingFaceService } from '../../../src/services/huggingface';
 import { buildDownloadedModel } from '../../../src/services/modelManager/storage';
-import { createModelFile, createModelFileWithMmProj } from '../../utils/factories';
+import { createModelFile,createModelFileWithMmProj } from '../../utils/factories';
 
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
 const mockedAsyncStorage = AsyncStorage as jest.Mocked<typeof AsyncStorage>;
@@ -57,15 +57,6 @@ import { resolveCoreMLModelDir as mockedResolveCoreML } from '../../../src/utils
 
 const MODELS_STORAGE_KEY = '@local_llm/downloaded_models';
 
-function setupLiteRTImportMocks() {
-  mockedRNFS.exists
-    .mockResolvedValueOnce(true)   // modelsDir
-    .mockResolvedValueOnce(true)   // imageModelsDir
-    .mockResolvedValueOnce(false); // destExists = false
-  mockedRNFS.stat.mockResolvedValue({ size: 500000000, isFile: () => true } as any);
-  (mockedRNFS as any).copyFile.mockResolvedValue(undefined);
-  mockedAsyncStorage.getItem.mockResolvedValue('[]');
-}
 
 describe('ModelManager', () => {
   beforeEach(() => {
@@ -596,12 +587,11 @@ describe('ModelManager', () => {
     });
 
     it('uses file.downloadUrl when set (cross-repo curated entries)', async () => {
-      // Curated entries (e.g. LiteRT recommended) carry an explicit downloadUrl that
       // points at a different repo than the parent modelId. The download path must
       // honor it instead of constructing one from modelId + file.name.
-      const customUrl = 'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm';
+      const customUrl = 'https://huggingface.co/test/custom-gguf/resolve/main/custom.gguf';
       const curated = createModelFile({
-        name: 'gemma-4-E2B-it.litertlm',
+        name: 'custom.gguf',
         size: 2_590_000_000,
         quantization: 'mixed',
         downloadUrl: customUrl,
@@ -616,15 +606,15 @@ describe('ModelManager', () => {
 
       mockedBackgroundDownloadService.startDownload.mockResolvedValue({
         downloadId: 99,
-        fileName: 'gemma-4-E2B-it.litertlm',
-        modelId: 'Own/litert-recommended',
+        fileName: 'custom.gguf',
+        modelId: 'test/custom-gguf',
         status: 'pending',
         bytesDownloaded: 0,
         totalBytes: curated.size,
         startedAt: Date.now(),
       } as any);
 
-      await modelManager.downloadModelBackground('Own/litert-recommended', curated);
+      await modelManager.downloadModelBackground('test/custom-gguf', curated);
 
       expect(mockedBackgroundDownloadService.startDownload).toHaveBeenCalledWith(
         expect.objectContaining({ url: customUrl }),
@@ -903,22 +893,22 @@ describe('ModelManager', () => {
       // 1. imageModelsDir listing (the scan itself)
       // 2. files inside the discovered model dir
       mockedRNFS.readDir.mockImplementation((dir: string) => {
-        if (dir.includes('image_models') && !dir.includes('sd-turbo-mnn')) {
+        if (dir.includes('image_models') && !dir.includes('sd-turbo-coreml')) {
           return Promise.resolve([
             {
-              name: 'sd-turbo-mnn',
-              path: '/mock/documents/image_models/sd-turbo-mnn',
+              name: 'sd-turbo-coreml',
+              path: '/mock/documents/image_models/sd-turbo-coreml',
               size: 0,
               isFile: () => false,
               isDirectory: () => true,
             } as any,
           ]);
         }
-        if (dir.includes('sd-turbo-mnn')) {
+        if (dir.includes('sd-turbo-coreml')) {
           return Promise.resolve([
             {
               name: 'model.onnx',
-              path: '/mock/documents/image_models/sd-turbo-mnn/model.onnx',
+              path: '/mock/documents/image_models/sd-turbo-coreml/model.onnx',
               size: 2000000000,
               isFile: () => true,
               isDirectory: () => false,
@@ -933,16 +923,16 @@ describe('ModelManager', () => {
       const discovered = await modelManager.scanForUntrackedImageModels();
 
       expect(discovered).toHaveLength(1);
-      expect(discovered[0].name).toContain('sd-turbo-mnn');
+      expect(discovered[0].name).toContain('sd-turbo-coreml');
     });
 
-    it('determines backend from directory name', async () => {
+    it('registers resolved image directories as Core ML', async () => {
       mockedRNFS.exists.mockResolvedValue(true);
       mockedRNFS.readDir
         .mockResolvedValueOnce([
           {
-            name: 'model-qnn-8gen3',
-            path: '/mock/documents/image_models/model-qnn-8gen3',
+            name: 'model-coreml',
+            path: '/mock/documents/image_models/model-coreml',
             size: 0,
             isFile: () => false,
             isDirectory: () => true,
@@ -951,7 +941,7 @@ describe('ModelManager', () => {
         .mockResolvedValueOnce([
           {
             name: 'model.bin',
-            path: '/mock/documents/image_models/model-qnn-8gen3/model.bin',
+            path: '/mock/documents/image_models/model-coreml/model.bin',
             size: 1000000000,
             isFile: () => true,
             isDirectory: () => false,
@@ -963,7 +953,7 @@ describe('ModelManager', () => {
       const discovered = await modelManager.scanForUntrackedImageModels();
 
       expect(discovered).toHaveLength(1);
-      expect(discovered[0].backend).toBe('qnn');
+      expect(discovered[0].backend).toBe('coreml');
     });
 
     it('skips already registered models', async () => {
@@ -1174,6 +1164,15 @@ describe('ModelManager', () => {
       jest.spyOn(require('react-native'), 'Platform', 'get').mockReturnValue({ OS: 'ios' } as any);
     });
 
+    it.each(['/picked/100%.gguf','/picked/literal%20name.gguf'])('preserves literal percent characters in local source %s',async sourceUri=>{
+      mockedRNFS.exists.mockResolvedValueOnce(true).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+      mockedRNFS.stat.mockResolvedValue({size:100,isFile:()=>true} as any);
+      mockedRNFS.copyFile.mockResolvedValue(undefined);
+      mockedAsyncStorage.getItem.mockResolvedValue('[]');
+      await modelManager.importLocalModel({sourceUri,fileName:'percent-model.gguf'});
+      expect(mockedRNFS.copyFile).toHaveBeenCalledWith(sourceUri,expect.any(String));
+    });
+
     it('imports valid .gguf file successfully', async () => {
       mockedRNFS.exists
         .mockResolvedValueOnce(true)   // modelsDir
@@ -1197,7 +1196,7 @@ describe('ModelManager', () => {
     it('rejects non-.gguf files', async () => {
       await expect(
         modelManager.importLocalModel({ sourceUri: '/path/to/model.bin', fileName: 'model.bin' })
-      ).rejects.toThrow('Only .gguf and .litertlm files can be imported');
+      ).rejects.toThrow('Only .gguf files can be imported');
     });
 
     it('rejects when destination already exists', async () => {
@@ -1890,7 +1889,7 @@ describe('ModelManager', () => {
         modelPath: '/mock/documents/image_models/delete-model',
         size: 2000000000,
         downloadedAt: new Date().toISOString(),
-        backend: 'mnn',
+        backend: 'coreml',
       };
       mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([imageModel]));
       mockedRNFS.exists.mockResolvedValue(true);
@@ -1911,7 +1910,7 @@ describe('ModelManager', () => {
         modelPath: '/mock/documents/image_models/missing',
         size: 1000,
         downloadedAt: new Date().toISOString(),
-        backend: 'mnn',
+        backend: 'coreml',
       };
       mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([imageModel]));
       // First exists call: model validation in getDownloadedImageModels -> true (so model stays in list)
@@ -1937,7 +1936,7 @@ describe('ModelManager', () => {
         modelPath: '/mock/image_models/path-model',
         size: 1000,
         downloadedAt: new Date().toISOString(),
-        backend: 'mnn',
+        backend: 'coreml',
       };
       mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([imageModel]));
       mockedRNFS.exists.mockResolvedValue(true); // model exists on disk
@@ -1960,8 +1959,8 @@ describe('ModelManager', () => {
   describe('getImageModelsStorageUsed', () => {
     it('returns total storage used by image models', async () => {
       const models = [
-        { id: 'a', name: 'A', modelPath: '/a', size: 1000, downloadedAt: '', backend: 'mnn' },
-        { id: 'b', name: 'B', modelPath: '/b', size: 2000, downloadedAt: '', backend: 'mnn' },
+        { id: 'a', name: 'A', modelPath: '/a', size: 1000, downloadedAt: '', backend: 'coreml' },
+        { id: 'b', name: 'B', modelPath: '/b', size: 2000, downloadedAt: '', backend: 'coreml' },
       ];
       mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify(models));
       mockedRNFS.exists.mockResolvedValue(true); // both models exist on disk
@@ -1992,7 +1991,7 @@ describe('ModelManager', () => {
         modelPath: '/mock/image_models/new-img',
         size: 2000000000,
         downloadedAt: new Date().toISOString(),
-        backend: 'mnn' as const,
+        backend: 'coreml' as const,
       };
 
       await modelManager.addDownloadedImageModel(model);
@@ -2011,7 +2010,7 @@ describe('ModelManager', () => {
         modelPath: '/mock/old',
         size: 1000,
         downloadedAt: '',
-        backend: 'mnn',
+        backend: 'coreml',
       };
       mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify([existing]));
       mockedRNFS.exists.mockResolvedValue(true); // existing model exists on disk
@@ -2023,7 +2022,7 @@ describe('ModelManager', () => {
         modelPath: '/mock/new',
         size: 2000,
         downloadedAt: new Date().toISOString(),
-        backend: 'mnn' as const,
+        backend: 'coreml' as const,
       };
 
       await modelManager.addDownloadedImageModel(updated);
@@ -2208,8 +2207,8 @@ describe('ModelManager', () => {
       mockedRNFS.readDir
         .mockResolvedValueOnce([ // image models dir listing
           {
-            name: 'sd_v15_mnn',
-            path: '/mock/image_models/sd_v15_mnn',
+            name: 'sd_v15_coreml',
+            path: '/mock/image_models/sd_v15_coreml',
             size: 0,
             isFile: () => false,
             isDirectory: () => true,
@@ -2218,14 +2217,14 @@ describe('ModelManager', () => {
         .mockResolvedValueOnce([ // model dir contents
           {
             name: 'unet.onnx',
-            path: '/mock/image_models/sd_v15_mnn/unet.onnx',
+            path: '/mock/image_models/sd_v15_coreml/unet.onnx',
             size: 1500000000,
             isFile: () => true,
             isDirectory: () => false,
           },
           {
             name: 'vae.onnx',
-            path: '/mock/image_models/sd_v15_mnn/vae.onnx',
+            path: '/mock/image_models/sd_v15_coreml/vae.onnx',
             size: 500000000,
             isFile: () => true,
             isDirectory: () => false,
@@ -2237,30 +2236,9 @@ describe('ModelManager', () => {
       expect(result).toHaveLength(1);
       expect(result[0].name).toContain('sd');
       expect(result[0].size).toBe(2000000000);
-      expect(result[0].backend).toBe('mnn');
+      expect(result[0].backend).toBe('coreml');
     });
 
-    it('detects qnn backend from directory name', async () => {
-      mockedRNFS.exists
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(true)
-        .mockResolvedValueOnce(true);
-
-      mockedAsyncStorage.getItem
-        .mockResolvedValueOnce('[]')
-        .mockResolvedValueOnce('[]');
-
-      mockedRNFS.readDir
-        .mockResolvedValueOnce([
-          { name: 'sd_qnn_model', path: '/mock/image_models/sd_qnn_model', size: 0, isFile: () => false, isDirectory: () => true },
-        ] as any)
-        .mockResolvedValueOnce([
-          { name: 'model.bin', path: '/mock/image_models/sd_qnn_model/model.bin', size: 1000000, isFile: () => true, isDirectory: () => false },
-        ] as any);
-
-      const result = await modelManager.scanForUntrackedImageModels();
-      expect(result[0].backend).toBe('qnn');
-    });
 
     it('detects coreml backend from directory name', async () => {
       mockedRNFS.exists
@@ -2303,7 +2281,7 @@ describe('ModelManager', () => {
     });
 
     it('skips already registered model directories', async () => {
-      const existing = [{ id: 'existing-img', modelPath: '/mock/image_models/existing', name: 'Existing', size: 1000, downloadedAt: '', backend: 'mnn' }];
+      const existing = [{ id: 'existing-img', modelPath: '/mock/image_models/existing', name: 'Existing', size: 1000, downloadedAt: '', backend: 'coreml' }];
       mockedRNFS.exists
         .mockResolvedValueOnce(true)
         .mockResolvedValueOnce(true)
@@ -2413,8 +2391,8 @@ describe('ModelManager', () => {
 
     it('filters out models whose files no longer exist', async () => {
       const models = [
-        { id: 'exists', name: 'Exists', modelPath: '/mock/image_models/exists', size: 1000, downloadedAt: '', backend: 'mnn' },
-        { id: 'missing', name: 'Missing', modelPath: '/mock/image_models/missing', size: 1000, downloadedAt: '', backend: 'mnn' },
+        { id: 'exists', name: 'Exists', modelPath: '/mock/image_models/exists', size: 1000, downloadedAt: '', backend: 'coreml' },
+        { id: 'missing', name: 'Missing', modelPath: '/mock/image_models/missing', size: 1000, downloadedAt: '', backend: 'coreml' },
       ];
       mockedAsyncStorage.getItem.mockResolvedValue(JSON.stringify(models));
 
@@ -2441,39 +2419,6 @@ describe('ModelManager', () => {
     });
   });
 
-  describe('importLocalModel — Android content:// URI handling', () => {
-    beforeEach(() => {
-      jest.useFakeTimers();
-      jest.spyOn(require('react-native'), 'Platform', 'get').mockReturnValue({ OS: 'android' } as any);
-    });
-
-    afterEach(() => {
-      jest.useRealTimers();
-    });
-
-    it('copies content:// URI directly to models dir on Android (no temp cache)', async () => {
-      mockedRNFS.exists
-        .mockResolvedValueOnce(true)   // modelsDir
-        .mockResolvedValueOnce(true)   // imageModelsDir
-        .mockResolvedValueOnce(false); // destExists = false
-
-      mockedRNFS.stat.mockResolvedValue({ size: 2000000000, isFile: () => true } as any);
-      (mockedRNFS as any).copyFile.mockResolvedValue(undefined);
-      mockedAsyncStorage.getItem.mockResolvedValue('[]');
-
-      const result = await modelManager.importLocalModel({
-        sourceUri: 'content://com.android.provider/document/model.gguf',
-        fileName: 'model-Q4_K_M.gguf',
-      });
-
-      // content:// URI is copied directly to the models dir — no temp cache step
-      expect((mockedRNFS as any).copyFile).toHaveBeenCalledWith(
-        'content://com.android.provider/document/model.gguf',
-        expect.stringContaining('model-Q4_K_M.gguf'),
-      );
-      expect(result.id).toBe('local_import/model-Q4_K_M.gguf');
-    });
-  });
 
   describe('copyFileWithProgress — poll interval callback', () => {
     beforeEach(() => {
@@ -2606,10 +2551,10 @@ describe('ModelManager', () => {
 
       mockedRNFS.readDir
         .mockResolvedValueOnce([
-          { name: 'sd_v15_mnn', path: `${IMAGE_MODELS_DIR}/sd_v15_mnn`, size: 0, isFile: () => false, isDirectory: () => true },
+          { name: 'sd_v15_coreml', path: `${IMAGE_MODELS_DIR}/sd_v15_coreml`, size: 0, isFile: () => false, isDirectory: () => true },
         ] as any)
         .mockResolvedValueOnce([
-          { name: 'unet.mnn', path: `${IMAGE_MODELS_DIR}/sd_v15_mnn/unet.mnn`, size: 1000000000, isFile: () => true, isDirectory: () => false },
+          { name: 'weights.bin', path: `${IMAGE_MODELS_DIR}/sd_v15_coreml/weights.bin`, size: 1000000000, isFile: () => true, isDirectory: () => false },
         ] as any);
 
       mockedAsyncStorage.setItem.mockResolvedValue(undefined);
@@ -2617,20 +2562,20 @@ describe('ModelManager', () => {
       const result = await modelManager.reconcileFinishedImageDownloads(new Set());
 
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('sd_v15_mnn');
-      expect(result[0].backend).toBe('mnn');
+      expect(result[0].id).toBe('sd_v15_coreml');
+      expect(result[0].backend).toBe('coreml');
     });
 
     it('skips dirs already in AsyncStorage', async () => {
       setupInitialized();
       mockedAsyncStorage.getItem.mockResolvedValueOnce(
-        JSON.stringify([{ id: 'sd_v15_mnn', modelPath: `${IMAGE_MODELS_DIR}/sd_v15_mnn`, size: 1000 }]),
+        JSON.stringify([{ id: 'sd_v15_coreml', modelPath: `${IMAGE_MODELS_DIR}/sd_v15_coreml`, size: 1000 }]),
       );
 
       mockedRNFS.exists.mockResolvedValueOnce(true); // imageModelsDir scan
 
       mockedRNFS.readDir.mockResolvedValueOnce([
-        { name: 'sd_v15_mnn', path: `${IMAGE_MODELS_DIR}/sd_v15_mnn`, size: 0, isFile: () => false, isDirectory: () => true },
+        { name: 'sd_v15_coreml', path: `${IMAGE_MODELS_DIR}/sd_v15_coreml`, size: 0, isFile: () => false, isDirectory: () => true },
       ] as any);
 
       const result = await modelManager.reconcileFinishedImageDownloads(new Set());
@@ -2644,10 +2589,10 @@ describe('ModelManager', () => {
       mockedRNFS.exists.mockResolvedValueOnce(true); // imageModelsDir scan
 
       mockedRNFS.readDir.mockResolvedValueOnce([
-        { name: 'sd_v15_mnn', path: `${IMAGE_MODELS_DIR}/sd_v15_mnn`, size: 0, isFile: () => false, isDirectory: () => true },
+        { name: 'sd_v15_coreml', path: `${IMAGE_MODELS_DIR}/sd_v15_coreml`, size: 0, isFile: () => false, isDirectory: () => true },
       ] as any);
 
-      const result = await modelManager.reconcileFinishedImageDownloads(new Set(['sd_v15_mnn']));
+      const result = await modelManager.reconcileFinishedImageDownloads(new Set(['sd_v15_coreml']));
       expect(result).toHaveLength(0);
     });
 
@@ -2665,13 +2610,13 @@ describe('ModelManager', () => {
 
       mockedRNFS.readDir
         .mockResolvedValueOnce([
-          { name: 'sd_v15_mnn', path: `${IMAGE_MODELS_DIR}/sd_v15_mnn`, size: 0, isFile: () => false, isDirectory: () => true },
+          { name: 'sd_v15_coreml', path: `${IMAGE_MODELS_DIR}/sd_v15_coreml`, size: 0, isFile: () => false, isDirectory: () => true },
         ] as any)
         .mockResolvedValueOnce([
-          { name: 'unet.mnn', path: `${IMAGE_MODELS_DIR}/sd_v15_mnn/unet.mnn`, size: 500000000, isFile: () => true, isDirectory: () => false },
+          { name: 'weights.bin', path: `${IMAGE_MODELS_DIR}/sd_v15_coreml/weights.bin`, size: 500000000, isFile: () => true, isDirectory: () => false },
         ] as any);
 
-      mockedRNFS.readFile = jest.fn().mockResolvedValueOnce('sd_v15_mnn.zip');
+      mockedRNFS.readFile = jest.fn().mockResolvedValueOnce('sd_v15_coreml.zip');
       mockedRNFS.stat = jest.fn().mockResolvedValue({ size: 400000000, isFile: () => true } as any);
       mockedRNFS.read = jest.fn().mockResolvedValue('PK\x03\x04');
       mockedRNFS.writeFile = jest.fn().mockResolvedValue(undefined as any);
@@ -2680,11 +2625,11 @@ describe('ModelManager', () => {
       const result = await modelManager.reconcileFinishedImageDownloads(new Set());
 
       expect(mockedUnzip).toHaveBeenCalledWith(
-        `${IMAGE_MODELS_DIR}/sd_v15_mnn.zip`,
-        `${IMAGE_MODELS_DIR}/sd_v15_mnn`,
+        `${IMAGE_MODELS_DIR}/sd_v15_coreml.zip`,
+        `${IMAGE_MODELS_DIR}/sd_v15_coreml`,
       );
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('sd_v15_mnn');
+      expect(result[0].id).toBe('sd_v15_coreml');
     });
 
     it('deletes partial dir when _zip_name present but zip is missing', async () => {
@@ -2698,14 +2643,14 @@ describe('ModelManager', () => {
         .mockResolvedValueOnce(false);  // zip file missing (isValidZip)
 
       mockedRNFS.readDir.mockResolvedValueOnce([
-        { name: 'sd_v15_mnn', path: `${IMAGE_MODELS_DIR}/sd_v15_mnn`, size: 0, isFile: () => false, isDirectory: () => true },
+        { name: 'sd_v15_coreml', path: `${IMAGE_MODELS_DIR}/sd_v15_coreml`, size: 0, isFile: () => false, isDirectory: () => true },
       ] as any);
 
-      mockedRNFS.readFile = jest.fn().mockResolvedValueOnce('sd_v15_mnn.zip');
+      mockedRNFS.readFile = jest.fn().mockResolvedValueOnce('sd_v15_coreml.zip');
 
       const result = await modelManager.reconcileFinishedImageDownloads(new Set());
 
-      expect(RNFS.unlink).toHaveBeenCalledWith(`${IMAGE_MODELS_DIR}/sd_v15_mnn`);
+      expect(RNFS.unlink).toHaveBeenCalledWith(`${IMAGE_MODELS_DIR}/sd_v15_coreml`);
       expect(result).toHaveLength(0);
     });
 
@@ -2760,39 +2705,18 @@ describe('ModelManager', () => {
     });
   });
 
-  describe('importLocalModel — LiteRT branches', () => {
-    it('imports a .litertlm file with engine=litert and liteRTVision=false', async () => {
-      setupLiteRTImportMocks();
-      const result = await modelManager.importLocalModel({
-        sourceUri: '/path/to/gemma.litertlm',
-        fileName: 'gemma-4-E2B-it.litertlm',
-        engine: 'litert',
-        liteRTVision: false,
-      });
-      expect(result.engine).toBe('litert');
-      expect((result as any).liteRTVision).toBe(false);
-      expect(result.id).toBe('local_import/gemma-4-E2B-it.litertlm');
-    });
 
-    it('imports a .litertlm file with liteRTVision=true', async () => {
-      setupLiteRTImportMocks();
-      const result = await modelManager.importLocalModel({
-        sourceUri: '/path/to/gemma-vision.litertlm',
-        fileName: 'gemma-vision.litertlm',
-        engine: 'litert',
-        liteRTVision: true,
-      });
-      expect((result as any).liteRTVision).toBe(true);
-    });
+});
 
-    it('omits engine and liteRTVision when not provided', async () => {
-      setupLiteRTImportMocks();
-      const result = await modelManager.importLocalModel({
-        sourceUri: '/path/to/model.gguf',
-        fileName: 'model.gguf',
-      });
-      expect(result.engine).toBe('llama');
-      expect((result as any).liteRTVision).toBeUndefined();
-    });
+describe('model import filename boundary', () => {
+  it.each(['../escape.gguf','/absolute.gguf','nested/model.gguf','bad\\model.gguf','bad\nname.gguf'])('rejects unsafe main filename %j before copying', async fileName => {
+    mockedRNFS.copyFile.mockClear();
+    await expect(modelManager.importLocalModel({sourceUri:'/picked/model.gguf',fileName})).rejects.toThrow('Invalid model file name');
+    expect(mockedRNFS.copyFile).not.toHaveBeenCalled();
+  });
+  it('rejects an unsafe vision filename before copying the main model',async()=>{
+    mockedRNFS.copyFile.mockClear();
+    await expect(modelManager.importLocalModel({sourceUri:'/picked/model.gguf',fileName:'model.gguf',mmProjSourceUri:'/picked/mmproj.gguf',mmProjFileName:'../mmproj.gguf'})).rejects.toThrow('Invalid model file name');
+    expect(mockedRNFS.copyFile).not.toHaveBeenCalled();
   });
 });

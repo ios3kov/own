@@ -9,21 +9,13 @@ This directory contains end-to-end tests using [Maestro](https://maestro.mobile.
    curl -Ls "https://get.maestro.mobile.dev" | bash
    ```
 
-2. **Android Setup**
-   - Android device connected via USB with USB debugging enabled
-   - OR Android emulator running
-   - Verify with: `adb devices`
-
-3. **iOS Setup** (macOS only)
+2. **iOS Setup** (macOS only)
    - iOS simulator running
    - OR physical device with developer mode enabled
 
-4. **App Installed**
+3. **App Installed**
    - Build and install the app on your device:
      ```bash
-     # Android
-     npm run android
-
      # iOS
      npm run ios
      ```
@@ -43,7 +35,6 @@ maestro test .maestro/flows/p0/02-text-generation.yaml
 ### Run with Specific Device
 ```bash
 # List devices
-adb devices  # Android
 xcrun simctl list devices  # iOS
 
 # Run on specific device

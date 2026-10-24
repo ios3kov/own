@@ -1,22 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { Platform, View, Text, TouchableOpacity } from 'react-native';
+import React from 'react';
+import { View,Text,TouchableOpacity } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { useTheme, useThemedStyles } from '../../theme';
+import { useTheme,useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
-import { CacheType, InferenceBackend, LiteRTBackend, INFERENCE_BACKENDS } from '../../types';
+import { CacheType,InferenceBackend,INFERENCE_BACKENDS } from '../../types';
 import {
-  useTextGenerationAdvanced,
-  CACHE_TYPE_DESCRIPTIONS,
-  GPU_LAYERS_MAX,
-  CACHE_TYPE_OPTIONS,
+useTextGenerationAdvanced,
+CACHE_TYPE_DESCRIPTIONS,
+GPU_LAYERS_MAX,
+CACHE_TYPE_OPTIONS,
 } from '../../hooks/useTextGenerationAdvanced';
-import { hardwareService } from '../../services/hardware';
 import { createStyles } from './styles';
 
-const isAndroid = Platform.OS === 'android';
-
-/** Feature flag: Set to true to enable HTP/Hexagon NPU in UI. Currently disabled. */
-const HTP_UI_ENABLED = false;
 
 // ─── Inference Backend ────────────────────────────────────────────────────────
 
@@ -27,35 +22,18 @@ const IOS_BACKENDS: BackendOption[] = [
   { id: INFERENCE_BACKENDS.METAL, label: 'Metal', desc: 'Offload layers to GPU via Metal. Faster for larger models. Requires model reload.' },
 ];
 
-const ANDROID_BASE_BACKENDS: BackendOption[] = [
-  { id: INFERENCE_BACKENDS.CPU, label: 'CPU', desc: 'Always available. Stable, predictable performance.' },
-  { id: INFERENCE_BACKENDS.OPENCL, label: 'OpenCL', desc: 'Offload layers to GPU via OpenCL. Fast decode on Adreno/Mali GPUs. Requires model reload.' },
-];
-
-const HTP_BACKEND: BackendOption = {
-  id: INFERENCE_BACKENDS.HTP, label: 'HTP', desc: 'Offload layers to Hexagon NPU on Snapdragon devices. Best for large models. Requires model reload.',
-};
 
 export const BackendSelector: React.FC = () => {
   const { colors } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { settings, updateSettings } = useAppStore();
   const { gpuLayersEffective } = useTextGenerationAdvanced();
-  const [hasNPU, setHasNPU] = useState(false);
+  const backends: BackendOption[] = (IOS_BACKENDS);
 
-  useEffect(() => {
-    if (isAndroid) {
-      hardwareService.getSoCInfo().then(info => setHasNPU(info.hasNPU));
-    }
-  }, []);
-
-  const androidBackends = hasNPU && HTP_UI_ENABLED ? [...ANDROID_BASE_BACKENDS, HTP_BACKEND] : ANDROID_BASE_BACKENDS;
-  const backends: BackendOption[] = Platform.OS === 'ios' ? IOS_BACKENDS : androidBackends;
-
-  const defaultBackend = Platform.OS === 'ios' ? INFERENCE_BACKENDS.METAL : INFERENCE_BACKENDS.CPU;
+  const defaultBackend = (INFERENCE_BACKENDS.METAL);
   const current = settings.inferenceBackend ?? defaultBackend;
   const showLayers = current !== INFERENCE_BACKENDS.CPU;
-  const layersLabel = current === INFERENCE_BACKENDS.HTP ? 'NPU Layers' : current === INFERENCE_BACKENDS.METAL ? 'GPU Layers (Metal)' : 'GPU Layers (OpenCL)';
+  const layersLabel = 'GPU Layers (Metal)';
 
   return (
     <View style={styles.modeToggleContainer}>
@@ -104,45 +82,6 @@ export const BackendSelector: React.FC = () => {
   );
 };
 
-// ─── LiteRT Acceleration ─────────────────────────────────────────────────────
-
-type LiteRTBackendOption = { id: LiteRTBackend; label: string; desc: string };
-
-const LITERT_BACKENDS: LiteRTBackendOption[] = [
-  { id: 'gpu', label: 'GPU', desc: 'Run on GPU via OpenCL. Best performance on most devices.' },
-  { id: 'cpu', label: 'CPU', desc: 'Always available. Use for battery savings or thermal relief.' },
-];
-
-export const LiteRTBackendSelector: React.FC = () => {
-  const styles = useThemedStyles(createStyles);
-  const { settings, updateSettings } = useAppStore();
-  const current = settings.liteRTBackend ?? 'gpu';
-
-  return (
-    <View style={styles.modeToggleContainer}>
-      <View style={styles.modeToggleInfo}>
-        <Text style={styles.modeToggleLabel}>Acceleration</Text>
-        <Text style={styles.modeToggleDesc}>
-          {LITERT_BACKENDS.find(b => b.id === current)?.desc ?? ''}
-        </Text>
-      </View>
-      <View style={styles.modeToggleButtons}>
-        {LITERT_BACKENDS.map(b => (
-          <TouchableOpacity
-            key={b.id}
-            testID={`litert-backend-${b.id}-button`}
-            style={[styles.modeButton, current === b.id && styles.modeButtonActive]}
-            onPress={() => updateSettings({ liteRTBackend: b.id })}
-          >
-            <Text style={[styles.modeButtonText, current === b.id && styles.modeButtonTextActive]}>
-              {b.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-};
 
 // ─── Flash Attention ──────────────────────────────────────────────────────────
 

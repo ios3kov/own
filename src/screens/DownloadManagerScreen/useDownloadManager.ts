@@ -1,19 +1,18 @@
 import { useState } from 'react';
-import { Platform } from 'react-native';
-import { AlertState, showAlert, hideAlert, initialAlertState } from '../../components/CustomAlert';
+import { AlertState,showAlert,hideAlert,initialAlertState } from '../../components/CustomAlert';
 import { useAppStore } from '../../stores';
-import { useDownloadStore, DownloadEntry } from '../../stores/downloadStore';
+import { useDownloadStore,DownloadEntry } from '../../stores/downloadStore';
 import {
-  modelManager,
-  activeModelService,
-  hardwareService,
-  huggingFaceService,
-  backgroundDownloadService,
+modelManager,
+activeModelService,
+hardwareService,
+huggingFaceService,
+backgroundDownloadService,
 } from '../../services';
-import { DownloadedModel, ONNXImageModel } from '../../types';
-import { DownloadItem, formatBytes } from './items';
+import { DownloadedModel,ONNXImageModel } from '../../types';
+import { DownloadItem,formatBytes } from './items';
 import logger from '../../utils/logger';
-import { cancelSyntheticImageDownload, proceedWithDownload } from '../ModelsScreen/imageDownloadActions';
+import { cancelSyntheticImageDownload,proceedWithDownload } from '../ModelsScreen/imageDownloadActions';
 import { resumeImageDownload } from '../ModelsScreen/imageDownloadResume';
 
 export interface UseDownloadManagerResult {
@@ -71,8 +70,6 @@ function getActiveItemFileName(
 
 function getImageAuthor(backend?: string): string {
   if (backend === 'coreml') return 'Core ML';
-  if (backend === 'qnn') return 'NPU';
-  if (backend === 'mnn') return 'GPU';
   return 'Image Generation';
 }
 
@@ -147,40 +144,6 @@ async function reattachRetriedTextDownload(
       });
     },
   );
-}
-
-async function retryFailedMmProj(entry: DownloadEntry | undefined): Promise<boolean> {
-  if (!entry?.mmProjDownloadId || entry.mmProjStatus !== 'failed') return false;
-  useDownloadStore.getState().setStatus(entry.mmProjDownloadId, 'pending');
-  try {
-    logger.log('[DownloadDebug] Retrying failed mmproj sidecar', {
-      modelKey: entry.modelKey,
-      modelId: entry.modelId,
-      mainDownloadId: entry.downloadId,
-      mmProjDownloadId: entry.mmProjDownloadId,
-    });
-    await backgroundDownloadService.retryDownload(entry.mmProjDownloadId);
-    return true;
-  } catch (error) {
-    logger.warn('[DownloadManager] Failed to retry mmproj sidecar:', error);
-    useDownloadStore.getState().setStatus(entry.mmProjDownloadId, 'failed', {
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return false;
-  }
-}
-
-async function retryAndroidDownload(item: DownloadItem, entry: DownloadEntry | undefined, setDownloadedModels: (models: DownloadedModel[]) => void): Promise<void> {
-  const downloadId = item.downloadId as string;
-  useDownloadStore.getState().setStatus(downloadId, 'pending');
-  await backgroundDownloadService.retryDownload(downloadId);
-  if (item.modelType === 'text') {
-    const mmProjRetried = await retryFailedMmProj(entry);
-    if (mmProjRetried) {
-      modelManager.resetMmProjForRetry(downloadId);
-    }
-    await reattachRetriedTextDownload(item, setDownloadedModels);
-  }
 }
 
 async function retryIosImageDownload(entry: DownloadEntry, setAlertState: (s: AlertState) => void): Promise<void> {
@@ -361,11 +324,9 @@ export function useDownloadManager(): UseDownloadManagerResult {
         }
       }
 
-      if (Platform.OS === 'android') {
-        await retryAndroidDownload(item, entry, setDownloadedModels);
-      } else if (Platform.OS === 'ios' && item.modelType === 'image' && entry) {
+      if ((item.modelType === 'image') && entry) {
         await retryIosImageDownload(entry, setAlertState);
-      } else if (Platform.OS === 'ios' && item.modelType === 'text' && entry) {
+      } else if ((item.modelType === 'text') && entry) {
         await retryIosTextDownload(item, entry, setDownloadedModels);
       }
       backgroundDownloadService.startProgressPolling();

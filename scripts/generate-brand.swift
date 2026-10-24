@@ -46,12 +46,5 @@ for directory in assetDirectories {
     exports[file] = image.pixelsWide
   }
 }
-let android = root.appendingPathComponent("android/app/src/main/res")
-for directory in try FileManager.default.contentsOfDirectory(at:android, includingPropertiesForKeys:nil) where directory.lastPathComponent.hasPrefix("mipmap-") || directory.lastPathComponent == "drawable" {
-  for file in try FileManager.default.contentsOfDirectory(at:directory, includingPropertiesForKeys:nil) where file.pathExtension == "png" && (file.lastPathComponent.hasPrefix("ic_launcher") || file.lastPathComponent == "splash_logo.png") {
-    guard let image = NSBitmapImageRep(data: try Data(contentsOf:file)) else { fatalError("Cannot read existing export dimensions") }
-    exports[file] = image.pixelsWide
-  }
-}
 for (file, size) in exports { try render(size, file) }
 print("Generated \(exports.count) Own icon exports from the original Own vector paths.")

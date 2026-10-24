@@ -1,16 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Animated, StyleSheet } from 'react-native';
+import React,{ useEffect,useMemo,useState } from 'react';
+import { View,Text,ScrollView,TouchableOpacity,Animated,StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AppSheet } from '../../../components/AppSheet';
 import { consumePendingSpotlight } from '../../../components/onboarding/spotlightState';
 import { MODEL_PICKER_STEP_INDEX } from '../../../components/onboarding/spotlightConfig';
 import { Button } from '../../../components';
-import { useTheme, useThemedStyles } from '../../../theme';
+import { useTheme,useThemedStyles } from '../../../theme';
 import { createStyles } from '../styles';
-import { hardwareService, ResourceUsage } from '../../../services';
+import { hardwareService,ResourceUsage } from '../../../services';
 import { getMmProjFileSize } from '../../../utils/modelHelpers';
-import { DownloadedModel, ONNXImageModel, RemoteModel } from '../../../types';
-import { ModelPickerType, LoadingState } from '../hooks/useHomeScreen';
+import { DownloadedModel,ONNXImageModel,RemoteModel } from '../../../types';
+import { ModelPickerType,LoadingState } from '../hooks/useHomeScreen';
 import { useRemoteServerStore } from '../../../stores';
 
 type Props = {
@@ -66,6 +66,7 @@ const ImageTabContent: React.FC<ImageTabProps> = ({ downloadedImageModels, activ
           <TouchableOpacity
             key={model.id}
             testID="model-item"
+                          accessibilityRole="button"
             style={[styles.pickerItem, activeImageModelId === model.id && styles.pickerItemActive, !memoryFits && styles.pickerItemWarning]}
             onPress={() => onSelectImageModel(model)}
             disabled={loadingState.isLoading}
@@ -209,6 +210,7 @@ export const ModelPickerSheet: React.FC<Props> = ({
                       const modelItem = (
                         <TouchableOpacity
                           testID="model-item"
+                          accessibilityRole="button"
                           style={[styles.pickerItem, activeModelId === model.id && styles.pickerItemActive, !memoryFits && styles.pickerItemWarning]}
                           onPress={() => onSelectTextModel(model)}
                           disabled={loadingState.isLoading}

@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist,createJSONStorage } from 'zustand/middleware';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DeviceInfo, DownloadedModel, ModelRecommendation, ONNXImageModel, ImageGenerationMode, AutoDetectMethod, ModelLoadingStrategy, CacheType, InferenceBackend, INFERENCE_BACKENDS, LiteRTBackend, GeneratedImage } from '../types';
+import { DeviceInfo,DownloadedModel,ModelRecommendation,ONNXImageModel,ImageGenerationMode,AutoDetectMethod,ModelLoadingStrategy,CacheType,InferenceBackend,INFERENCE_BACKENDS,GeneratedImage } from '../types';
 
 function isUnknownLike(value: string): boolean {
   const normalized = value.trim().toLowerCase();
@@ -38,15 +38,13 @@ type AppSettings = {
   imageGenerationMode: ImageGenerationMode; autoDetectMethod: AutoDetectMethod;
   classifierModelId: string | null; imageSteps: number; imageGuidanceScale: number;
   imageThreads: number; imageWidth: number; imageHeight: number;
-  imageUseOpenCL: boolean; enhanceImagePrompts: boolean; modelLoadingStrategy: ModelLoadingStrategy;
+  enhanceImagePrompts: boolean; modelLoadingStrategy: ModelLoadingStrategy;
   enableGpu: boolean; gpuLayers: number; flashAttn: boolean;
   cacheType: CacheType; showGenerationDetails: boolean; enabledTools: string[];
   thinkingEnabled: boolean;
   inferenceBackend: InferenceBackend;
-  liteRTBackend: LiteRTBackend;
-  liteRTTemperature: number;
-  liteRTTopP: number;
-  liteRTMaxTokens: number;
+
+
 };
 
 type ThemeMode = 'system' | 'light' | 'dark';
@@ -139,33 +137,25 @@ const DEFAULT_SETTINGS: AppSettings = {
   imageGenerationMode: 'auto' as ImageGenerationMode,
   autoDetectMethod: 'pattern' as AutoDetectMethod,
   classifierModelId: null,
-  imageSteps: Platform.OS === 'ios' ? 20 : 8,
+  imageSteps: (20),
   imageGuidanceScale: 7.5,
   imageThreads: 4,
   imageWidth: 512,
   imageHeight: 512,
-  imageUseOpenCL: true,
   enhanceImagePrompts: false,
   modelLoadingStrategy: 'performance' as ModelLoadingStrategy,
   enableGpu: Platform.OS === 'ios',
-  inferenceBackend: Platform.OS === 'ios' ? INFERENCE_BACKENDS.METAL : INFERENCE_BACKENDS.CPU,
+  inferenceBackend: (INFERENCE_BACKENDS.METAL),
   gpuLayers: 99,
   flashAttn: true,
   cacheType: 'q8_0' as CacheType,
   showGenerationDetails: false,
   enabledTools: ['web_search', 'read_url', 'search_knowledge_base'],
   thinkingEnabled: false,
-  liteRTBackend: 'gpu',
-  liteRTTemperature: 0.7,
-  liteRTTopP: 0.9,
-  liteRTMaxTokens: 4096,
+
+
 };
 
-function migrateEnabledTools(merged: any): void {
-  if (merged.settings?.enabledTools && !merged.settings.enabledTools.includes('search_knowledge_base')) {
-    merged.settings = { ...merged.settings, enabledTools: [...merged.settings.enabledTools, 'search_knowledge_base'] };
-  }
-}
 function migratePersistedState(persistedState: any, currentState: AppState): AppState {
   const merged = {
     ...currentState,
@@ -173,7 +163,7 @@ function migratePersistedState(persistedState: any, currentState: AppState): App
     settings: { ...DEFAULT_SETTINGS, ...persistedState?.settings },
   };
   // Drop legacy download tracking fields. The unified downloadStore (backed
-  // by the native Room DB) is now the source of truth. Persisted entries
+  // by the native download database) is now the source of truth. Persisted entries
   // from old versions are silently ignored on rehydrate.
   delete merged.downloadProgress;
   delete merged.activeBackgroundDownloads;
@@ -189,18 +179,15 @@ function migratePersistedState(persistedState: any, currentState: AppState): App
   if (persistedState?.settings && !persistedState.settings.inferenceBackend) {
     merged.settings = {
       ...merged.settings,
-      inferenceBackend: Platform.OS === 'ios' ? INFERENCE_BACKENDS.METAL : INFERENCE_BACKENDS.CPU,
+      inferenceBackend: (INFERENCE_BACKENDS.METAL),
     };
   }
 
   if (merged.checklistDismissed && merged.onboardingChecklist &&
     !Object.values(merged.onboardingChecklist).every(Boolean)) merged.checklistDismissed = false;
-  migrateEnabledTools(merged);
   return merged as AppState;
 }
 
-export const selectIsLiteRT = (state: AppState): boolean =>
-  state.downloadedModels.find(m => m.id === state.activeModelId)?.engine === 'litert';
 
 export const useAppStore = create<AppState>()(
   persist(

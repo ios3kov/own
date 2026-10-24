@@ -116,7 +116,7 @@ test_cases:
           - Progress updated during generation
           - State reset on completion
 
-    localDreamGenerator:
+    coreMLImageGenerator:
       - id: dream-001
         name: loadModel initializes native module
         given: Model path valid

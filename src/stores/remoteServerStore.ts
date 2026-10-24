@@ -7,19 +7,19 @@
  */
 
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { persist,createJSONStorage } from 'zustand/middleware';
+import { serverPreferenceStorage,withoutServerKeys,useServerStorageStatus } from '../services/serverPreferenceStorage';
 import {
-  RemoteServer,
-  RemoteModel,
-  ServerTestResult,
+RemoteServer,
+RemoteModel,
+ServerTestResult,
 } from '../types';
 import logger from '../utils/logger';
 import { generateId } from '../utils/generateId';
 import {
-  testServerConnection,
-  testEndpointAndGetModels,
-  fetchModelsFromServer,
+testServerConnection,
+testEndpointAndGetModels,
+fetchModelsFromServer,
 } from './remoteServerHelpers';
 
 interface RemoteServerState {
@@ -310,9 +310,10 @@ export const useRemoteServerStore = create<RemoteServerState>()(
     }),
     {
       name: 'remote-servers',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => serverPreferenceStorage),
+      onRehydrateStorage:()=> (_state,error)=>{useServerStorageStatus.setState({failed:!!error});},
       partialize: (state) => ({
-        servers: state.servers,
+        servers: withoutServerKeys({servers:state.servers}).servers,
         activeServerId: state.activeServerId,
         activeRemoteTextModelId: state.activeRemoteTextModelId,
         activeRemoteImageModelId: state.activeRemoteImageModelId,

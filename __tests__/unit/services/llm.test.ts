@@ -12,7 +12,7 @@ import { llmService } from '../../../src/services/llm';
 import { useAppStore } from '../../../src/stores/appStore';
 import { resetStores } from '../../utils/testHelpers';
 import { createMockLlamaContext } from '../../utils/testHelpers';
-import { createUserMessage, createAssistantMessage, createSystemMessage } from '../../utils/factories';
+import { createUserMessage,createAssistantMessage,createSystemMessage } from '../../utils/factories';
 
 const mockedInitLlama = initLlama as jest.MockedFunction<typeof initLlama>;
 const mockedRNFS = RNFS as jest.Mocked<typeof RNFS>;
@@ -1260,60 +1260,6 @@ describe('LLMService', () => {
     });
   });
 
-  describe('getGpuInfo Android branches', () => {
-    const { hardwareService: hw } = require('../../../src/services/hardware');
-
-    beforeEach(() => {
-      (hw as any).cachedOpenCLCapability = null;
-      jest.spyOn(hw, 'getOpenCLCapability').mockResolvedValue({ supported: true });
-    });
-
-    afterEach(() => {
-      (hw as any).cachedOpenCLCapability = null;
-    });
-
-    it('returns OpenCL when OpenCL backend selected on Android with no devices', async () => {
-      const originalOS = Platform.OS;
-      Object.defineProperty(Platform, 'OS', { get: () => 'android' });
-
-      mockedRNFS.exists.mockResolvedValue(true);
-      const ctx = createMockLlamaContext({ gpu: true, devices: [] });
-      mockedInitLlama.mockResolvedValue(ctx as any);
-
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'opencl' as const, gpuLayers: 6 },
-      });
-
-      await llmService.loadModel('/models/test.gguf');
-
-      const info = llmService.getGpuInfo();
-      expect(info.gpu).toBe(true);
-      expect(info.gpuBackend).toBe('OpenCL');
-
-      Object.defineProperty(Platform, 'OS', { get: () => originalOS });
-    });
-
-    it('returns device names when OpenCL backend selected on Android with devices', async () => {
-      const originalOS = Platform.OS;
-      Object.defineProperty(Platform, 'OS', { get: () => 'android' });
-
-      mockedRNFS.exists.mockResolvedValue(true);
-      const ctx = createMockLlamaContext({ gpu: true, devices: ['Adreno 730'] });
-      mockedInitLlama.mockResolvedValue(ctx as any);
-
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'opencl' as const, gpuLayers: 6 },
-      });
-
-      await llmService.loadModel('/models/test.gguf');
-
-      const info = llmService.getGpuInfo();
-      expect(info.gpu).toBe(true);
-      expect(info.gpuBackend).toBe('Adreno 730');
-
-      Object.defineProperty(Platform, 'OS', { get: () => originalOS });
-    });
-  });
 
   describe('getTokenCount', () => {
     it('returns token count for text', async () => {
@@ -2011,7 +1957,7 @@ describe('LLMService', () => {
       });
 
       await expect(llmService.loadModel('/models/test.gguf'))
-        .rejects.toThrow('Failed to load model even at minimum context');
+        .rejects.toThrow('Failed to load model after CPU retries');
     });
   });
 
@@ -2056,7 +2002,7 @@ describe('LLMService', () => {
       await llmService.loadModel('/models/test.gguf');
 
       // nThreads=0 is falsy, so getOptimalThreadCount() (returns DEFAULT_THREADS = 4 on iOS) is used
-      // The test env is iOS, so DEFAULT_THREADS = Platform.OS === 'android' ? 6 : 4 = 4
+      // The test env is iOS, so DEFAULT_THREADS = Platform.OS === 'ios' ? 6 : 4 = 4
       expect(initLlama).toHaveBeenCalledWith(
         expect.objectContaining({ n_threads: 4 })
       );
@@ -2457,66 +2403,6 @@ describe('LLMService', () => {
   });
 
   // ========================================================================
-  // Hexagon HTP (NPU) acceleration
   // ========================================================================
-  describe('HTP NPU acceleration', () => {
-    const { hardwareService } = require('../../../src/services/hardware');
 
-    beforeEach(() => {
-      mockedRNFS.exists.mockResolvedValue(true);
-      // Clear SoC cache between tests
-      (hardwareService as any).cachedSoCInfo = null;
-    });
-
-    afterEach(() => {
-      (hardwareService as any).cachedSoCInfo = null;
-    });
-
-    it('passes devices:HTP0 and 99 gpu_layers when inferenceBackend is htp on Android', async () => {
-      jest.spyOn(Platform, 'OS', 'get').mockReturnValue('android');
-      jest.spyOn(hardwareService, 'getSoCInfo').mockResolvedValue({
-        vendor: 'qualcomm', hasNPU: true, qnnVariant: '8gen3',
-      });
-
-      const ctx = createMockLlamaContext();
-      mockedInitLlama.mockResolvedValue(ctx as any);
-
-      useAppStore.setState({
-        settings: { ...useAppStore.getState().settings, inferenceBackend: 'htp' as const, gpuLayers: 99 },
-      });
-
-      await llmService.loadModel('/models/test.gguf');
-
-      expect(mockedInitLlama).toHaveBeenCalledWith(
-        expect.objectContaining({ devices: ['HTP0'], n_gpu_layers: 99 }),
-      );
-    });
-
-    it('does not use HTP when inferenceBackend is cpu on Android', async () => {
-      jest.spyOn(Platform, 'OS', 'get').mockReturnValue('android');
-
-      const ctx = createMockLlamaContext();
-      mockedInitLlama.mockResolvedValue(ctx as any);
-
-      // inferenceBackend defaults to 'cpu' from testHelpers resetStores
-      await llmService.loadModel('/models/test.gguf');
-
-      expect(mockedInitLlama).not.toHaveBeenCalledWith(
-        expect.objectContaining({ devices: expect.anything() }),
-      );
-    });
-
-    it('does not use HTP on iOS', async () => {
-      jest.spyOn(Platform, 'OS', 'get').mockReturnValue('ios');
-
-      const ctx = createMockLlamaContext();
-      mockedInitLlama.mockResolvedValue(ctx as any);
-
-      await llmService.loadModel('/models/test.gguf');
-
-      expect(mockedInitLlama).not.toHaveBeenCalledWith(
-        expect.objectContaining({ devices: expect.anything() }),
-      );
-    });
-  });
 });

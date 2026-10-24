@@ -1,35 +1,8 @@
 import { llmService } from './llm';
-import { liteRTService } from './litert';
-import { getActiveEngineService } from './engines';
-import { useAppStore, useRemoteServerStore } from '../stores';
+
+import { useAppStore,useRemoteServerStore } from '../stores';
 import type { GenerationMeta } from '../types';
 
-function buildLiteRTMeta(svc: any, modelName: string | undefined): GenerationMeta {
-  const backend = liteRTService.getActiveBackend() ?? 'cpu';
-  const stats = svc.liteRTBenchmarkStats ?? liteRTService.getLastBenchmarkStats();
-  if (stats) {
-    return {
-      gpu: backend !== 'cpu',
-      gpuBackend: backend.toUpperCase(),
-      modelName,
-      decodeTokensPerSecond: stats.decodeTokensPerSecond,
-      prefillTokensPerSecond: stats.prefillTokensPerSecond,
-      timeToFirstToken: stats.ttft,
-      tokenCount: stats.prefillTokenCount,
-      modelLoadTimeSeconds: stats.initTimeSeconds > 0 ? stats.initTimeSeconds : undefined,
-    };
-  }
-  const contentLength = svc.state.streamingContent?.length ?? 0;
-  const estimatedTokenCount = Math.ceil(contentLength / 4);
-  const genTime = svc.state.startTime ? (Date.now() - svc.state.startTime) / 1000 : 0;
-  return {
-    gpu: backend !== 'cpu',
-    gpuBackend: backend.toUpperCase(),
-    modelName,
-    tokenCount: estimatedTokenCount,
-    tokensPerSecond: genTime > 0 && estimatedTokenCount > 0 ? estimatedTokenCount / genTime : undefined,
-  };
-}
 
 export function buildGenerationMetaImpl(svc: any): GenerationMeta {
   const meta = buildBaseGenerationMeta(svc);
@@ -57,9 +30,7 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
   const { downloadedModels, activeModelId, settings } = useAppStore.getState();
   const modelName = downloadedModels.find((m: any) => m.id === activeModelId)?.name;
 
-  if (getActiveEngineService() === liteRTService) {
-    return buildLiteRTMeta(svc, modelName);
-  }
+  ;
 
   const { gpu, gpuBackend, gpuLayers } = llmService.getGpuInfo();
   const perf = llmService.getPerformanceStats();

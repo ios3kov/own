@@ -5,10 +5,10 @@
  * Priority: P1 - Voice input support.
  */
 
-import { initWhisper, AudioSessionIos } from 'whisper.rn';
-import { Platform, PermissionsAndroid } from 'react-native';
+import { initWhisper,AudioSessionIos } from 'whisper.rn';
+import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
-import { whisperService, WHISPER_MODELS } from '../../../src/services/whisperService';
+import { whisperService,WHISPER_MODELS } from '../../../src/services/whisperService';
 import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
 
 jest.mock('../../../src/services/backgroundDownloadService', () => ({
@@ -350,61 +350,6 @@ describe('WhisperService', () => {
       Object.defineProperty(Platform, 'OS', { get: () => originalOS });
     });
 
-    describe('Android', () => {
-      beforeEach(() => {
-        Object.defineProperty(Platform, 'OS', { get: () => 'android' });
-      });
-
-      it('returns true when granted', async () => {
-        jest.spyOn(PermissionsAndroid, 'request').mockResolvedValue(
-          PermissionsAndroid.RESULTS.GRANTED
-        );
-
-        expect(await whisperService.requestPermissions()).toBe(true);
-      });
-
-      it('returns false when denied', async () => {
-        jest.spyOn(PermissionsAndroid, 'request').mockResolvedValue(
-          PermissionsAndroid.RESULTS.DENIED
-        );
-
-        expect(await whisperService.requestPermissions()).toBe(false);
-      });
-
-      it('returns false on permission error', async () => {
-        jest.spyOn(PermissionsAndroid, 'request').mockRejectedValue(new Error('Permission error'));
-
-        expect(await whisperService.requestPermissions()).toBe(false);
-      });
-
-      it('does not call AudioSessionIos', async () => {
-        jest.spyOn(PermissionsAndroid, 'request').mockResolvedValue(
-          PermissionsAndroid.RESULTS.GRANTED
-        );
-
-        await whisperService.requestPermissions();
-
-        expect(mockedAudioSessionIos.setCategory).not.toHaveBeenCalled();
-        expect(mockedAudioSessionIos.setMode).not.toHaveBeenCalled();
-        expect(mockedAudioSessionIos.setActive).not.toHaveBeenCalled();
-      });
-
-      it('requests RECORD_AUDIO permission with correct message', async () => {
-        const requestSpy = jest.spyOn(PermissionsAndroid, 'request').mockResolvedValue(
-          PermissionsAndroid.RESULTS.GRANTED
-        );
-
-        await whisperService.requestPermissions();
-
-        expect(requestSpy).toHaveBeenCalledWith(
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          expect.objectContaining({
-            title: 'Microphone Permission',
-            buttonPositive: 'OK',
-          })
-        );
-      });
-    });
 
     describe('iOS', () => {
       beforeEach(() => {
@@ -445,13 +390,7 @@ describe('WhisperService', () => {
         expect(await whisperService.requestPermissions()).toBe(false);
       });
 
-      it('does not call PermissionsAndroid', async () => {
-        const requestSpy = jest.spyOn(PermissionsAndroid, 'request');
 
-        await whisperService.requestPermissions();
-
-        expect(requestSpy).not.toHaveBeenCalled();
-      });
     });
   });
 
@@ -513,10 +452,7 @@ describe('WhisperService', () => {
       mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
       await whisperService.loadModel('/path/model.bin');
 
-      Object.defineProperty(Platform, 'OS', { get: () => 'android' });
-      jest.spyOn(PermissionsAndroid, 'request').mockResolvedValue(
-        PermissionsAndroid.RESULTS.DENIED
-      );
+      mockedAudioSessionIos.setActive.mockRejectedValueOnce(new Error('Microphone permission denied'));
 
       await expect(
         whisperService.startRealtimeTranscription(jest.fn())
@@ -577,30 +513,6 @@ describe('WhisperService', () => {
       );
     });
 
-    it('does not include audioSession options on Android', async () => {
-      const mockContext = {
-        id: 'ctx',
-        release: jest.fn(),
-        transcribeRealtime: jest.fn((..._args: any[]) => Promise.resolve({
-          stop: jest.fn(),
-          subscribe: jest.fn(),
-        })),
-        transcribe: jest.fn(),
-      };
-      mockedInitWhisper.mockResolvedValueOnce(mockContext as any);
-      await whisperService.loadModel('/path/model.bin');
-
-      Object.defineProperty(Platform, 'OS', { get: () => 'android' });
-      jest.spyOn(PermissionsAndroid, 'request').mockResolvedValue(
-        PermissionsAndroid.RESULTS.GRANTED
-      );
-
-      await whisperService.startRealtimeTranscription(jest.fn());
-
-      const callArgs = mockContext.transcribeRealtime.mock.calls[0]![0]!;
-      expect(callArgs.audioSessionOnStartIos).toBeUndefined();
-      expect(callArgs.audioSessionOnStopIos).toBeUndefined();
-    });
 
     it('forwards events to callback via subscribe', async () => {
       let subscribeFn: any;

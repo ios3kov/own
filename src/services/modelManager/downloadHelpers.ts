@@ -3,9 +3,9 @@
  * to keep each file within the max-lines limit.
  */
 import RNFS from 'react-native-fs';
-import { DownloadedModel, ModelFile, PersistedDownloadInfo } from '../../types';
+import { DownloadedModel,ModelFile,PersistedDownloadInfo } from '../../types';
 import { backgroundDownloadService } from '../backgroundDownloadService';
-import { buildDownloadedModel, persistDownloadedModel } from './storage';
+import { buildDownloadedModel,persistDownloadedModel } from './storage';
 
 export async function getOrphanedTextFiles(
   modelsDir: string,
@@ -123,10 +123,7 @@ async function processCompletedDownload(
 
   const mainFileSize = metadata.mainFileSize ?? metadata.totalBytes;
   const mmProjFileSize = metadata.mmProjFileSize ?? 0;
-  // We deliberately do NOT thread liteRTVision through metadata here — the
-  // curated registry in buildDownloadedModel resolves capability bits by
-  // fileName, so the restore-after-kill path produces the same result as
-  // the in-session path without explicit plumbing.
+
   const fileInfo: ModelFile = {
     name: metadata.fileName, size: mainFileSize,
     quantization: metadata.quantization, downloadUrl: '',

@@ -1,21 +1,17 @@
 import {
-  getMaxContextForDevice,
-  getGpuLayersForDevice,
-  BYTES_PER_GB,
-  supportsNativeThinking,
-  getModelMaxContext,
-  estimateTokens,
-  fitMessagesInBudget,
-  getStreamingDelta,
-  buildModelParams,
-  buildCompletionParams,
-  shouldDisableMmap,
-  captureGpuInfo,
-  logContextMetadata,
-  initContextWithFallback,
+getMaxContextForDevice,
+getGpuLayersForDevice,
+BYTES_PER_GB,
+supportsNativeThinking,
+getModelMaxContext,
+estimateTokens,
+fitMessagesInBudget,
+getStreamingDelta,
+buildModelParams,
+buildCompletionParams,captureGpuInfo,
+logContextMetadata,
+initContextWithFallback
 } from '../../../src/services/llmHelpers';
-import { Platform } from 'react-native';
-import { INFERENCE_BACKENDS } from '../../../src/types';
 
 jest.mock('../../../src/utils/logger', () => ({
   __esModule: true,
@@ -76,45 +72,7 @@ describe('getGpuLayersForDevice', () => {
     expect(getGpuLayersForDevice(8 * GB, 0)).toBe(0);
   });
 
-  describe('Android Adreno GPU caps', () => {
-    const origPlatform = Platform.OS;
 
-    beforeEach(() => {
-      (Platform as any).OS = 'android';
-    });
-
-    afterEach(() => {
-      (Platform as any).OS = origPlatform;
-    });
-
-    it('disables GPU on Android with 4GB RAM', () => {
-      expect(getGpuLayersForDevice(4 * GB, 99)).toBe(0);
-    });
-
-    it('disables GPU on Android with 6GB RAM', () => {
-      expect(getGpuLayersForDevice(6 * GB, 99)).toBe(0);
-    });
-
-    it('caps GPU layers to 12 on Android with 8GB RAM', () => {
-      expect(getGpuLayersForDevice(8 * GB, 99)).toBe(12);
-    });
-
-    it('caps GPU layers to 12 on Android with 7GB RAM', () => {
-      expect(getGpuLayersForDevice(7 * GB, 99)).toBe(12);
-    });
-
-    it('caps GPU layers to 24 on Android with 12GB RAM', () => {
-      expect(getGpuLayersForDevice(12 * GB, 99)).toBe(24);
-    });
-
-    it('returns requested layers when under cap on Android 12GB', () => {
-      expect(getGpuLayersForDevice(12 * GB, 16)).toBe(16);
-    });
-
-    it('passes through 0 GPU layers unchanged on Android', () => {
-      expect(getGpuLayersForDevice(8 * GB, 0)).toBe(0);
-    });
-  });
 });
 
 describe('supportsNativeThinking', () => {
@@ -280,10 +238,7 @@ describe('getModelMaxContext — alternative metadata keys', () => {
 });
 
 describe('shouldDisableMmap', () => {
-  it('returns false on non-android', () => {
-    // Platform.OS is mocked as 'ios' in test env
-    expect(shouldDisableMmap('/path/to/model.q4_0.gguf')).toBe(false);
-  });
+
 });
 
 describe('buildModelParams', () => {
@@ -318,15 +273,7 @@ describe('buildModelParams', () => {
     expect(params.nGpuLayers).toBe(16);
   });
 
-  // HTP is currently disabled via HTP_ENABLED feature flag
-  it.skip('forces f16 KV cache for HTP backend', () => {
-    const params = buildModelParams('/model.gguf', {
-      inferenceBackend: INFERENCE_BACKENDS.HTP,
-      cacheType: 'q8_0',
-    });
-    expect((params.baseParams as any).cache_type_k).toBe('f16');
-    expect((params.baseParams as any).cache_type_v).toBe('f16');
-  });
+
 });
 
 describe('captureGpuInfo', () => {
@@ -378,7 +325,6 @@ describe('logContextMetadata', () => {
 });
 
 // ==========================================================================
-// buildCompletionParams — ctx_shift disable for Android GPU (SIGSEGV fix)
 // ==========================================================================
 describe('buildCompletionParams', () => {
   const defaultSettings = { maxTokens: 512, temperature: 0.7, topP: 0.95, repeatPenalty: 1.1 };
@@ -393,7 +339,7 @@ describe('buildCompletionParams', () => {
     expect(params.ctx_shift).toBe(true);
   });
 
-  it('disables ctx_shift when disableCtxShift is true (Android GPU SIGSEGV fix)', () => {
+  it('disables ctx_shift when disableCtxShift is true ', () => {
     const params = buildCompletionParams(defaultSettings, { disableCtxShift: true });
     expect(params.ctx_shift).toBe(false);
   });
@@ -408,25 +354,25 @@ describe('buildCompletionParams', () => {
   });
 });
 
-describe('initContextWithFallback — HTP device stripping and timeout', () => {
+describe('initContextWithFallback — accelerator removal on CPU retry', () => {
   const { initLlama } = require('llama.rn');
   const mockedInitLlama = initLlama as jest.MockedFunction<typeof initLlama>;
 
-  const baseParams = { model: '/model.gguf', devices: ['HTP0'] };
+  const baseParams = { model: '/model.gguf', devices: ['Metal'] };
 
-  it('passes devices to initLlama on the first (GPU/HTP) attempt', async () => {
+  it('passes devices to initLlama on the first (GPU) attempt', async () => {
     const mockCtx = { gpu: true, release: jest.fn() };
     mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
 
     await initContextWithFallback(baseParams, 2048, 99);
 
     expect(mockedInitLlama).toHaveBeenCalledWith(
-      expect.objectContaining({ devices: ['HTP0'], n_gpu_layers: 99 }),
+      expect.objectContaining({ devices: ['Metal'], n_gpu_layers: 99 }),
     );
   });
 
   it('strips devices from params on CPU fallback (attempt 2)', async () => {
-    mockedInitLlama.mockRejectedValueOnce(new Error('HTP init failed'));
+    mockedInitLlama.mockRejectedValueOnce(new Error('GPU init failed'));
     const mockCtx = { gpu: false, release: jest.fn() };
     mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
 
@@ -438,7 +384,7 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
   });
 
   it('strips devices from params on minimal CPU fallback (attempt 3)', async () => {
-    mockedInitLlama.mockRejectedValueOnce(new Error('HTP init failed'));
+    mockedInitLlama.mockRejectedValueOnce(new Error('GPU init failed'));
     mockedInitLlama.mockRejectedValueOnce(new Error('CPU init failed'));
     const mockCtx = { gpu: false, release: jest.fn() };
     mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
@@ -451,82 +397,22 @@ describe('initContextWithFallback — HTP device stripping and timeout', () => {
     expect(minCtxCall.n_ctx).toBe(2048);
   });
 
-  // HTP is currently disabled via HTP_ENABLED feature flag
-  it.skip('logs backend=HTP when devices contains HTP0', async () => {
-    const mockCtx = { gpu: true, release: jest.fn() };
-    mockedInitLlama.mockResolvedValueOnce(mockCtx as any);
-    const logger = require('../../../src/utils/logger').default;
 
-    await initContextWithFallback(baseParams, 2048, 99);
-
-    expect(logger.log).toHaveBeenCalledWith(
-      expect.stringContaining('backend=HTP'),
-    );
-  });
 });
 
 // ==========================================================================
-// GPU timeout on Android — withTimeout, tryGpuInit catch, safeRelease
 // ==========================================================================
 
-describe('initContextWithFallback — GPU timeout on Android', () => {
-  const { initLlama } = require('llama.rn');
-  const mockedInitLlama = initLlama as jest.MockedFunction<typeof initLlama>;
-  const origPlatform = Platform.OS;
 
-  beforeEach(() => {
-    (Platform as any).OS = 'android';
-    jest.useFakeTimers();
-  });
-
-  afterEach(() => {
-    (Platform as any).OS = origPlatform;
-    jest.useRealTimers();
-  });
-
-  it('falls back to CPU when GPU init times out (withTimeout + tryGpuInit catch)', async () => {
-    let resolveGpu!: (ctx: any) => void;
-    const slowGpu = new Promise<any>(resolve => { resolveGpu = resolve; });
-    const cpuCtx = { gpu: false, release: jest.fn() };
-
-    mockedInitLlama
-      .mockReturnValueOnce(slowGpu)
-      .mockResolvedValueOnce(cpuCtx);
-
-    const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, 4);
-    jest.advanceTimersByTime(8001);
-    const result = await resultPromise;
-
-    expect(result.gpuAttemptFailed).toBe(true);
-    expect(result.context).toBe(cpuCtx);
-
-    // Resolve the late GPU promise after timeout — exercises safeRelease(nonNullCtx)
-    const lateCtx = { release: jest.fn() };
-    resolveGpu(lateCtx);
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(lateCtx.release).toHaveBeenCalled();
-  });
-
-  it('safeRelease swallows error when late GPU ctx release throws', async () => {
-    let resolveGpu!: (ctx: any) => void;
-    const slowGpu = new Promise<any>(resolve => { resolveGpu = resolve; });
-    const cpuCtx = { gpu: false, release: jest.fn() };
-
-    mockedInitLlama
-      .mockReturnValueOnce(slowGpu)
-      .mockResolvedValueOnce(cpuCtx);
-
-    const resultPromise = initContextWithFallback({ model: '/m.gguf' }, 2048, 4);
-    jest.advanceTimersByTime(8001);
-    await resultPromise;
-
-    // Late ctx whose release() throws — safeRelease must swallow the error
-    const lateCtx = { release: jest.fn().mockRejectedValue(new Error('release fail')) };
-    resolveGpu(lateCtx);
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(lateCtx.release).toHaveBeenCalled();
+describe('bounded CPU retry context', () => {
+  it('never grows a requested small context on the final retry', async () => {
+    const init = require('llama.rn').initLlama as jest.Mock;
+    init.mockReset();
+    init.mockRejectedValueOnce(new Error('GPU unavailable'))
+      .mockRejectedValueOnce(new Error('CPU retry'))
+      .mockResolvedValueOnce({gpu:false});
+    const result = await initContextWithFallback({model:'/small.gguf'},512,0);
+    expect(result.actualLength).toBe(512);
+    expect(init.mock.calls.every(([params]:any[]) => params.n_ctx <= 512)).toBe(true);
   });
 });

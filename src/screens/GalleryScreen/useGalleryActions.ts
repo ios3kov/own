@@ -1,9 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Platform, PermissionsAndroid, Share } from 'react-native';
-import RNFS from 'react-native-fs';
-import { showAlert, hideAlert, AlertState, initialAlertState } from '../../components/CustomAlert';
-import { useAppStore, useChatStore } from '../../stores';
-import { imageGenerationService, onnxImageGeneratorService } from '../../services';
+import { useState,useEffect,useCallback,useMemo } from 'react';
+import { Share } from 'react-native';
+import { showAlert,hideAlert,AlertState,initialAlertState } from '../../components/CustomAlert';
+import { useAppStore,useChatStore } from '../../stores';
+import { imageGenerationService,coreMLImageGeneratorService } from '../../services';
 import type { ImageGenerationState } from '../../services';
 import { GeneratedImage } from '../../types';
 
@@ -42,7 +41,7 @@ export const useGalleryActions = (conversationId: string | undefined) => {
   useEffect(() => {
     const syncFromDisk = async () => {
       try {
-        const diskImages = await onnxImageGeneratorService.getGeneratedImages();
+        const diskImages = await coreMLImageGeneratorService.getGeneratedImages();
         if (diskImages.length > 0) {
           const { generatedImages: storeImages, addGeneratedImage } = useAppStore.getState();
           const existingIds = new Set(storeImages.map(img => img.id));
@@ -84,7 +83,7 @@ export const useGalleryActions = (conversationId: string | undefined) => {
   const handleDelete = useCallback((image: GeneratedImage) => {
     const doDelete = async () => {
       setAlertState(hideAlert());
-      await onnxImageGeneratorService.deleteGeneratedImage(image.id);
+      await coreMLImageGeneratorService.deleteGeneratedImage(image.id);
       removeGeneratedImage(image.id);
       if (selectedImage?.id === image.id) setSelectedImage(null);
     };
@@ -136,7 +135,7 @@ export const useGalleryActions = (conversationId: string | undefined) => {
             const doDeleteSelected = async () => {
               setAlertState(hideAlert());
               for (const imageId of selectedIds) {
-                await onnxImageGeneratorService.deleteGeneratedImage(imageId);
+                await coreMLImageGeneratorService.deleteGeneratedImage(imageId);
                 removeGeneratedImage(imageId);
               }
               setSelectedIds(new Set());
@@ -155,28 +154,7 @@ export const useGalleryActions = (conversationId: string | undefined) => {
 
   const handleSaveImage = useCallback(async (image: GeneratedImage) => {
     try {
-      if (Platform.OS === 'ios') {
-        await Share.share({ url: `file://${image.imagePath}` });
-        return;
-      }
-      await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-        {
-          title: 'Storage Permission',
-          message: 'App needs access to save images',
-          buttonNeutral: 'Ask Later',
-          buttonNegative: 'Cancel',
-          buttonPositive: 'OK',
-        }
-      );
-      const picturesDir = `${RNFS.ExternalStorageDirectoryPath}/Pictures/Own`;
-      if (!(await RNFS.exists(picturesDir))) {
-        await RNFS.mkdir(picturesDir);
-      }
-      const timestamp = new Date().toISOString().replaceAll(/[:.]/g, '-');
-      const fileName = `generated_${timestamp}.png`;
-      await RNFS.copyFile(image.imagePath, `${picturesDir}/${fileName}`);
-      setAlertState(showAlert('Image Saved', `Saved to Pictures/Own/${fileName}`));
+      await Share.share({ url: `file://${image.imagePath}` });
     } catch (error: any) {
       setAlertState(showAlert('Error', `Failed to save image: ${error?.message || 'Unknown error'}`));
     }

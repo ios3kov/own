@@ -1,8 +1,9 @@
 import React from 'react';
-import {render, fireEvent, waitFor} from '@testing-library/react-native';
-import {viewDocument} from '@react-native-documents/viewer';
-import {DocumentSources} from '../../../src/components/ChatMessage/components/DocumentSources';
-import {ragService} from '../../../src/services/rag';
+import { render,fireEvent,waitFor } from '@testing-library/react-native';
+import { viewDocument } from '@react-native-documents/viewer';
+import { ChatMessage } from '../../../src/components/ChatMessage';
+import { DocumentSources } from '../../../src/components/ChatMessage/components/DocumentSources';
+import { ragService } from '../../../src/services/rag';
 
 jest.mock('../../../src/services/rag', () => ({ragService:{getDocumentsByProject:jest.fn()}}));
 jest.mock('@react-native-documents/viewer', () => ({viewDocument:jest.fn().mockResolvedValue(undefined)}));
@@ -42,4 +43,11 @@ describe('source preview and local document opening', () => {
     await waitFor(()=>expect(screen.queryByText('Open original document')).toBeNull());
     expect(viewDocument).not.toHaveBeenCalled();
   });
+});
+
+it('keeps document controls accessible inside a complete assistant message',()=>{
+  const screen=render(<ChatMessage message={{id:'qa',role:'assistant',content:'Answer from the saved document.',timestamp:1,generationMeta:{gpu:false,documentSources:sources}}}/>);
+  expect(screen.getByTestId('assistant-message').props.accessible).toBe(false);
+  fireEvent.press(screen.getByRole('button',{name:'Notes.txt, part 3'}));
+  expect(screen.getByText('The saved original passage.')).toBeTruthy();
 });

@@ -3,12 +3,11 @@
  * Extracted to keep index.ts under the max-lines limit.
  */
 
-import { Platform, ToastAndroid } from 'react-native';
 import { useAppStore } from '../../stores';
-import { DownloadedModel, LlamaDownloadedModel, ONNXImageModel, INFERENCE_BACKENDS } from '../../types';
+import { DownloadedModel,LlamaDownloadedModel,ONNXImageModel } from '../../types';
 import { llmService } from '../llm';
-import { liteRTService } from '../litert';
-import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
+
+import { coreMLImageGeneratorService } from '../coreMLImageGenerator';
 import { modelManager } from '../modelManager';
 import logger from '../../utils/logger';
 import RNFS from 'react-native-fs';
@@ -87,91 +86,9 @@ export interface TextLoadContext {
   onFinally: () => void;
 }
 
-async function doLoadLiteRTModel(ctx: TextLoadContext): Promise<void> {
-  if (ctx.model.engine !== 'litert') {
-    throw new Error('doLoadLiteRTModel called with non-LiteRT model');
-  }
-  const liteRTModel = ctx.model;
-  try {
-    if (ctx.loadedTextModelId && ctx.loadedTextModelId !== ctx.modelId) {
-      try {
-        await liteRTService.unloadModel();
-      } catch (unloadErr) {
-        logger.warn('[LiteRT] Error unloading previous model, continuing:', unloadErr);
-      }
-      ctx.onError();
-    }
-
-    const preferredBackend = ctx.store.settings.liteRTBackend;
-
-    const maxTokens = ctx.store.settings.liteRTMaxTokens ?? 4096;
-    const contextScalar = Math.max(1, maxTokens / 4096);
-    const baseTimeoutMs = 90_000;
-    const timeoutMs = Math.min(Math.ceil(baseTimeoutMs * contextScalar), 180_000);
-
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(
-        () => reject(new Error(`LiteRT model load timed out after ${timeoutMs / 1000}s.`)),
-        timeoutMs,
-      );
-    });
-
-    try {
-      await Promise.race([
-        liteRTService.loadModel(ctx.model.filePath, preferredBackend, { supportsVision: liteRTModel.liteRTVision ?? false, maxNumTokens: maxTokens }),
-        timeoutPromise,
-      ]);
-    } finally {
-      if (timeoutId !== null) clearTimeout(timeoutId);
-    }
-
-    const actualBackend = liteRTService.getActiveBackend();
-    if (actualBackend !== preferredBackend) {
-      if (preferredBackend === 'gpu' && actualBackend === 'cpu' && maxTokens > 8192 && Platform.OS === 'android') {
-        ToastAndroid.showWithGravity(
-          `GPU unavailable at ${maxTokens.toLocaleString()} token context. Running on CPU — reduce context length to use GPU.`,
-          ToastAndroid.LONG,
-          ToastAndroid.BOTTOM,
-        );
-      }
-    }
-
-    // Warmup on GPU/NPU only — primes shader/kernel caches so first real prompt runs at full speed
-    if (actualBackend === 'gpu' || actualBackend === 'npu') {
-      await liteRTService.warmup();
-    }
-
-    // Snapshot the settings that require a full engine reload so the pending-settings
-    // banner appears if the user changes them while the model is loaded.
-    ctx.store.setLoadedSettings({
-      liteRTBackend: ctx.store.settings.liteRTBackend,
-      liteRTMaxTokens: maxTokens,
-      // Fields not used by LiteRT — set to current values so llama checks don't misfire
-      contextLength: ctx.store.settings.contextLength,
-      enableGpu: ctx.store.settings.enableGpu,
-      gpuLayers: ctx.store.settings.gpuLayers,
-      nThreads: ctx.store.settings.nThreads,
-      nBatch: ctx.store.settings.nBatch,
-      flashAttn: ctx.store.settings.flashAttn,
-      cacheType: ctx.store.settings.cacheType,
-    });
-
-    ctx.onLoaded(ctx.modelId);
-    ctx.store.setActiveModelId(ctx.modelId);
-  } catch (error) {
-    ctx.onError();
-    throw error;
-  } finally {
-    ctx.onFinally();
-  }
-}
 
 export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
-  // Route LiteRT models to the LiteRT loader — existing llama path is untouched below
-  if (ctx.model.engine === 'litert') {
-    return doLoadLiteRTModel(ctx);
-  }
+  ;
 
   try {
     if (ctx.loadedTextModelId && ctx.loadedTextModelId !== ctx.modelId) {
@@ -228,9 +145,7 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
       nBatch: settings.nBatch,
       contextLength: settings.contextLength,
       flashAttn: settings.flashAttn,
-      // Store the effective cache type (f16 may be forced for OpenCL) so the
-      // banner doesn't show a false mismatch when the user setting differs.
-      cacheType: settings.inferenceBackend === INFERENCE_BACKENDS.OPENCL ? 'f16' : settings.cacheType,
+      cacheType: settings.cacheType,
     };
     ctx.store.setLoadedSettings(reloadSettings);
 
@@ -268,7 +183,7 @@ export async function doLoadImageModel(ctx: ImageLoadContext): Promise<void> {
       ctx.loadedImageModelId &&
       (ctx.loadedImageModelId !== ctx.modelId || ctx.needsThreadReload)
     ) {
-      await onnxImageGeneratorService.unloadModel();
+      await coreMLImageGeneratorService.unloadModel();
       ctx.onError(); // resets loadedImageModelId/threads to null
     }
 
@@ -282,11 +197,10 @@ export async function doLoadImageModel(ctx: ImageLoadContext): Promise<void> {
 
     try {
       await Promise.race([
-        onnxImageGeneratorService.loadModel(
+        coreMLImageGeneratorService.loadModel(
           ctx.model.modelPath,
           ctx.imageThreads,
           {
-            backend: 'auto',
             cpuOnly: ctx.cpuOnly,
             attentionVariant: ctx.model.attentionVariant,
           },

@@ -1,6 +1,6 @@
 /**
  * PDFExtractor - TypeScript wrapper for native PDF text extraction modules.
- * Uses PDFKit on iOS (built-in) and PDFium on Android (native C++ via JNI).
+ * Uses the built-in iOS PDFKit framework.
  */
 
 import { NativeModules } from 'react-native';

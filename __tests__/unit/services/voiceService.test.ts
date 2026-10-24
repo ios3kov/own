@@ -5,7 +5,7 @@
  * Priority: P1 - Voice input support.
  */
 
-import { NativeModules, Platform, PermissionsAndroid } from 'react-native';
+import { NativeModules,Platform } from 'react-native';
 import { useAppStore } from '../../../src/stores/appStore';
 import { voiceService } from '../../../src/services/voiceService';
 import type { VoiceEventCallbacks } from '../../../src/services/voiceService';
@@ -129,54 +129,14 @@ describe('VoiceService', () => {
   // requestPermissions
   // ========================================================================
   describe('requestPermissions', () => {
-    it('requests RECORD_AUDIO permission on Android and returns true when granted', async () => {
-      Platform.OS = 'android';
-      const requestSpy = jest
-        .spyOn(PermissionsAndroid, 'request')
-        .mockResolvedValue(PermissionsAndroid.RESULTS.GRANTED);
 
-      const result = await voiceService.requestPermissions();
-
-      expect(result).toBe(true);
-      expect(requestSpy).toHaveBeenCalledWith(
-        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-        expect.objectContaining({
-          title: 'Microphone Permission',
-          buttonPositive: 'OK',
-        }),
-      );
-    });
-
-    it('returns false on Android when permission is denied', async () => {
-      Platform.OS = 'android';
-      jest
-        .spyOn(PermissionsAndroid, 'request')
-        .mockResolvedValue(PermissionsAndroid.RESULTS.DENIED);
-
-      const result = await voiceService.requestPermissions();
-
-      expect(result).toBe(false);
-    });
-
-    it('returns false on Android when permission request throws', async () => {
-      Platform.OS = 'android';
-      jest
-        .spyOn(PermissionsAndroid, 'request')
-        .mockRejectedValue(new Error('Permission error'));
-
-      const result = await voiceService.requestPermissions();
-
-      expect(result).toBe(false);
-    });
 
     it('returns true on iOS without requesting permissions', async () => {
       Platform.OS = 'ios';
-      const requestSpy = jest.spyOn(PermissionsAndroid, 'request');
 
       const result = await voiceService.requestPermissions();
 
       expect(result).toBe(true);
-      expect(requestSpy).not.toHaveBeenCalled();
     });
   });
 

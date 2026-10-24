@@ -1,8 +1,7 @@
 jest.mock('../../../../src/services/rag/database', () => ({
   ragDatabase: {
     ensureReady: jest.fn(() => Promise.resolve()),
-    insertDocument: jest.fn((_doc: any) => 1),
-    insertChunks: jest.fn(() => [1, 2]),
+    insertDocumentWithChunks: jest.fn(() => ({docId:1,rowIds:[1,2]})),
     deleteDocument: jest.fn(),
     getDocumentsByProject: jest.fn(() => []),
     toggleEnabled: jest.fn(),
@@ -68,8 +67,7 @@ describe('RagService', () => {
       const docId = await ragService.indexDocument({ projectId: 'proj1', filePath: '/path/test.txt', fileName: 'test.txt', fileSize: 100, onProgress });
 
       expect(mockDocService.processDocumentFromPath).toHaveBeenCalledWith('/path/test.txt', 'test.txt', 500_000);
-      expect(mockDb.insertDocument).toHaveBeenCalledWith({ projectId: 'proj1', name: 'test.txt', path: '/path/test.txt', size: 100 });
-      expect(mockDb.insertChunks).toHaveBeenCalled();
+      expect(mockDb.insertDocumentWithChunks).toHaveBeenCalledWith({ projectId: 'proj1', name: 'test.txt', path: '/path/test.txt', size: 100 },expect.any(Array));
       expect(docId).toBe(1);
 
       // Progress callbacks include new 'embedding' stage

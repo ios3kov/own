@@ -53,6 +53,20 @@ final class PDFExtractorModuleTests: XCTestCase {
     makeTempPDF(pages: [(text, CGRect(x: 72, y: 72, width: 468, height: 648))])
   }
 
+  func testPrivatePDFDiagnosticPayloadIsNotEvaluatedInRelease() {
+    var evaluated = false
+    func privateMessage() -> String {
+      evaluated = true
+      return "Synthetic private PDF diagnostic"
+    }
+    pdfDebugLog(privateMessage())
+#if DEBUG
+    XCTAssertTrue(evaluated)
+#else
+    XCTAssertFalse(evaluated)
+#endif
+  }
+
   // MARK: requiresMainQueueSetup
 
   func testRequiresMainQueueSetupReturnsFalse() {
@@ -260,8 +274,8 @@ final class CoreMLDiffusionModuleTests: XCTestCase {
 
   func testSupportedEvents() {
     let events = module.supportedEvents()!
-    XCTAssertTrue(events.contains("LocalDreamProgress"))
-    XCTAssertTrue(events.contains("LocalDreamError"))
+    XCTAssertTrue(events.contains("OwnImageProgress"))
+    XCTAssertTrue(events.contains("OwnImageError"))
     XCTAssertEqual(events.count, 2)
   }
 
@@ -954,5 +968,29 @@ final class OwnReplySpeechPolicyTests: XCTestCase {
     XCTAssertTrue(OwnReplySpeech.basicVoiceMatches(quality: .default, locale: "ru-RU", language: "ru"))
     XCTAssertFalse(OwnReplySpeech.basicVoiceMatches(quality: .default, locale: "en-US", language: "ru"))
     XCTAssertFalse(OwnReplySpeech.basicVoiceMatches(quality: .default, locale: "en-US", language: ""))
+  }
+}
+
+final class ScenePrivacyCoverTests: XCTestCase {
+  @MainActor func testCoverIsOpaqueFullWindowAndIdempotent() {
+    let delegate = SceneDelegate()
+    let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+    delegate.window = window
+    delegate.showPrivacyCover()
+    delegate.showPrivacyCover()
+    let covers = window.subviews.filter { $0.accessibilityIdentifier == "own-privacy-cover" }
+    XCTAssertEqual(covers.count, 1)
+    XCTAssertEqual(covers.first?.frame, window.bounds)
+    XCTAssertEqual(covers.first?.alpha, 1)
+    XCTAssertEqual(covers.first?.backgroundColor, .systemBackground)
+    delegate.hidePrivacyCover()
+    XCTAssertFalse(window.subviews.contains { $0.accessibilityIdentifier == "own-privacy-cover" })
+    delegate.hidePrivacyCover()
+  }
+  @MainActor func testNoWindowIsSafe() {
+    let delegate = SceneDelegate()
+    delegate.showPrivacyCover()
+    delegate.hidePrivacyCover()
+    XCTAssertNil(delegate.window)
   }
 }

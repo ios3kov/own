@@ -9,12 +9,9 @@ jest.mock('../../../src/services/llm', () => ({
   llmService: { isModelLoaded: jest.fn() },
 }));
 
-jest.mock('../../../src/services/litert', () => ({
-  liteRTService: { isModelLoaded: jest.fn() },
-}));
 
-jest.mock('../../../src/services/localDreamGenerator', () => ({
-  localDreamGeneratorService: { isModelLoaded: jest.fn(() => Promise.resolve(false)) },
+jest.mock('../../../src/services/coreMLImageGenerator', () => ({
+  coreMLImageGeneratorService: { isModelLoaded: jest.fn(() => Promise.resolve(false)) },
 }));
 
 jest.mock('../../../src/stores', () => ({
@@ -37,10 +34,9 @@ jest.mock('../../../src/services/hardware', () => ({
 }));
 
 import { llmService } from '../../../src/services/llm';
-import { liteRTService } from '../../../src/services/litert';
+
 
 const mockedLlm = llmService as jest.Mocked<typeof llmService>;
-const mockedLiteRT = liteRTService as jest.Mocked<typeof liteRTService>;
 
 function makeTarget(overrides: Partial<{ loadedTextModelId: string | null; loadedImageModelId: string | null }> = {}) {
   const t = {
@@ -56,18 +52,8 @@ function makeTarget(overrides: Partial<{ loadedTextModelId: string | null; loade
 describe('syncWithNativeState', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('sets loadedTextModelId when only liteRTService is loaded and target has no id', async () => {
-    mockedLiteRT.isModelLoaded.mockReturnValue(true);
-    mockedLlm.isModelLoaded.mockReturnValue(false);
-
-    const target = makeTarget({ loadedTextModelId: null });
-    await syncWithNativeState(target);
-
-    expect(target.setLoadedTextModelId).toHaveBeenCalledWith('model-abc');
-  });
 
   it('clears loadedTextModelId when both services are not loaded', async () => {
-    mockedLiteRT.isModelLoaded.mockReturnValue(false);
     mockedLlm.isModelLoaded.mockReturnValue(false);
 
     const target = makeTarget({ loadedTextModelId: 'old-model' });
@@ -76,18 +62,8 @@ describe('syncWithNativeState', () => {
     expect(target.setLoadedTextModelId).toHaveBeenCalledWith(null);
   });
 
-  it('does not overwrite existing loadedTextModelId when liteRTService is loaded', async () => {
-    mockedLiteRT.isModelLoaded.mockReturnValue(true);
-    mockedLlm.isModelLoaded.mockReturnValue(false);
-
-    const target = makeTarget({ loadedTextModelId: 'already-set' });
-    await syncWithNativeState(target);
-
-    expect(target.setLoadedTextModelId).not.toHaveBeenCalled();
-  });
 
   it('sets loadedTextModelId when only llmService is loaded and target has no id', async () => {
-    mockedLiteRT.isModelLoaded.mockReturnValue(false);
     mockedLlm.isModelLoaded.mockReturnValue(true);
 
     const target = makeTarget({ loadedTextModelId: null });

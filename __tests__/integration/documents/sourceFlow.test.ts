@@ -1,15 +1,15 @@
-import {generationService} from '../../../src/services/generationService';
-import {buildToolLoopHandlersImpl} from '../../../src/services/generationServiceHelpers';
-import {executeToolCall} from '../../../src/services/tools/handlers';
-import {llmService} from '../../../src/services/llm';
-import {useChatStore} from '../../../src/stores/chatStore';
-import {resetStores, setupWithActiveModel, setupWithConversation} from '../../utils/testHelpers';
-import {sourcesFromChunks} from '../../../src/services/documentSources';
-import {ragService} from '../../../src/services/rag';
-import {resolveDocumentSource} from '../../../src/services/documentSourceFile';
+import { generationService } from '../../../src/services/generationService';
+import { buildToolLoopHandlersImpl } from '../../../src/services/generationServiceHelpers';
+import { executeToolCall } from '../../../src/services/tools/handlers';
+import { llmService } from '../../../src/services/llm';
+import { useChatStore } from '../../../src/stores/chatStore';
+import { resetStores,setupWithActiveModel,setupWithConversation } from '../../utils/testHelpers';
+import { sourcesFromChunks } from '../../../src/services/documentSources';
+import { ragService } from '../../../src/services/rag';
+import { resolveDocumentSource } from '../../../src/services/documentSourceFile';
 
 jest.mock('../../../src/services/llm');
-jest.mock('../../../src/services/litert');
+
 jest.mock('../../../src/services/rag', () => ({ragService:{searchProject:jest.fn(),getDocumentsByProject:jest.fn()}}));
 jest.mock('../../../src/utils/sharePrompt', () => ({shouldShowSharePrompt:()=>false,emitSharePrompt:jest.fn()}));
 const chunks = [{doc_id:7,name:'Notes.txt',position:2,content:'The original passage.',score:1}];
@@ -56,3 +56,23 @@ describe('retrieved document references', () => {
     await expect(resolveDocumentSource(sourcesFromChunks('p',chunks)[0])).rejects.toThrow('cannot be opened');
   });
 });
+
+describe('local source URI boundaries',()=>{
+  const source=sourcesFromChunks('p',chunks)[0];
+  it.each(['/local/file?name#part.txt','file:///local/encoded%20file.txt','/local/noextension'])('opens a local path without interpreting its punctuation as navigation: %s',async path=>{
+    (ragService.getDocumentsByProject as jest.Mock).mockResolvedValue([{id:7,project_id:'p',name:path.endsWith('noextension')?'Notes':'Notes.txt',path}]);
+    const result=await resolveDocumentSource(source);
+    expect(result.uri).toMatch(/^file:\/\/\//);
+    if(path.startsWith('file:'))expect(result.uri).toBe(path);
+    else expect(result.uri).not.toContain('?');
+  });
+  it('rejects control characters in local file targets',async()=>{
+    (ragService.getDocumentsByProject as jest.Mock).mockResolvedValue([{id:7,project_id:'p',name:'Notes.txt',path:'/local/unsafe\n.txt'}]);
+    await expect(resolveDocumentSource(source)).rejects.toThrow('cannot be opened');
+  });
+});
+
+  it('opens the same saved document after iOS moves its app container',async()=>{
+    (ragService.getDocumentsByProject as jest.Mock).mockResolvedValue([{id:7,project_id:'p',name:'Notes.txt',path:'file:///var/mobile/Containers/Data/Application/11111111-1111-1111-1111-111111111111/Documents/Inbox/My%20notes.txt'}]);
+    await expect(resolveDocumentSource(sourcesFromChunks('p',chunks)[0])).resolves.toEqual({uri:'file:///mock/documents/Inbox/My%20notes.txt',mimeType:'text/plain'});
+  });

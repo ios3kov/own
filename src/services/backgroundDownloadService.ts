@@ -1,10 +1,10 @@
-import { NativeModules, NativeEventEmitter, Platform, Alert } from 'react-native';
-import { BackgroundDownloadInfo, BackgroundDownloadStatus } from '../types';
+import { NativeModules,NativeEventEmitter } from 'react-native';
+import { BackgroundDownloadInfo,BackgroundDownloadStatus } from '../types';
 import logger from '../utils/logger';
 import type {
-  DownloadParams,
-  DownloadProgressEvent, DownloadCompleteEvent, DownloadErrorEvent,
-  DownloadProgressCallback, DownloadCompleteCallback, DownloadErrorCallback,
+DownloadParams,
+DownloadProgressEvent,DownloadCompleteEvent,DownloadErrorEvent,
+DownloadProgressCallback,DownloadCompleteCallback,DownloadErrorCallback,
 } from './backgroundDownloadTypes';
 const { DownloadManagerModule } = NativeModules;
 
@@ -54,13 +54,6 @@ class BackgroundDownloadService {
       totalBytes: params.totalBytes ?? 0,
       startedAt: Date.now(),
     };
-  }
-
-  async retryDownload(downloadId: string): Promise<void> {
-    if (!this.isAvailable() || Platform.OS !== 'android') {
-      throw new Error('retryDownload is only available on Android');
-    }
-    await DownloadManagerModule.retryDownload(downloadId);
   }
 
   async cancelDownload(downloadId: string): Promise<void> {
@@ -142,47 +135,6 @@ class BackgroundDownloadService {
     if (!this.isAvailable() || !this.isPolling) return;
     this.isPolling = false;
     DownloadManagerModule.stopProgressPolling();
-  }
-
-  async isBatteryOptimizationIgnored(): Promise<boolean> {
-    if (Platform.OS !== 'android' || !this.isAvailable()) return true;
-    try {
-      return await DownloadManagerModule.isBatteryOptimizationIgnored();
-    } catch {
-      return true;
-    }
-  }
-
-  requestBatteryOptimizationIgnore(): void {
-    if (Platform.OS !== 'android' || !this.isAvailable()) return;
-    try {
-      DownloadManagerModule.requestBatteryOptimizationIgnore();
-    } catch (e) {
-      logger.log('[BackgroundDownload] requestBatteryOptimizationIgnore failed:', e);
-    }
-  }
-
-  async checkAndPromptBatteryOptimization(): Promise<void> {
-    if (Platform.OS !== 'android') return;
-    const ignored = await this.isBatteryOptimizationIgnored();
-    if (ignored) return;
-    return new Promise<void>(resolve => {
-      Alert.alert(
-        'Keep downloads running',
-        'To prevent Android from pausing large model downloads when your screen is off, allow this app to run without battery restrictions.',
-        [
-          { text: 'Not now', style: 'cancel', onPress: () => resolve() },
-          {
-            text: 'Allow',
-            onPress: () => {
-              this.requestBatteryOptimizationIgnore();
-              resolve();
-            },
-          },
-        ],
-        { cancelable: false },
-      );
-    });
   }
 
   downloadFileTo(opts: {

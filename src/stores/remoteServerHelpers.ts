@@ -6,16 +6,17 @@
  * Extracted from remoteServerStore to keep the store file under the line limit.
  */
 
-import { RemoteServer, RemoteModel, ServerTestResult } from '../types';
-import { testEndpoint, detectServerType } from '../services/httpClient';
+import { RemoteServer,RemoteModel,ServerTestResult } from '../types';
+import { testEndpoint,detectServerType } from '../services/httpClient';
 import logger from '../utils/logger';
 import {
-  fetchModelCapabilities,
-  isGenerativeModel,
+fetchModelCapabilities,
+isGenerativeModel,
 } from './remoteModelCapabilities';
 import {
-  detectVisionCapability,
-  detectToolCallingCapability,
+getApiKeyImpl,
+detectVisionCapability,
+detectToolCallingCapability,
 } from '../services/remoteServerManagerUtils';
 
 /** Timeout for model discovery fetches (non-critical, background operation) */
@@ -23,6 +24,7 @@ const DISCOVERY_FETCH_TIMEOUT_MS = 5000;
 
 export async function testServerConnection(server: RemoteServer): Promise<ServerTestResult> {
   try {
+    server={...server,apiKey:server.apiKey??await getApiKeyImpl(server.id)??undefined};
     const testResult = await testEndpoint(server.endpoint, 10000, server.apiKey);
 
     if (!testResult.success) {
@@ -101,6 +103,7 @@ export async function testEndpointAndGetModels(
 }
 
 export async function fetchModelsFromServer(server: RemoteServer): Promise<RemoteModel[]> {
+  server={...server,apiKey:server.apiKey??await getApiKeyImpl(server.id)??undefined};
   let url = server.endpoint;
   while (url.endsWith('/')) url = url.slice(0, -1);
 

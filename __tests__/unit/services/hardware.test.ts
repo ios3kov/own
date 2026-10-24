@@ -5,7 +5,7 @@
  * Priority: P0 (Critical) - Device capability detection drives model selection.
  */
 
-import { Platform, NativeModules } from 'react-native';
+import { Platform,NativeModules } from 'react-native';
 import { hardwareService } from '../../../src/services/hardware';
 import DeviceInfo from 'react-native-device-info';
 
@@ -28,7 +28,7 @@ describe('HardwareService', () => {
       mockedDeviceInfo.getTotalMemory.mockResolvedValue(8 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(4 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue('Pixel 7');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('14');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
 
@@ -38,7 +38,7 @@ describe('HardwareService', () => {
       expect(info.usedMemory).toBe(4 * 1024 * 1024 * 1024);
       expect(info.availableMemory).toBe(4 * 1024 * 1024 * 1024);
       expect(info.deviceModel).toBe('Pixel 7');
-      expect(info.systemName).toBe('Android');
+      expect(info.systemName).toBe('iOS');
       expect(info.systemVersion).toBe('14');
       expect(info.isEmulator).toBe(false);
     });
@@ -49,7 +49,7 @@ describe('HardwareService', () => {
       );
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(5 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue('Test');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('13');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
 
@@ -62,7 +62,7 @@ describe('HardwareService', () => {
       mockedDeviceInfo.getTotalMemory.mockResolvedValue(8 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(4 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue('Test');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('13');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
 
@@ -83,7 +83,7 @@ describe('HardwareService', () => {
       mockedDeviceInfo.getTotalMemory.mockResolvedValue(8 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(4 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue('Test');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('13');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
       await hardwareService.getDeviceInfo();
@@ -102,7 +102,7 @@ describe('HardwareService', () => {
       mockedDeviceInfo.getTotalMemory.mockResolvedValue(8 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(3 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue('Test');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('13');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
 
@@ -116,7 +116,7 @@ describe('HardwareService', () => {
       mockedDeviceInfo.getTotalMemory.mockResolvedValue(8 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(4 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue('Galaxy S24');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('14');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
       await hardwareService.getDeviceInfo();
@@ -158,7 +158,7 @@ describe('HardwareService', () => {
       mockedDeviceInfo.getTotalMemory.mockResolvedValue(8 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(4 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue('Test');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('13');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
       await hardwareService.getDeviceInfo();
@@ -172,7 +172,7 @@ describe('HardwareService', () => {
       );
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(4 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue('Test');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('13');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
       await hardwareService.getDeviceInfo();
@@ -193,7 +193,7 @@ describe('HardwareService', () => {
       mockedDeviceInfo.getTotalMemory.mockResolvedValue(8 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(2 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue('Test');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('13');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
       await hardwareService.getDeviceInfo();
@@ -212,7 +212,7 @@ describe('HardwareService', () => {
       );
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(2 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue('Test');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('13');
       mockedDeviceInfo.isEmulator.mockResolvedValue(isEmulator);
       await hardwareService.getDeviceInfo();
@@ -286,7 +286,7 @@ describe('HardwareService', () => {
         usedGB * 1024 * 1024 * 1024,
       );
       mockedDeviceInfo.getModel.mockReturnValue('Test');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('13');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
       await hardwareService.getDeviceInfo();
@@ -555,7 +555,7 @@ describe('HardwareService', () => {
       );
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(2 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue('Test');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('13');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
       await hardwareService.getDeviceInfo();
@@ -620,7 +620,7 @@ describe('HardwareService', () => {
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(2 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue(opts.model ?? 'Test');
       mockedDeviceInfo.getSystemName.mockReturnValue(
-        opts.platform === 'ios' ? 'iOS' : 'Android',
+        opts.platform === 'ios' ? 'iOS' : 'iOS',
       );
       mockedDeviceInfo.getSystemVersion.mockReturnValue('14');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
@@ -713,156 +713,18 @@ describe('HardwareService', () => {
       });
     });
 
-    describe('Android', () => {
-      it('detects Qualcomm from hardware string', async () => {
-        await setupDevice({
-          totalGB: 8,
-          platform: 'android',
-          hardware: 'qcom',
-          model: 'Samsung Galaxy S24',
-        });
-        const soc = await hardwareService.getSoCInfo();
-        expect(soc.vendor).toBe('qualcomm');
-        // hasNPU depends on RAM heuristic (no native module) — 8GB → min variant → true
-      });
-
-      it('returns undefined qnnVariant when native module unavailable (no RAM heuristic)', async () => {
-        await setupDevice({
-          totalGB: 12,
-          platform: 'android',
-          hardware: 'qcom',
-          model: 'Test',
-        });
-        const soc = await hardwareService.getSoCInfo();
-        expect(soc.qnnVariant).toBeUndefined();
-        expect(soc.hasNPU).toBe(false);
-      });
-
-      it('returns hasNPU false for Qualcomm without native module (any RAM)', async () => {
-        await setupDevice({
-          totalGB: 8,
-          platform: 'android',
-          hardware: 'qcom',
-          model: 'Test',
-        });
-        const soc = await hardwareService.getSoCInfo();
-        expect(soc.qnnVariant).toBeUndefined();
-        expect(soc.hasNPU).toBe(false);
-      });
-
-      it('detects Tensor for Pixel devices', async () => {
-        await setupDevice({
-          totalGB: 8,
-          platform: 'android',
-          hardware: 'unknown-hw',
-          model: 'Pixel 8 Pro',
-        });
-        const soc = await hardwareService.getSoCInfo();
-        expect(soc.vendor).toBe('tensor');
-        expect(soc.hasNPU).toBe(false);
-      });
-
-      it('detects MediaTek from hardware string', async () => {
-        await setupDevice({
-          totalGB: 6,
-          platform: 'android',
-          hardware: 'mt6789',
-          model: 'Test',
-        });
-        const soc = await hardwareService.getSoCInfo();
-        expect(soc.vendor).toBe('mediatek');
-      });
-
-      it('detects Exynos from hardware string', async () => {
-        await setupDevice({
-          totalGB: 8,
-          platform: 'android',
-          hardware: 'samsungexynos2200',
-          model: 'Test',
-        });
-        const soc = await hardwareService.getSoCInfo();
-        expect(soc.vendor).toBe('exynos');
-      });
-
-      it('returns unknown vendor for unrecognized hardware', async () => {
-        await setupDevice({
-          totalGB: 6,
-          platform: 'android',
-          hardware: 'something-else',
-          model: 'Generic Phone',
-        });
-        const soc = await hardwareService.getSoCInfo();
-        expect(soc.vendor).toBe('unknown');
-        expect(soc.hasNPU).toBe(false);
-      });
-    });
-
-    describe('getQnnVariantFromSoC range-based detection', () => {
-      const setupQualcommWithSoC = async (socModel: string) => {
-        Platform.OS = 'android' as typeof Platform.OS;
-        NativeModules.LocalDreamModule = {
-          getSoCModel: jest.fn().mockResolvedValue(socModel),
-        };
-        mockedDeviceInfo.getTotalMemory.mockResolvedValue(
-          8 * 1024 * 1024 * 1024,
-        );
-        mockedDeviceInfo.getUsedMemory.mockResolvedValue(
-          2 * 1024 * 1024 * 1024,
-        );
-        mockedDeviceInfo.getModel.mockReturnValue('Test');
-        mockedDeviceInfo.getSystemName.mockReturnValue('Android');
-        mockedDeviceInfo.getSystemVersion.mockReturnValue('14');
-        mockedDeviceInfo.isEmulator.mockResolvedValue(false);
-        mockedDeviceInfo.getHardware.mockResolvedValue('qcom');
-        await hardwareService.getDeviceInfo();
-      };
-
-      afterEach(() => {
-        Platform.OS = originalOS;
-        delete NativeModules.LocalDreamModule;
-      });
-
-      it.each([
-        ['SM8550-AB', '8gen2', 'Snapdragon 8 Gen 2'],
-        ['SM8650-AC', '8gen2', 'Snapdragon 8 Gen 3'],
-        ['SM8735-AB', '8gen2', 'SM8735 flagship variant'],
-        ['SM8750-AB', '8gen2', 'Snapdragon 8 Elite'],
-        ['SM8845-AB', '8gen2', 'SM8845 flagship variant'],
-        ['SM8850-AB', '8gen2', 'Snapdragon 8 Elite Gen 5'],
-        ['SM8450-AB', '8gen1', 'Snapdragon 8 Gen 1'],
-        ['SM8475-AB', '8gen1', 'Snapdragon 8+ Gen 1'],
-        ['SM8635-AB', 'min', 'Snapdragon 8s Gen 3'],
-        ['SM8535-AB', 'min', 'Snapdragon 8s Gen 2'],
-        ['SM8350-AC', 'min', 'Snapdragon 888'],
-        ['SM8250-AB', 'min', 'Snapdragon 870'],
-        ['SM7450-AB', 'min', 'Snapdragon 7 Gen 1'],
-        ['SM7475-AB', 'min', 'Snapdragon 7+ Gen 2'],
-        ['SM7550-AB', 'min', 'Snapdragon 7 Gen 3'],
-        ['SM7675-AB', 'min', 'Snapdragon 7+ Gen 3'],
-        ['SM7225-AB', 'min', 'Snapdragon 750G'],
-        ['SM6375-AB', 'min', 'Snapdragon 695'],
-      ] as const)(
-        'returns %s variant for %s (%s)',
-        async (socModel, expected, _desc) => {
-          await setupQualcommWithSoC(socModel);
-          const soc = await hardwareService.getSoCInfo();
-          expect(soc.qnnVariant).toBe(expected);
-          expect(soc.hasNPU).toBe(true);
-        },
-      );
-    });
 
     it('caches SoC info after first call', async () => {
       await setupDevice({
         totalGB: 8,
-        platform: 'android',
-        hardware: 'qcom',
+        platform: 'ios',
+        deviceId: 'iPhone16,1',
         model: 'Test',
       });
       const first = await hardwareService.getSoCInfo();
       const second = await hardwareService.getSoCInfo();
       expect(first).toBe(second); // same reference
-      expect(mockedDeviceInfo.getHardware).toHaveBeenCalledTimes(1);
+      expect(first.vendor).toBe('apple');
     });
   });
 
@@ -884,7 +746,7 @@ describe('HardwareService', () => {
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(2 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue(opts.model ?? 'Test');
       mockedDeviceInfo.getSystemName.mockReturnValue(
-        opts.platform === 'ios' ? 'iOS' : 'Android',
+        opts.platform === 'ios' ? 'iOS' : 'iOS',
       );
       mockedDeviceInfo.getSystemVersion.mockReturnValue('14');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
@@ -898,7 +760,7 @@ describe('HardwareService', () => {
     const originalOS = Platform.OS;
     afterEach(() => {
       Platform.OS = originalOS;
-      delete NativeModules.LocalDreamModule;
+      delete NativeModules.CoreMLDiffusionModule;
     });
 
     describe('iOS recommendations', () => {
@@ -964,103 +826,12 @@ describe('HardwareService', () => {
       });
     });
 
-    describe('Android Qualcomm recommendations', () => {
-      it('recommends QNN for Qualcomm devices with known SoC', async () => {
-        Platform.OS = 'android' as typeof Platform.OS;
-        NativeModules.LocalDreamModule = {
-          getSoCModel: jest.fn().mockResolvedValue('SM8550-AB'),
-        };
-        mockedDeviceInfo.getTotalMemory.mockResolvedValue(
-          12 * 1024 * 1024 * 1024,
-        );
-        mockedDeviceInfo.getUsedMemory.mockResolvedValue(
-          2 * 1024 * 1024 * 1024,
-        );
-        mockedDeviceInfo.getModel.mockReturnValue('Test');
-        mockedDeviceInfo.getSystemName.mockReturnValue('Android');
-        mockedDeviceInfo.getSystemVersion.mockReturnValue('14');
-        mockedDeviceInfo.isEmulator.mockResolvedValue(false);
-        mockedDeviceInfo.getHardware.mockResolvedValue('qcom');
-        await hardwareService.getDeviceInfo();
-        const rec = await hardwareService.getImageModelRecommendation();
-        expect(rec.recommendedBackend).toBe('qnn');
-        expect(rec.qnnVariant).toBe('8gen2');
-        expect(rec.compatibleBackends).toEqual(
-          expect.arrayContaining(['qnn', 'mnn']),
-        );
-      });
-
-      it('recommends MNN for Qualcomm without native module (cannot determine SoC)', async () => {
-        await setupDevice({
-          totalGB: 12,
-          platform: 'android',
-          hardware: 'qcom',
-          model: 'Test',
-        });
-        const rec = await hardwareService.getImageModelRecommendation();
-        expect(rec.recommendedBackend).toBe('mnn');
-        expect(rec.bannerText).toContain('Snapdragon');
-      });
-    });
-
-    describe('Android non-Qualcomm recommendations', () => {
-      it('recommends MNN for non-Qualcomm Android', async () => {
-        await setupDevice({
-          totalGB: 8,
-          platform: 'android',
-          hardware: 'mt6789',
-          model: 'Test',
-        });
-        const rec = await hardwareService.getImageModelRecommendation();
-        expect(rec.recommendedBackend).toBe('mnn');
-        expect(rec.bannerText).toContain('GPU');
-        expect(rec.bannerText).toContain('888');
-        expect(rec.compatibleBackends).toEqual(['mnn']);
-      });
-
-      it('recommends MNN for Tensor (Pixel) devices', async () => {
-        await setupDevice({
-          totalGB: 8,
-          platform: 'android',
-          hardware: 'unknown-hw',
-          model: 'Pixel 8 Pro',
-        });
-        const rec = await hardwareService.getImageModelRecommendation();
-        expect(rec.recommendedBackend).toBe('mnn');
-      });
-    });
-
-    describe('Android Qualcomm without SM prefix', () => {
-      it('recommends MNN for Qualcomm with non-SM SoC (e.g. native module unavailable)', async () => {
-        Platform.OS = 'android' as typeof Platform.OS;
-        NativeModules.LocalDreamModule = {
-          getSoCModel: jest.fn().mockResolvedValue(''),
-        };
-        mockedDeviceInfo.getTotalMemory.mockResolvedValue(
-          8 * 1024 * 1024 * 1024,
-        );
-        mockedDeviceInfo.getUsedMemory.mockResolvedValue(
-          2 * 1024 * 1024 * 1024,
-        );
-        mockedDeviceInfo.getModel.mockReturnValue('POCO F3');
-        mockedDeviceInfo.getSystemName.mockReturnValue('Android');
-        mockedDeviceInfo.getSystemVersion.mockReturnValue('14');
-        mockedDeviceInfo.isEmulator.mockResolvedValue(false);
-        mockedDeviceInfo.getHardware.mockResolvedValue('qcom');
-        await hardwareService.getDeviceInfo();
-
-        const rec = await hardwareService.getImageModelRecommendation();
-        expect(rec.recommendedBackend).toBe('mnn');
-        expect(rec.bannerText).toContain('GPU');
-        expect(rec.compatibleBackends).toEqual(['mnn']);
-      });
-    });
 
     describe('low RAM warning', () => {
       it('adds warning for devices under 4GB', async () => {
         await setupDevice({
           totalGB: 3,
-          platform: 'android',
+          platform: 'ios',
           hardware: 'qcom',
           model: 'Test',
         });
@@ -1071,7 +842,7 @@ describe('HardwareService', () => {
       it('has no warning for devices with 4GB+', async () => {
         await setupDevice({
           totalGB: 8,
-          platform: 'android',
+          platform: 'ios',
           hardware: 'qcom',
           model: 'Test',
         });
@@ -1091,43 +862,7 @@ describe('HardwareService', () => {
       expect(first).toBe(second);
     });
 
-    describe('Android Qualcomm 8gen1 and min variant recommendations', () => {
-      afterEach(() => {
-        Platform.OS = originalOS;
-        delete NativeModules.LocalDreamModule;
-      });
 
-      const setupQualcommDevice = async (socModel: string) => {
-        Platform.OS = 'android' as typeof Platform.OS;
-        NativeModules.LocalDreamModule = {
-          getSoCModel: jest.fn().mockResolvedValue(socModel),
-        };
-        mockedDeviceInfo.getTotalMemory.mockResolvedValue(8 * 1024 * 1024 * 1024);
-        mockedDeviceInfo.getUsedMemory.mockResolvedValue(2 * 1024 * 1024 * 1024);
-        mockedDeviceInfo.getModel.mockReturnValue('Test');
-        mockedDeviceInfo.getSystemName.mockReturnValue('Android');
-        mockedDeviceInfo.getSystemVersion.mockReturnValue('14');
-        mockedDeviceInfo.isEmulator.mockResolvedValue(false);
-        mockedDeviceInfo.getHardware.mockResolvedValue('qcom');
-        await hardwareService.getDeviceInfo();
-      };
-
-      it('returns qnn recommendation for 8gen1 Qualcomm device', async () => {
-        await setupQualcommDevice('SM8450-AB'); // 8gen1
-        const rec = await hardwareService.getImageModelRecommendation();
-        expect(rec.recommendedBackend).toBe('qnn');
-        expect(rec.qnnVariant).toBe('8gen1');
-        expect(rec.bannerText).toContain('NPU');
-      });
-
-      it('returns qnn recommendation for min (Snapdragon 888) Qualcomm device', async () => {
-        await setupQualcommDevice('SM8350-AC'); // min
-        const rec = await hardwareService.getImageModelRecommendation();
-        expect(rec.recommendedBackend).toBe('qnn');
-        expect(rec.qnnVariant).toBe('min');
-        expect(rec.bannerText).toContain('lightweight');
-      });
-    });
   });
 
   describe('getTotalMemoryGB — background fetch callbacks', () => {
@@ -1136,7 +871,7 @@ describe('HardwareService', () => {
       mockedDeviceInfo.getTotalMemory.mockResolvedValue(8 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getUsedMemory.mockResolvedValue(2 * 1024 * 1024 * 1024);
       mockedDeviceInfo.getModel.mockReturnValue('Test');
-      mockedDeviceInfo.getSystemName.mockReturnValue('Android');
+      mockedDeviceInfo.getSystemName.mockReturnValue('iOS');
       mockedDeviceInfo.getSystemVersion.mockReturnValue('13');
       mockedDeviceInfo.isEmulator.mockResolvedValue(false);
       await hardwareService.getDeviceInfo();

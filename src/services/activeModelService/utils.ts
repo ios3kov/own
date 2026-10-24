@@ -5,8 +5,8 @@
 import { useAppStore } from '../../stores';
 import { hardwareService } from '../hardware';
 import { llmService } from '../llm';
-import { liteRTService } from '../litert';
-import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
+
+import { coreMLImageGeneratorService } from '../coreMLImageGenerator';
 import { ResourceUsage } from './types';
 
 export async function getResourceUsage(): Promise<ResourceUsage> {
@@ -47,14 +47,14 @@ export interface SyncStateTarget {
 export async function syncWithNativeState(target: SyncStateTarget): Promise<void> {
   const store = useAppStore.getState();
 
-  const textModelLoaded = llmService.isModelLoaded() || liteRTService.isModelLoaded();
+  const textModelLoaded = llmService.isModelLoaded();
   if (!textModelLoaded) {
     target.setLoadedTextModelId(null);
   } else if (!target.loadedTextModelId && store.activeModelId) {
     target.setLoadedTextModelId(store.activeModelId);
   }
 
-  const imageModelLoaded = await onnxImageGeneratorService.isModelLoaded();
+  const imageModelLoaded = await coreMLImageGeneratorService.isModelLoaded();
   if (!imageModelLoaded) {
     target.setLoadedImageModelId(null);
     target.setLoadedImageModelThreads(null);

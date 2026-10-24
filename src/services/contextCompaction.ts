@@ -57,7 +57,7 @@ class ContextCompactionService {
     this.compactingListeners.forEach(fn => fn(v));
   }
 
-  /** Allow external services (e.g. LiteRT) to surface compaction state in the UI. */
+
   signalCompacting(v: boolean): void {
     this.setCompacting(v);
   }

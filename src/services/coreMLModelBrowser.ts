@@ -218,7 +218,6 @@ export async function fetchAvailableCoreMLModels(
 
   results.forEach((r, i) => {
     if (r.status === 'rejected') {
-      console.warn(`[CoreMLBrowser] Failed to fetch ${REPOS[i].repo}:`, r.reason);
       logger.warn(`[CoreMLBrowser] Failed to fetch ${REPOS[i].repo}:`, r.reason);
     }
   });
@@ -226,4 +225,17 @@ export async function fetchAvailableCoreMLModels(
   cachedModels = models;
   cacheTimestamp = Date.now();
   return models;
+}
+
+export function guessStyle(name: string): string {
+  const lower = name.toLowerCase();
+  if (
+    lower.includes('reality') ||
+    lower.includes('realistic') ||
+    lower.includes('chillout') ||
+    lower.includes('photo')
+  ) {
+    return 'photorealistic';
+  }
+  return 'anime';
 }

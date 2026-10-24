@@ -42,6 +42,10 @@ describe('AuthService', () => {
   // setPassphrase
   // ========================================================================
   describe('setPassphrase', () => {
+    it('does not claim success when Keychain returns false',async()=>{
+      (Keychain.setGenericPassword as jest.Mock).mockResolvedValueOnce(false);
+      expect(await authService.setPassphrase('synthetic-password')).toBe(false);
+    });
     it('stores hashed passphrase in keychain and returns true', async () => {
       (Keychain.setGenericPassword as jest.Mock).mockResolvedValue(true);
 

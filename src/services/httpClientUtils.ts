@@ -50,7 +50,7 @@ export async function imageToBase64DataUrl(uri: string): Promise<string> {
     return fetchBlobAsBase64(uri);
   }
 
-  // For other URIs (content://, ph://, etc.), try fetch
+  // For other asset URIs (ph://, etc.), try fetch
   try {
     return await fetchBlobAsBase64(uri);
   } catch {

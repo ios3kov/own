@@ -1,28 +1,22 @@
-import { initLlama, LlamaContext } from 'llama.rn';
+import { initLlama,LlamaContext } from 'llama.rn';
 import RNFS from 'react-native-fs';
-import { Platform } from 'react-native';
 import { APP_CONFIG } from '../constants';
-import { Message, INFERENCE_BACKENDS } from '../types';
-import { MultimodalSupport, LLMPerformanceStats } from './llmTypes';
+import { Message,INFERENCE_BACKENDS } from '../types';
+import { MultimodalSupport,LLMPerformanceStats } from './llmTypes';
 import logger from '../utils/logger';
 
-/** Feature flag: Set to true to enable HTP/Hexagon NPU support. Currently disabled. */
-const HTP_ENABLED = false;
 
 export const SYSTEM_PROMPT_RESERVE = 256;
 export const RESPONSE_RESERVE = 512;
 export const CONTEXT_SAFETY_MARGIN = 0.85;
 const DEFAULT_THREADS = 4; // targets performance cores only; over-threading onto efficiency cores (A520) hurts
 const DEFAULT_BATCH = 512;
-export const DEFAULT_GPU_LAYERS = Platform.OS === 'ios' ? 99 : 0;
+export const DEFAULT_GPU_LAYERS = (99);
 export function getOptimalThreadCount(): number { return DEFAULT_THREADS; }
 export function getOptimalBatchSize(): number { return DEFAULT_BATCH; }
-const REPACKABLE_QUANTS = ['q4_0', 'iq4_nl'];
 /** Detect repackable quant formats where disabling mmap improves inference speed. */
-export function shouldDisableMmap(modelPath: string): boolean {
-  if (Platform.OS !== 'android') return false;
-  return REPACKABLE_QUANTS.some(q => modelPath.toLowerCase().includes(q));
-}
+export function shouldDisableMmap(_modelPath: string): boolean { return false; }
+
 export function hashString(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -61,27 +55,16 @@ export function buildModelParams(
   const ctxLen = settings.contextLength || APP_CONFIG.maxContextLength;
   // inferenceBackend takes precedence; fall back to legacy enableGpu flag
   const backend = settings.inferenceBackend;
-  // Use flash_attn_type string API (replaces deprecated flash_attn boolean).
-  // OpenCL and HTP backends crash with flash attn on — disable for those.
-  // CPU (Android/iOS) and Metal both support it; use 'auto' to let llama.cpp decide.
-  const gpuBackendIncompatible = backend === INFERENCE_BACKENDS.OPENCL || (HTP_ENABLED && backend === INFERENCE_BACKENDS.HTP);
-  const flash_attn_type = (settings.flashAttn === false || gpuBackendIncompatible) ? 'off' : 'auto';
+  const flash_attn_type = settings.flashAttn === false ? 'off' : 'auto';
   const gpuEnabled = backend ? backend !== INFERENCE_BACKENDS.CPU : settings.enableGpu !== false;
   const nGpuLayers = gpuEnabled ? (settings.gpuLayers ?? DEFAULT_GPU_LAYERS) : 0;
-  const isFlashAttnEffective = flash_attn_type !== 'off';
-  const requestedCache = settings.cacheType || (isFlashAttnEffective ? 'q8_0' : 'f16');
-  // OpenCL init on affected Adreno devices can fail when cache_type_k/v are passed.
-  // Keep f16 coercion for the non-OpenCL paths that still use explicit cache params.
-  const needsF16 =
-    backend === INFERENCE_BACKENDS.OPENCL ||
-    (HTP_ENABLED && backend === INFERENCE_BACKENDS.HTP);
-  const cacheType = needsF16 && requestedCache !== 'f16' ? 'f16' : requestedCache;
+  const cacheType = settings.cacheType || (flash_attn_type === 'off' ? 'f16' : 'q8_0');
   return {
     baseParams: {
       model: modelPath, use_mlock: false, n_batch: nBatch, n_ubatch: nBatch, n_threads: nThreads,
       use_mmap: !shouldDisableMmap(modelPath), vocab_only: false, flash_attn_type,
       kv_unified: true, no_extra_bufts: false,
-      ...(backend === INFERENCE_BACKENDS.OPENCL ? {} : { cache_type_k: cacheType, cache_type_v: cacheType }),
+      cache_type_k: cacheType, cache_type_v: cacheType,
     },
     nThreads, nBatch, ctxLen, nGpuLayers,
   };
@@ -91,47 +74,20 @@ export interface ContextInitResult {
   gpuAttemptFailed: boolean;
   actualLength: number;
 }
-/** Timeout for Adreno GPU context init on Android -- bail before OS triggers ANR. */
-const GPU_INIT_TIMEOUT_MS = 8000;
-/** Timeout for HTP/NPU context init -- DSP firmware load takes longer than Adreno. */
-const HTP_INIT_TIMEOUT_MS = 30000;
-/** Race a promise against a timeout; rejects with descriptive error on expiry. */
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout>;
-  const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-/** Safely release a context, swallowing errors (used during fallback cleanup). */
-async function safeRelease(ctx: LlamaContext | null): Promise<void> {
-  if (!ctx) return;
-  try { await ctx.release(); } catch (e) { logger.warn('[LLM] Error releasing context during fallback:', e); }
-}
-/** On Android, race GPU/HTP init against a timeout to prevent ANRs. */
-async function tryGpuInit(promise: Promise<LlamaContext>, nGpuLayers: number, isHtp: boolean = false): Promise<LlamaContext> {
-  if (nGpuLayers <= 0 || Platform.OS !== 'android') return promise;
-  const timeoutMs = isHtp ? HTP_INIT_TIMEOUT_MS : GPU_INIT_TIMEOUT_MS;
-  let timedOut = false;
-  promise.then(ctx => { if (timedOut) safeRelease(ctx); }).catch(() => {});
-  try { return await withTimeout(promise, timeoutMs, isHtp ? 'HTP context init' : 'GPU context init'); }
-  catch (e) { timedOut = true; throw e; }
-}
-
-/** Init llama with GPU/HTP, fall back to CPU, then retry with ctx=2048 on failure. */
+/** Try the requested device, then CPU; a final retry never increases context memory. */
 export async function initContextWithFallback(
   params: object,
   contextLength: number,
   nGpuLayers: number,
 ): Promise<ContextInitResult> {
   const modelPath = (params as any).model || 'unknown';
-  const isHtp = HTP_ENABLED && Array.isArray((params as any).devices) && (params as any).devices.some((d: string) => d.startsWith('HTP'));
-  logger.log(`[LLM] initContextWithFallback: model=${modelPath}, ctx=${contextLength}, gpuLayers=${nGpuLayers}${isHtp ? ', backend=HTP' : ''}`);
+  logger.log(`[LLM] initContextWithFallback: model=${modelPath}, ctx=${contextLength}, gpuLayers=${nGpuLayers}`);
+  const fallbackLength = Math.min(contextLength, 2048);
   let gpuAttemptFailed = false;
   try {
-    logger.log(`[LLM] Attempt 1/3: ${isHtp ? 'HTP' : 'GPU'} init (ctx=${contextLength}, gpu_layers=${nGpuLayers})`);
+    logger.log(`[LLM] Attempt 1/3: GPU init (ctx=${contextLength}, gpu_layers=${nGpuLayers})`);
     const gpuInitPromise = initLlama({ ...params, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any);
-    const context = await tryGpuInit(gpuInitPromise, nGpuLayers, isHtp);
+    const context = await gpuInitPromise;
     logger.log('[LLM] GPU init succeeded');
     return { context, gpuAttemptFailed, actualLength: contextLength };
   } catch (gpuError: any) {
@@ -144,7 +100,7 @@ export async function initContextWithFallback(
     }
     try {
       logger.log(`[LLM] Attempt 2/3: CPU init (ctx=${contextLength}, gpu_layers=0)`);
-      // Strip devices — HTP requires n_gpu_layers > 0; CPU fallback must not request it
+      // A CPU retry must not request accelerator devices.
       const cpuParams = { ...(params as Record<string, unknown>) };
       delete cpuParams.devices;
       const context = await initLlama({ ...cpuParams, n_ctx: contextLength, n_gpu_layers: 0 } as any);
@@ -154,15 +110,15 @@ export async function initContextWithFallback(
       const cpuMsg = cpuError?.message || String(cpuError);
       logger.warn(`[LLM] Attempt 2/3 failed (CPU, ctx=${contextLength}): ${cpuMsg}`);
       try {
-        logger.log('[LLM] Attempt 3/3: CPU init (ctx=2048, gpu_layers=0)');
+        logger.log(`[LLM] Attempt 3/3: CPU init (ctx=${fallbackLength}, gpu_layers=0)`);
         const cpuMinParams = { ...(params as Record<string, unknown>) };
         delete cpuMinParams.devices;
-        const context = await initLlama({ ...cpuMinParams, n_ctx: 2048, n_gpu_layers: 0 } as any);
-        logger.log('[LLM] CPU init with ctx=2048 succeeded');
-        return { context, gpuAttemptFailed, actualLength: 2048 };
+        const context = await initLlama({ ...cpuMinParams, n_ctx: fallbackLength, n_gpu_layers: 0 } as any);
+        logger.log(`[LLM] CPU init with ctx=${fallbackLength} succeeded`);
+        return { context, gpuAttemptFailed, actualLength: fallbackLength };
       } catch (finalError: any) {
         const finalMsg = finalError?.message || String(finalError);
-        logger.error(`[LLM] Attempt 3/3 failed (CPU, ctx=2048): ${finalMsg}`);
+        logger.error(`[LLM] Attempt 3/3 failed (CPU, ctx=${fallbackLength}): ${finalMsg}`);
         logger.error(`[LLM] All 3 init attempts failed for model: ${modelPath}`);
         logger.error(`[LLM] Error chain — GPU: "${gpuMsg}" | CPU: "${cpuMsg}" | min-ctx: "${finalMsg}"`);
         const errorParts = [
@@ -170,7 +126,7 @@ export async function initContextWithFallback(
           cpuMsg && cpuMsg !== finalMsg ? `CPU: ${cpuMsg}` : null,
           `min-ctx: ${finalMsg}`,
         ].filter(Boolean).join(' | ');
-        throw new Error(`Failed to load model even at minimum context (2048). This may indicate insufficient memory, a corrupted model file, or an unsupported model format.\n\nError chain: ${errorParts}`);
+        throw new Error(`Failed to load model after CPU retries (context ${fallbackLength}). This may indicate insufficient memory, a corrupted model file, or an unsupported model format.\n\nError chain: ${errorParts}`);
       }
     }
   }
@@ -320,21 +276,11 @@ export function getMaxContextForDevice(totalMemoryBytes: number): number {
   if (gb <= 8) return 4096;
   return 8192;
 }
-// Android Adreno GPU caps (≤4GB/≤6GB→0, ≤8GB→12, >8GB→24). iOS unaffected.
-const ANDROID_GPU_LAYER_CAPS: { maxGB: number; layers: number }[] = [{ maxGB: 4, layers: 0 }, { maxGB: 6, layers: 0 }, { maxGB: 8, layers: 12 }];
-const ANDROID_GPU_LAYERS_FALLBACK = 24;
-
 /** Safe GPU layer count based on device RAM. Skips GPU on ≤4 GB to prevent abort(). */
 export function getGpuLayersForDevice(totalMemoryBytes: number, requestedLayers: number): number {
   const totalGB = totalMemoryBytes / BYTES_PER_GB;
   if (totalGB <= 4) return 0;
 
-  // Android / Adreno-specific caps to prevent GPU ANRs
-  if (Platform.OS === 'android') {
-    const tier = ANDROID_GPU_LAYER_CAPS.find(t => totalGB <= t.maxGB);
-    const maxLayers = tier ? tier.layers : ANDROID_GPU_LAYERS_FALLBACK;
-    return Math.min(requestedLayers, maxLayers);
-  }
   return requestedLayers;
 }
 export { validateModelFile, checkMemoryForModel, safeCompletion } from './llmSafetyChecks';

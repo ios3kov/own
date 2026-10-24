@@ -1,4 +1,4 @@
-import { AppState, NativeModules, Platform } from 'react-native';
+import { AppState,NativeModules } from 'react-native';
 import { create } from 'zustand';
 
 function stripInlineCode(text: string): string {
@@ -47,7 +47,7 @@ export function speechText(raw: string, final = false): string {
 }
 
 export const useReplySpeechState = create<{ error: string | null }>(() => ({ error: null }));
-const bridge = () => Platform.OS === 'ios' ? NativeModules.OwnReplySpeech : null;
+const bridge = () => (NativeModules.OwnReplySpeech);
 
 export class ReplySpeech {
   private session = 0;

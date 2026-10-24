@@ -18,10 +18,10 @@ jest.mock('../../../src/stores', () => ({
 import { Platform } from 'react-native';
 import { useChatStore } from '../../../src/stores';
 import {
-  buildEnhancementMessages,
-  getConversationContext,
-  cleanEnhancedPrompt,
-  buildImageGenMeta,
+buildEnhancementMessages,
+getConversationContext,
+cleanEnhancedPrompt,
+buildImageGenMeta,
 } from '../../../src/services/imageGenerationHelpers';
 
 const mockGetState = useChatStore.getState as jest.Mock;
@@ -168,7 +168,7 @@ describe('buildImageGenMeta', () => {
     (Platform as any).OS = 'ios';
     const meta = buildImageGenMeta(baseModel, baseOpts);
     expect(meta.gpu).toBe(true);
-    expect(meta.gpuBackend).toBe('Core ML (ANE)');
+    expect(meta.gpuBackend).toBe('Core ML');
   });
 
   it('includes model name, steps, guidanceScale, resolution', () => {
@@ -179,30 +179,5 @@ describe('buildImageGenMeta', () => {
     expect(meta.resolution).toBe('512x512');
   });
 
-  it('returns QNN backend for qnn backend on android', () => {
-    (Platform as any).OS = 'android';
-    const meta = buildImageGenMeta({ ...baseModel, backend: 'qnn' }, baseOpts);
-    expect(meta.gpu).toBe(true);
-    expect(meta.gpuBackend).toBe('QNN (NPU)');
-  });
 
-  it('returns MNN GPU when useOpenCL is true on android', () => {
-    (Platform as any).OS = 'android';
-    const meta = buildImageGenMeta({ ...baseModel, backend: 'mnn' }, { ...baseOpts, useOpenCL: true });
-    expect(meta.gpu).toBe(true);
-    expect(meta.gpuBackend).toBe('MNN (GPU)');
-  });
-
-  it('returns MNN CPU when useOpenCL is false and backend is mnn on android', () => {
-    (Platform as any).OS = 'android';
-    const meta = buildImageGenMeta({ ...baseModel, backend: 'mnn' }, { ...baseOpts, useOpenCL: false });
-    expect(meta.gpu).toBe(false);
-    expect(meta.gpuBackend).toBe('MNN (CPU)');
-  });
-
-  it('defaults backend to mnn when not specified', () => {
-    (Platform as any).OS = 'android';
-    const meta = buildImageGenMeta(baseModel, { ...baseOpts, useOpenCL: false });
-    expect(meta.gpuBackend).toBe('MNN (CPU)');
-  });
 });

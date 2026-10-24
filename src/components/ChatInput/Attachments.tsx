@@ -1,17 +1,17 @@
-import React, { useState, useRef } from 'react';
+import React,{ useState,useRef } from 'react';
+import { View,Text,Image,ScrollView,TouchableOpacity,ActionSheetIOS } from 'react-native';
+import { launchImageLibrary,launchCamera,Asset } from 'react-native-image-picker';
+import { pick,types,isErrorWithCode,errorCodes } from '@react-native-documents/picker';
+import Icon from 'react-native-vector-icons/Feather';
+import { useTheme,useThemedStyles } from '../../theme';
+import { MediaAttachment } from '../../types';
+import { documentService } from '../../services/documentService';
+import { AlertState,showAlert } from '../CustomAlert';
+import { createStyles } from './styles';
+import { isPickerStuck } from '../../utils/pickerErrorUtils';
 
 let _attachmentIdSeq = 0;
 const nextAttachmentId = () => `${Date.now()}-${(++_attachmentIdSeq).toString(36)}`;
-import { View, Text, Image, ScrollView, TouchableOpacity, Platform, ActionSheetIOS } from 'react-native';
-import { launchImageLibrary, launchCamera, Asset } from 'react-native-image-picker';
-import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
-import Icon from 'react-native-vector-icons/Feather';
-import { useTheme, useThemedStyles } from '../../theme';
-import { MediaAttachment } from '../../types';
-import { documentService } from '../../services/documentService';
-import { AlertState, showAlert, hideAlert } from '../CustomAlert';
-import { createStyles } from './styles';
-import { isPickerStuck } from '../../utils/pickerErrorUtils';
 
 // ─── useAttachments hook ──────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
   };
 
   const handlePickImage = () => {
-    if (Platform.OS === 'ios') {
+    {
       ActionSheetIOS.showActionSheetWithOptions(
         { options: ['Camera', 'Photo Library', 'Cancel'], cancelButtonIndex: 2 },
         (index) => {
@@ -65,15 +65,6 @@ export function useAttachments(setAlertState: (state: AlertState) => void) {
           else if (index === 1) pickFromLibrary();
         },
       );
-    } else {
-      setAlertState(showAlert(
-        'Add Image',
-        'Choose image source',
-        [
-          { text: 'Camera', onPress: () => { setAlertState(hideAlert()); setTimeout(pickFromCamera, 300); } },
-          { text: 'Photo Library', onPress: () => { setAlertState(hideAlert()); setTimeout(pickFromLibrary, 300); } },
-        ],
-      ));
     }
   };
 

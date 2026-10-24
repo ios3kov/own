@@ -13,7 +13,7 @@ describe('isSuspiciousRecoveredImageModel', () => {
       modelPath: '/models/image',
       size: 100 * 1024 * 1024,
       downloadedAt: new Date().toISOString(),
-      backend: 'mnn',
+      backend: 'coreml',
     };
     expect(isSuspiciousRecoveredImageModel(model)).toBe(true);
   });
@@ -26,7 +26,7 @@ describe('isSuspiciousRecoveredImageModel', () => {
       modelPath: '/models/image',
       size: 500 * 1024 * 1024,
       downloadedAt: new Date().toISOString(),
-      backend: 'qnn',
+      backend: 'coreml',
     };
     expect(isSuspiciousRecoveredImageModel(model)).toBe(false);
   });
@@ -39,13 +39,13 @@ describe('isSuspiciousRecoveredImageModel', () => {
       modelPath: '/models/tiny',
       size: 10 * 1024 * 1024,
       downloadedAt: new Date().toISOString(),
-      backend: 'mnn',
+      backend: 'coreml',
     };
     expect(isSuspiciousRecoveredImageModel(model)).toBe(true);
   });
 
   it('should filter recovered models regardless of backend', () => {
-    const backends: Array<'mnn' | 'qnn' | 'coreml'> = ['mnn', 'qnn', 'coreml'];
+    const backends: Array<'coreml'> = ['coreml'];
     backends.forEach(backend => {
       const model: ONNXImageModel = {
         id: `recovered_model_${backend}_123456`,

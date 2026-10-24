@@ -17,11 +17,11 @@
  */
 
 import React from 'react';
+import { render,fireEvent } from '@testing-library/react-native';
+import { GenerationSettingsModal } from '../../../src/components/GenerationSettingsModal';
 
 // These legacy cases cover the technical editor; friendly settings have real-store integration tests.
 jest.mock('../../../src/components/SimpleModelSettings', () => ({SimpleModelSettings:({advancedContent}:any)=>advancedContent,useResponseBackend:()=>'llama'}));
-import { render, fireEvent } from '@testing-library/react-native';
-import { GenerationSettingsModal } from '../../../src/components/GenerationSettingsModal';
 
 // Mock AppSheet
 jest.mock('../../../src/components/AppSheet', () => ({
@@ -45,8 +45,7 @@ let mockStoreValues: any = {};
 
 jest.mock('../../../src/stores', () => ({
   useAppStore: jest.fn((sel?: any) => typeof sel === 'function' ? sel(mockStoreValues) : mockStoreValues),
-  selectIsLiteRT: (state: any) =>
-    state.downloadedModels?.find((m: any) => m.id === state.activeModelId)?.engine === 'litert',
+
 }));
 
 jest.mock('../../../src/services', () => ({
@@ -947,7 +946,7 @@ describe('GenerationSettingsModal', () => {
     });
 
     it('defaults flash attention On when flashAttn setting is undefined (iOS → platform default true)', () => {
-      // flashAttn: undefined → falls back to Platform.OS !== 'android' = true on iOS
+      // flashAttn: undefined → falls back to Platform.OS !== 'ios' = true on iOS
       mockStoreValues.settings = { ...defaultSettings, flashAttn: undefined as any };
 
       const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
@@ -960,134 +959,7 @@ describe('GenerationSettingsModal', () => {
       expect(mockUpdateSettings).toHaveBeenCalledWith(expect.objectContaining({ flashAttn: false }));
     });
 
-    // Android-specific tests: mock Platform.OS before each, restore after
-    describe('on Android platform', () => {
-      let originalOS: string;
-      const { Platform } = require('react-native');
 
-      beforeEach(() => {
-        originalOS = Platform.OS;
-        Object.defineProperty(Platform, 'OS', { get: () => 'android', configurable: true });
-      });
-
-      afterEach(() => {
-        Object.defineProperty(Platform, 'OS', { get: () => originalOS, configurable: true });
-      });
-
-      it('renders GPU layers slider with gpuLayersEffective when backend is OpenCL', () => {
-        mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 8, flashAttn: false };
-        const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        expect(getByText('8')).toBeTruthy();
-      });
-
-      it('shows GPU layers at full value when flash attention is On (no clamping)', () => {
-        // Flash attention no longer caps GPU layers — gpuLayersMax is always 99
-        mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 8, flashAttn: true };
-        const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        // gpuLayersEffective = Math.min(8, 99) = 8
-        expect(getByText('8')).toBeTruthy();
-      });
-
-      it('uses default gpuLayers value of 1 when gpuLayers is undefined (covers ?? fallback)', () => {
-        mockStoreValues.settings = {
-          ...defaultSettings,
-          inferenceBackend: 'opencl' as const,
-          gpuLayers: undefined as any,
-          flashAttn: false,
-        };
-        const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        // gpuLayersEffective = Math.min(undefined ?? 1, 99) = 1
-        expect(getByText('1')).toBeTruthy();
-      });
-
-      it('does not clamp gpuLayers when turning flash attn On with undefined layers', () => {
-        mockStoreValues.settings = { ...defaultSettings, flashAttn: false, gpuLayers: undefined as any };
-        const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        mockUpdateSettings.mockClear();
-        fireEvent.press(getByTestId('flash-attn-on-button'));
-        expect(mockUpdateSettings).toHaveBeenCalledWith(
-          expect.objectContaining({ flashAttn: true })
-        );
-        expect(mockUpdateSettings).not.toHaveBeenCalledWith(
-          expect.objectContaining({ gpuLayers: expect.any(Number) })
-        );
-      });
-
-      it('does not clamp gpuLayers when turning flash attn On with layers > 1', () => {
-        mockStoreValues.settings = { ...defaultSettings, flashAttn: false, gpuLayers: 8 };
-        const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        mockUpdateSettings.mockClear();
-        fireEvent.press(getByTestId('flash-attn-on-button'));
-        expect(mockUpdateSettings).toHaveBeenCalledWith(
-          expect.objectContaining({ flashAttn: true })
-        );
-        expect(mockUpdateSettings).not.toHaveBeenCalledWith(
-          expect.objectContaining({ gpuLayers: expect.any(Number) })
-        );
-      });
-
-      it('does not clamp gpuLayers when turning flash attn On with layers = 1', () => {
-        mockStoreValues.settings = { ...defaultSettings, flashAttn: false, gpuLayers: 1 };
-        const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        mockUpdateSettings.mockClear();
-        fireEvent.press(getByTestId('flash-attn-on-button'));
-        expect(mockUpdateSettings).toHaveBeenCalledWith(
-          expect.objectContaining({ flashAttn: true })
-        );
-        expect(mockUpdateSettings).not.toHaveBeenCalledWith(
-          expect.objectContaining({ gpuLayers: expect.any(Number) })
-        );
-      });
-
-      it('calls updateSettings with inferenceBackend: cpu when CPU button pressed', () => {
-        mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'opencl' as const };
-        const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        mockUpdateSettings.mockClear();
-
-        fireEvent.press(getByTestId('backend-cpu-button'));
-
-        expect(mockUpdateSettings).toHaveBeenCalledWith({ inferenceBackend: 'cpu' });
-      });
-
-      it('calls updateSettings with inferenceBackend: opencl when OpenCL button pressed on Android', () => {
-        mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'cpu' as const };
-        const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        mockUpdateSettings.mockClear();
-
-        fireEvent.press(getByTestId('backend-opencl-button'));
-
-        expect(mockUpdateSettings).toHaveBeenCalledWith({ inferenceBackend: 'opencl' });
-      });
-
-      it('calls updateSettings with gpuLayers value from GPU layers slider', () => {
-        mockStoreValues.settings = { ...defaultSettings, inferenceBackend: 'opencl' as const, gpuLayers: 6, flashAttn: false };
-        const { getByText, getByTestId } = render(<GenerationSettingsModal {...defaultProps} />);
-        fireEvent.press(getByText('TEXT GENERATION'));
-        fireEvent.press(getByTestId('modal-text-advanced-toggle'));
-        mockUpdateSettings.mockClear();
-
-        const slider = getByTestId('gpu-layers-slider');
-        slider.props.onSlidingComplete(12);
-
-        expect(mockUpdateSettings).toHaveBeenCalledWith({ gpuLayers: 12 });
-      });
-    });
   });
 
   // ============================================================================

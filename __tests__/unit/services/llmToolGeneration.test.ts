@@ -141,7 +141,7 @@ describe('generateWithToolsImpl', () => {
       expect(callArgs.reasoning_format).toBe('none');
     });
 
-    it('disables ctx_shift when disableCtxShift is true (Android GPU SIGSEGV fix)', async () => {
+    it('disables ctx_shift when disableCtxShift is true ', async () => {
       const completion = jest.fn(async (_params: any, _cb: any) => ({}));
       const deps = createMockDeps({ context: { completion }, disableCtxShift: true });
 

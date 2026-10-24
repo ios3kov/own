@@ -1,23 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React,{ useState,useEffect } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  InteractionManager,
+View,
+Text,
+ScrollView,
+TouchableOpacity,
+TextInput,
+KeyboardAvoidingView,InteractionManager
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation,useRoute,RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { AttachStep, useSpotlightTour } from 'react-native-spotlight-tour';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
+import { AttachStep,useSpotlightTour } from 'react-native-spotlight-tour';
+import { CustomAlert,showAlert,hideAlert,AlertState,initialAlertState } from '../components/CustomAlert';
 import { consumePendingSpotlight } from '../components/onboarding/spotlightState';
-import { useTheme, useThemedStyles } from '../theme';
-import type { ThemeColors, ThemeShadows } from '../theme';
-import { TYPOGRAPHY, SPACING } from '../constants';
+import { useTheme,useThemedStyles } from '../theme';
+import type { ThemeColors,ThemeShadows } from '../theme';
+import { TYPOGRAPHY,SPACING } from '../constants';
 import { useProjectStore } from '../stores';
 import { RootStackParamList } from '../navigation/types';
 
@@ -91,7 +89,7 @@ export const ProjectEditScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={('padding')}
         style={styles.keyboardAvoid}
       >
         {/* Header */}

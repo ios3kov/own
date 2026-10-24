@@ -40,7 +40,6 @@ Every claim has a fact behind it. Never say "fast" when you can say "15-30 tok/s
 Specificity is how you earn trust without asking for it.
 
 ```
-"Phi-3 Mini runs at ~28 tok/s on a Snapdragon 8 Gen 3. Llama 3.1 8B runs at ~12 tok/s on the same chip."
 "On-device. Offline. Zero data leaves your phone. Not a marketing claim -- airplane mode works."
 ```
 
@@ -152,9 +151,8 @@ Status: "READY"
 The reader has the app open. Get them to the thing. State requirements before steps. One action per step.
 
 ```
-"Step 1 -- Download Own
-iOS: requires iPhone 12 or newer, 4GB RAM.
-Android: requires Android 10+, 4GB RAM."
+"Step 1 -- Open Own
+Apple Foundation Models needs a supported iPhone with Apple Intelligence enabled and ready. If it is unavailable, choose another model."
 ```
 
 ### Onboarding
@@ -267,7 +265,6 @@ Name models precisely. Include size and quantization when recommending.
 ```
 "Llama 3.2 3B Q4_K_M -- ~2GB, 18 tok/s on iPhone 15 Pro"
 "Phi-4 Mini -- runs on any modern phone, 4GB RAM minimum"
-"Stable Diffusion 1.5 -- on-device image gen, 5-10s on Snapdragon NPU"
 ```
 
 ---
@@ -296,7 +293,6 @@ Not a feature tour -- just the obvious next thing.
 ```
 "Run your first local AI model in 5 minutes"
 "Which model should you use? Here's how to decide."
-"Stable Diffusion on Android -- on-device image generation, no cloud."
 "Llama 3.1 8B vs Phi-4 Mini -- when to use which."
 "How to connect Own to your Ollama server at home."
 "iPhone 15 Pro vs iPhone 12 -- what on-device AI actually looks like."

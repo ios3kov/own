@@ -276,7 +276,6 @@ describe('AppNavigator', () => {
     });
 
     it('renders all tabs with large bottom inset (regression test for nav bar overlap)', () => {
-      // This is the key regression test: with a 48dp bottom inset (3-button Android nav),
       // all tabs should still be visible and not clipped by the system navigation bar
       mockInsets.bottom = 48;
       const { getAllByText, getByTestId } = renderAppNavigator();

@@ -10,22 +10,22 @@
  */
 
 import React from 'react';
-import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { render,fireEvent,waitFor,act } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAppStore } from '../../../src/stores/appStore';
 import { resetStores } from '../../utils/testHelpers';
+import {
+createDownloadedModel,
+createONNXImageModel,
+createModelInfo,
+createModelFile,
+createModelFileWithMmProj,
+createDeviceInfo,
+} from '../../utils/factories';
 
 // Mirror constants from ModelsScreen so test assertions stay in sync with the source
 const VISION_PIPELINE_TAG = 'image-text-to-text';
 const CODE_FALLBACK_QUERY = 'coder';
-import {
-  createDownloadedModel,
-  createONNXImageModel,
-  createModelInfo,
-  createModelFile,
-  createModelFileWithMmProj,
-  createDeviceInfo,
-} from '../../utils/factories';
 
 // Mock navigation
 const mockNavigate = jest.fn();
@@ -90,7 +90,7 @@ jest.mock('../../../src/services/hardware', () => ({
       usedMemory: 4 * 1024 * 1024 * 1024,
       availableMemory: 4 * 1024 * 1024 * 1024,
       deviceModel: 'Test Device',
-      systemName: 'Android',
+      systemName: 'iOS',
       systemVersion: '13',
       isEmulator: false,
     })),
@@ -108,7 +108,7 @@ jest.mock('../../../src/services/hardware', () => ({
       warning: undefined,
     })),
     getImageModelRecommendation: jest.fn(() => Promise.resolve({
-      recommendedBackend: 'mnn',
+      recommendedBackend: 'coreml',
       maxModelSizeMB: 2048,
       canRunSD: true,
       canRunQNN: false,
@@ -117,11 +117,7 @@ jest.mock('../../../src/services/hardware', () => ({
 }));
 
 const mockFetchAvailableModels = jest.fn();
-jest.mock('../../../src/services/huggingFaceModelBrowser', () => ({
-  fetchAvailableModels: (...args: any[]) => mockFetchAvailableModels(...args),
-  getVariantLabel: jest.fn(() => 'Standard'),
-  guessStyle: jest.fn(() => 'creative'),
-}));
+
 
 jest.mock('../../../src/services/coreMLModelBrowser', () => ({
   fetchAvailableCoreMLModels: jest.fn(() => Promise.resolve([])),
@@ -1231,10 +1227,10 @@ describe('ModelsScreen', () => {
           name: 'sd-model',
           displayName: 'Test SD Model',
           size: 500000000,
-          backend: 'mnn' as const,
+          backend: 'coreml' as const,
           variant: 'standard',
           downloadUrl: 'https://example.com/model.zip',
-          fileName: 'model.mnn',
+          fileName: 'weights.bin',
           repo: 'test/sd-model',
         },
       ];
@@ -2264,7 +2260,7 @@ describe('ModelsScreen', () => {
         id: 'sd-model-1',
         name: 'sd-model-1',
         displayName: 'Stable Diffusion V1',
-        backend: 'mnn',
+        backend: 'coreml',
         fileName: 'sd1.zip',
         downloadUrl: 'https://example.com/sd1.zip',
         size: 1000000000,
@@ -2274,21 +2270,21 @@ describe('ModelsScreen', () => {
         id: 'anime-model',
         name: 'anime-model',
         displayName: 'Anime Generator',
-        backend: 'mnn',
+        backend: 'coreml',
         fileName: 'anime.zip',
         downloadUrl: 'https://example.com/anime.zip',
         size: 1000000000,
         repo: 'test/anime',
       },
       {
-        id: 'qnn-model',
-        name: 'qnn-model',
+        id: 'coreml-model',
+        name: 'coreml-model',
         displayName: 'QNN Fast Model',
-        backend: 'qnn',
-        fileName: 'qnn.zip',
-        downloadUrl: 'https://example.com/qnn.zip',
+        backend: 'coreml',
+        fileName: 'coreml.zip',
+        downloadUrl: 'https://example.com/coreml.zip',
         size: 500000000,
-        repo: 'test/qnn',
+        repo: 'test/coreml',
       },
     ];
 
@@ -2430,48 +2426,20 @@ describe('ModelsScreen', () => {
   // recommended toggle and backend filter behaviour
   // ============================================================================
   describe('image model recommended toggle and backend filter', () => {
-    const mnnModel = {
+    const coreMLModel = {
       id: 'cpu-model',
       name: 'cpu-model',
       displayName: 'GPU Model',
-      backend: 'mnn' as const,
+      backend: 'coreml' as const,
       fileName: 'cpu.zip',
       downloadUrl: 'https://example.com/cpu.zip',
       size: 500000000,
       repo: 'test/cpu-model',
     };
-    const qnnModel = {
-      id: 'npu-model',
-      name: 'npu-model',
-      displayName: 'NPU Model',
-      backend: 'qnn' as const,
-      fileName: 'npu.zip',
-      downloadUrl: 'https://example.com/npu.zip',
-      size: 500000000,
-      repo: 'test/npu-model',
-    };
 
-    it('hides qnn model when showRecommendedOnly is on and recommendedBackend is mnn', async () => {
-      mockFetchAvailableModels.mockResolvedValue([mnnModel, qnnModel]);
-
-      const { queryByText, getByText } = renderModelsScreen();
-
-      await act(async () => {
-        fireEvent.press(getByText('Image Models'));
-      });
-
-      // Allow async state (imageRec + models) to fully settle
-      await act(async () => {
-        await new Promise<void>(resolve => setTimeout(resolve, 100));
-      });
-
-      // GPU Model (mnn) matches recommendedBackend='mnn' → visible
-      // NPU Model (qnn) does not match → filtered out by showRecommendedOnly
-      expect(queryByText('NPU Model')).toBeNull();
-    });
 
     it('dismisses first-time hint when rec-toggle is pressed', async () => {
-      mockFetchAvailableModels.mockResolvedValue([mnnModel]);
+      mockFetchAvailableModels.mockResolvedValue([coreMLModel]);
 
       const { getByText, getByTestId, queryByText } = renderModelsScreen();
 

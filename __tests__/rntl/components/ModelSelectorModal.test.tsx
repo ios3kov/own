@@ -20,7 +20,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { render,fireEvent,act } from '@testing-library/react-native';
 import { ModelSelectorModal } from '../../../src/components/ModelSelectorModal';
 
 jest.mock('../../../src/components/AppSheet', () => ({
@@ -565,7 +565,7 @@ describe('ModelSelectorModal', () => {
             modelPath: '/path/recovered',
             size: 100000000,
             downloadedAt: new Date().toISOString(),
-            backend: 'mnn',
+            backend: 'coreml',
           },
           {
             id: 'img-model1',
@@ -574,7 +574,7 @@ describe('ModelSelectorModal', () => {
             modelPath: '/path/sd',
             size: 2000000000,
             downloadedAt: new Date().toISOString(),
-            backend: 'mnn',
+            backend: 'coreml',
           },
         ],
         activeImageModelId: null,

@@ -35,7 +35,7 @@ jest.mock('../../../src/stores', () => ({
     const state = {
       deviceInfo: {
         deviceModel: 'Pixel 7',
-        systemName: 'Android',
+        systemName: 'iOS',
         systemVersion: '14',
         isEmulator: false,
       },
@@ -93,7 +93,7 @@ describe('DeviceInfoScreen', () => {
 
   it('shows system info', () => {
     const { getByText } = render(<DeviceInfoScreen />);
-    expect(getByText('Android 14')).toBeTruthy();
+    expect(getByText('iOS 14')).toBeTruthy();
   });
 
   it('shows RAM', () => {

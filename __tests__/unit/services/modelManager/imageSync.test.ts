@@ -156,7 +156,7 @@ describe('syncCompletedImageDownloads', () => {
           imageModelDescription: 'A model',
           imageModelSize: 500,
           imageModelStyle: 'realistic',
-          imageModelBackend: 'mnn',
+          imageModelBackend: 'coreml',
         },
       },
     });
@@ -182,15 +182,17 @@ describe('syncCompletedImageDownloads', () => {
           imageModelName: 'Model Two',
           imageModelDescription: 'A zip model',
           imageModelSize: 1000,
-          imageModelBackend: 'mnn',
+          imageModelBackend: 'coreml',
         },
       },
     });
+    mockResolveCoreMLModelDir.mockResolvedValueOnce('/models/images/model2/coreml');
     const result = await syncCompletedImageDownloads(opts);
     expect(mockMoveCompletedDownload).toHaveBeenCalledWith(2, '/models/images/model2.zip');
     expect(mockUnzip).toHaveBeenCalledWith('/models/images/model2.zip', '/models/images/model2');
     expect(mockUnlink).toHaveBeenCalledWith('/models/images/model2.zip');
-    expect(result[0].modelPath).toBe('/models/images/model2');
+    expect(mockResolveCoreMLModelDir).toHaveBeenCalledWith('/models/images/model2');
+    expect(result[0].modelPath).toBe('/models/images/model2/coreml');
   });
 
   it('uses resolveCoreMLModelDir for coreml zip download', async () => {
@@ -265,7 +267,7 @@ describe('syncCompletedImageDownloads', () => {
           modelId: 'image:unnamed-model',
           imageDownloadType: 'multifile',
           imageModelSize: 200,
-          imageModelBackend: 'mnn',
+          imageModelBackend: 'coreml',
         },
       },
     });
@@ -286,7 +288,7 @@ describe('syncCompletedImageDownloads', () => {
           imageDownloadType: 'zip',
           fileName: 'broken.zip',
           imageModelName: 'Broken',
-          imageModelBackend: 'mnn',
+          imageModelBackend: 'coreml',
           imageModelSize: 100,
         },
       },
@@ -308,7 +310,7 @@ describe('syncCompletedImageDownloads', () => {
           imageDownloadType: 'zip',
           fileName: 'model8.zip',
           imageModelName: 'Model 8',
-          imageModelBackend: 'mnn',
+          imageModelBackend: 'coreml',
           imageModelSize: 100,
         },
       },

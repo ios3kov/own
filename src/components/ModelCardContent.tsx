@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View,Text,TouchableOpacity,ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
-import { useThemedStyles, useTheme } from '../theme';
+import { useThemedStyles,useTheme } from '../theme';
 import type { ThemeColors } from '../theme';
 import { createStyles } from './ModelCard.styles';
 import { huggingFaceService } from '../services/huggingface';
@@ -282,7 +282,7 @@ export const ModelInfoBadges: React.FC<ModelInfoBadgesProps> = ({
       )}
       {/* Label chip renders for any non-empty quantization string — llama quants
           (Q4_K_M etc.) get the green "recommended" highlight via quantInfo, and
-          non-table values (e.g. "LiteRT" for the curated LiteRT entries) still
+          other non-table values still
           render as a plain label instead of disappearing. */}
       {!!quantization && (
         <View style={[styles.infoBadge, quantInfo?.recommended && styles.recommendedBadge]}>

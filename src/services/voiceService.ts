@@ -1,10 +1,10 @@
-import Voice, {
-  SpeechResultsEvent,
-  SpeechErrorEvent,
-  SpeechStartEvent,
-  SpeechEndEvent,
+import Voice,{
+SpeechResultsEvent,
+SpeechErrorEvent,
+SpeechStartEvent,
+SpeechEndEvent,
 } from '@react-native-voice/voice';
-import { NativeModules, Platform, PermissionsAndroid } from 'react-native';
+import { NativeModules } from 'react-native';
 import logger from '../utils/logger';
 import { useAppStore } from '../stores/appStore';
 
@@ -59,23 +59,7 @@ class VoiceService {
   }
 
   async requestPermissions(): Promise<boolean> {
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          {
-            title: 'Microphone Permission',
-            message: 'This app needs access to your microphone for voice input.',
-            buttonPositive: 'OK',
-            buttonNegative: 'Cancel',
-          }
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-      } catch (error) {
-        logger.error('Failed to request microphone permission:', error);
-        return false;
-      }
-    }
+    ;
     // iOS handles permissions through Info.plist
     return true;
   }
@@ -111,7 +95,7 @@ class VoiceService {
 
   async startListening(): Promise<void> {
     try {
-      if (Platform.OS === 'ios') {
+      {
         if (useAppStore.getState().settings.allowAppleSpeech !== true) {
           throw new Error('Apple speech is disabled. Enable it in Voice settings.');
         }
@@ -126,7 +110,7 @@ class VoiceService {
       }
       const available = await this.initialize();
       if (!available) throw new Error('Speech recognition is unavailable.');
-      if (Platform.OS === 'ios' && useAppStore.getState().settings.allowAppleSpeech !== true) {
+      if ((useAppStore.getState().settings.allowAppleSpeech !== true)) {
         await NativeModules.Voice.setCloudRecognitionAllowed(false);
         throw new Error('Apple speech is disabled.');
       }
@@ -178,7 +162,7 @@ export const voiceService = new VoiceService();
 
 // Revoke the native capability even if the settings screen changes during recording.
 useAppStore.subscribe((state, previous) => {
-  if (Platform.OS === 'ios' && previous.settings.allowAppleSpeech && !state.settings.allowAppleSpeech) {
+  if ((previous.settings.allowAppleSpeech) && !state.settings.allowAppleSpeech) {
     NativeModules.Voice?.setCloudRecognitionAllowed?.(false).catch(() => {
       // Native start still defaults closed; stop the existing session as fallback.
       void voiceService.cancelListening();

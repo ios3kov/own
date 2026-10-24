@@ -1,16 +1,16 @@
 /* eslint-disable max-lines */
 import RNFS from 'react-native-fs';
-import { ModelFile, BackgroundDownloadInfo } from '../../types';
+import { ModelFile,BackgroundDownloadInfo } from '../../types';
 import { huggingFaceService } from '../huggingface';
 import { backgroundDownloadService } from '../backgroundDownloadService';
 import {
-  DownloadProgressCallback,
-  DownloadCompleteCallback,
-  DownloadErrorCallback,
-  BackgroundDownloadMetadataCallback,
-  BackgroundDownloadContext,
+DownloadProgressCallback,
+DownloadCompleteCallback,
+DownloadErrorCallback,
+BackgroundDownloadMetadataCallback,
+BackgroundDownloadContext,
 } from './types';
-import { buildDownloadedModel, persistDownloadedModel, loadDownloadedModels, saveModelsList } from './storage';
+import { buildDownloadedModel,persistDownloadedModel,loadDownloadedModels,saveModelsList } from './storage';
 import logger from '../../utils/logger';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { makeModelKey } from '../../utils/modelKey';
@@ -259,7 +259,6 @@ async function startBgDownload(opts: StartBgDownloadOpts): Promise<BackgroundDow
     }
     lastCombinedMilestone = maybeLogMilestone('combined', combinedDownloaded, combinedTotalBytes, lastCombinedMilestone);
 
-    // Update Android notification with combined progress for vision models
     if (needsMmProj && mmProjDownloadId) {
       try {
         const { DownloadManagerModule } = require('react-native').NativeModules as {
@@ -485,7 +484,7 @@ export function watchBackgroundDownload(opts: WatchDownloadOpts): void {
         finalPath,
         finalMmProjPath,
         savedEngine: model.engine,
-        savedLiteRTVision: model.engine === 'litert' ? model.liteRTVision : undefined,
+
       });
       backgroundDownloadMetadataCallback?.(downloadId, null);
       onComplete?.(model);

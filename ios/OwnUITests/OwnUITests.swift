@@ -19,6 +19,47 @@ final class OwnUITests: XCTestCase {
     screenshot.lifetime = .keepAlways
     add(screenshot)
   }
+  func testSavedDocumentSourcePreview() throws {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    app.launch()
+    let title = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Own QA document sources")).firstMatch
+    guard title.waitForExistence(timeout: 10) else {
+      throw XCTSkip("Requires scripts/qa/document-fixture.py synthetic simulator data")
+    }
+    title.tap()
+    let source = app.buttons["Own QA notes.txt, part 1"]
+    XCTAssertTrue(source.waitForExistence(timeout: 10))
+    source.tap()
+    XCTAssertTrue(app.staticTexts["Saved excerpt · Part 1"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["Own QA source: the meeting starts at 14:30 in room Cedar. This is synthetic test data."].exists)
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Own saved document source"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
+    app.buttons["Open original document"].tap()
+    let close = app.buttons["QLOverlayDoneButtonAccessibilityIdentifier"]
+    XCTAssertTrue(close.waitForExistence(timeout: 10))
+    let original = app.textViews.matching(NSPredicate(format: "label CONTAINS %@", "Own QA source: the meeting starts at 14:30")).firstMatch
+    XCTAssertTrue(original.waitForExistence(timeout: 10))
+    let originalScreenshot = XCTAttachment(screenshot: app.screenshot())
+    originalScreenshot.name = "Own original document after sandbox move"
+    originalScreenshot.lifetime = .keepAlways
+    add(originalScreenshot)
+    close.tap()
+  }
+  func testForegroundRemovesPrivacyCover() {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    app.launch()
+    let skip = app.descendants(matching: .any)["onboarding-skip"]
+    if skip.waitForExistence(timeout: 3) { skip.tap() }
+    XCTAssertTrue(app.descendants(matching: .any)["settings-tab"].firstMatch.waitForExistence(timeout: 15))
+    XCUIDevice.shared.press(.home)
+    app.activate()
+    XCTAssertTrue(app.descendants(matching: .any)["settings-tab"].firstMatch.waitForExistence(timeout: 15))
+    XCTAssertFalse(app.descendants(matching: .any)["own-privacy-cover"].exists)
+  }
   func testSpokenReplyPreferenceAndVoiceScreen() {
     continueAfterFailure = false
     let app = XCUIApplication()
@@ -113,6 +154,49 @@ final class OwnUITests: XCTestCase {
     XCTAssertTrue(app.staticTexts["Maximum response tokens · 256"].waitForExistence(timeout: 5))
     XCTAssertFalse(app.staticTexts["CPU Threads"].exists)
     tap(app.buttons["Remove QA settings"], towardBottom: false)
+  }
+  func testLocalLlamaReplyAndContext() throws {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    app.launch()
+    let skip = app.descendants(matching: .any)["onboarding-skip"]
+    if skip.waitForExistence(timeout: 3) { skip.tap() }
+    let card = app.buttons["text-model-picker"]
+    guard card.waitForExistence(timeout: 10) else {
+      throw XCTSkip("Requires local-model-fixture.py and Apple default on the dedicated QA simulator")
+    }
+    card.tap()
+    print(app.debugDescription)
+    let model = app.descendants(matching: .any).matching(NSPredicate(format: "identifier == %@ AND label BEGINSWITH %@", "model-item", "Own QA local model")).firstMatch
+    guard model.waitForExistence(timeout: 10) else {
+      throw XCTSkip("Requires the hash-checked synthetic local model fixture")
+    }
+    model.tap()
+    let selected = app.buttons["Use Apple model"]
+    XCTAssertTrue(selected.waitForExistence(timeout: 90), "Local model selection must finish before opening chat")
+    let newChat = app.buttons["new-chat-button"]
+    let ready = NSPredicate { _, _ in newChat.exists && newChat.isHittable }
+    expectation(for: ready, evaluatedWith: app)
+    waitForExpectations(timeout: 30)
+    newChat.tap()
+    let input = app.textViews["chat-input"]
+    XCTAssertTrue(input.waitForExistence(timeout: 10))
+    input.tap()
+    input.typeText("Once upon a time")
+    app.descendants(matching: .any)["send-button"].tap()
+    let measured = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Latest request: about ")).firstMatch
+    XCTAssertTrue(measured.waitForExistence(timeout: 60), "Real tokenizer context must be measured")
+    let stop = app.descendants(matching: .any)["stop-button"]
+    let finished = NSPredicate { _, _ in !stop.exists }
+    expectation(for: finished, evaluatedWith: app)
+    waitForExpectations(timeout: 60)
+    let reply = app.descendants(matching: .any)["assistant-message"].firstMatch
+    XCTAssertTrue(reply.waitForExistence(timeout: 5))
+    print(app.debugDescription)
+    let screenshot = XCTAttachment(screenshot: app.screenshot())
+    screenshot.name = "Own actual local Llama reply and context"
+    screenshot.lifetime = .keepAlways
+    add(screenshot)
   }
   func testLocalAppleReplyThroughChat() throws {
     continueAfterFailure = false

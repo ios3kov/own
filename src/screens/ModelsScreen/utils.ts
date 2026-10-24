@@ -1,7 +1,7 @@
 import RNFS from 'react-native-fs';
-import { guessStyle, HFImageModel } from '../../services/huggingFaceModelBrowser';
-import { ModelInfo, ImageModelRecommendation, SoCInfo } from '../../types';
-import { ImageModelDescriptor, ModelTypeFilter } from './types';
+import { guessStyle,CoreMLImageModel as HFImageModel } from '../../services/coreMLModelBrowser';
+import { ModelInfo,ImageModelRecommendation,SoCInfo } from '../../types';
+import { ImageModelDescriptor,ModelTypeFilter } from './types';
 
 export function formatNumber(num: number): string {
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
@@ -104,58 +104,18 @@ export function matchesSdVersionFilter(modelName: string, sdVersionFilter: strin
 export function getImageModelCompatibility(
   model: HFImageModel,
   imageRec: ImageModelRecommendation | null,
-  socInfo?: SoCInfo | null,
+  _socInfo?: SoCInfo | null,
 ): { isCompatible: boolean; incompatibleReason: string | undefined } {
-  const backendCompatible =
-    !imageRec?.compatibleBackends ||
-    imageRec.compatibleBackends.includes(model.backend as any);
-
-  const variantCompatible =
-    !model.variant ||
-    !imageRec?.qnnVariant ||
-    model.variant === imageRec.qnnVariant ||
-    imageRec.qnnVariant === '8gen2' ||
-    (imageRec.qnnVariant === '8gen1' && model.variant !== '8gen2');
-
-  const isCompatible = backendCompatible && variantCompatible;
-
-  let incompatibleReason: string | undefined;
-  if (!backendCompatible) {
-    if (socInfo?.vendor === 'qualcomm' && !socInfo.hasNPU) {
-      incompatibleReason = 'Requires newer Snapdragon';
-    } else {
-      incompatibleReason = 'Requires Snapdragon 888+';
-    }
-  } else if (!variantCompatible) {
-    let variantName = model.variant;
-    if (model.variant === '8gen2') variantName = 'Snapdragon 8 Gen 2+';
-    else if (model.variant === 'min') variantName = 'non-flagship Snapdragon';
-    incompatibleReason = `Requires ${variantName}`;
-  }
-
-  return { isCompatible, incompatibleReason };
+  const isCompatible = !imageRec?.compatibleBackends || imageRec.compatibleBackends.includes(model.backend);
+  return {isCompatible, incompatibleReason:isCompatible ? undefined : 'This model requires Core ML support.'};
 }
 
 // -- HF model → descriptor conversion --
 
-export function hfModelToDescriptor(
-  hfModel: HFImageModel & { _coreml?: boolean; _coremlFiles?: any[]; _coremlAttentionVariant?: 'split_einsum' | 'original' },
-): ImageModelDescriptor {
+export function hfModelToDescriptor(hfModel: HFImageModel): ImageModelDescriptor {
   return {
-    id: hfModel.id,
-    name: hfModel.displayName,
-    description: (() => {
-      if (hfModel._coreml) return `Core ML model from ${hfModel.repo}`;
-      const backendLabel = hfModel.backend === 'qnn' ? 'NPU' : 'GPU';
-      return `${backendLabel} model from ${hfModel.repo}`;
-    })(),
-    downloadUrl: hfModel.downloadUrl,
-    size: hfModel.size,
-    style: guessStyle(hfModel.name),
-    backend: hfModel._coreml ? 'coreml' : hfModel.backend,
-    variant: hfModel.variant,
-    coremlFiles: hfModel._coremlFiles,
-    repo: hfModel.repo,
-    attentionVariant: hfModel._coremlAttentionVariant,
+    id:hfModel.id, name:hfModel.displayName, description:`Core ML model from ${hfModel.repo}`,
+    downloadUrl:hfModel.downloadUrl, size:hfModel.size, style:guessStyle(hfModel.name),
+    backend:'coreml', coremlFiles:hfModel.files, repo:hfModel.repo, attentionVariant:hfModel.attentionVariant,
   };
 }

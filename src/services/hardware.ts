@@ -1,32 +1,21 @@
-import { Platform, NativeModules } from 'react-native';
+import logger from '../utils/logger';
 import DeviceInfo from 'react-native-device-info';
-import RNFS from 'react-native-fs';
-// Access NativeModules.LocalDreamModule dynamically (not destructured)
+// Access NativeModules.CoreMLDiffusionModule dynamically (not destructured)
 // so it can be mocked in tests after module import.
-const getLocalDreamModule = () => NativeModules.LocalDreamModule;
+
 import {
-  DeviceInfo as DeviceInfoType,
-  ModelRecommendation,
-  SoCInfo,
-  SoCVendor,
-  ImageModelRecommendation,
+DeviceInfo as DeviceInfoType,
+ModelRecommendation,
+SoCInfo,ImageModelRecommendation
 } from '../types';
-import { MODEL_RECOMMENDATIONS, RECOMMENDED_MODELS } from '../constants';
-/**
- * QNN variant tiers — mirrors local-dream's chipsetModelSuffixes map exactly.
- * Source: https://github.com/xororz/local-dream — Model.kt getChipsetSuffix()
- *
- * - 8gen2: SM8550, SM8650, SM8735, SM8750, SM8845, SM8850
- * - 8gen1: SM8450, SM8475
- * - min:   any other SM-prefixed chip (fallback, same as local-dream)
- */
-const FLAGSHIP_8GEN2 = new Set([8550, 8650, 8735, 8750, 8845, 8850]);
-const FLAGSHIP_8GEN1 = new Set([8450, 8475]);
+import { MODEL_RECOMMENDATIONS,RECOMMENDED_MODELS } from '../constants';
+
+
 class HardwareService {
   private cachedDeviceInfo: DeviceInfoType | null = null;
   private cachedSoCInfo: SoCInfo | null = null;
   private cachedImageRecommendation: ImageModelRecommendation | null = null;
-  private cachedOpenCLCapability: { supported: boolean; reason?: string } | null = null;
+
   async getDeviceInfo(): Promise<DeviceInfoType> {
     if (this.cachedDeviceInfo) {
       return this.cachedDeviceInfo;
@@ -99,7 +88,7 @@ class HardwareService {
           }
         })
         .catch(error =>
-          console.warn('Failed to fetch total memory in background:', error),
+          logger.warn('Failed to fetch total memory in background:', error),
         );
       return 4; // Safe default until cache is populated
     }
@@ -116,7 +105,7 @@ class HardwareService {
           }
         })
         .catch(error =>
-          console.warn(
+          logger.warn(
             'Failed to fetch available memory in background:',
             error,
           ),
@@ -208,61 +197,13 @@ class HardwareService {
   }
   async getSoCInfo(): Promise<SoCInfo> {
     if (this.cachedSoCInfo) return this.cachedSoCInfo;
-    if (Platform.OS === 'ios') {
-      const ramGB = this.getTotalMemoryGB();
-      const appleChip =
-        this.detectAppleChip(DeviceInfo.getDeviceId()) ??
-        (ramGB >= 6 ? 'A15' : 'A14');
-      this.cachedSoCInfo = { vendor: 'apple', hasNPU: true, appleChip };
-      return this.cachedSoCInfo;
-    }
-    const hardware = await DeviceInfo.getHardware();
-    const model = DeviceInfo.getModel();
-    const hw = hardware.toLowerCase();
-    let vendor: SoCVendor = 'unknown';
-    if (hw.includes('qcom')) vendor = 'qualcomm';
-    else if (model.startsWith('Pixel')) vendor = 'tensor';
-    else if (hw.includes('mt') || hw.includes('mediatek')) vendor = 'mediatek';
-    else if (hw.includes('exynos') || hw.includes('samsungexynos'))
-      vendor = 'exynos';
-    const qnnVariant =
-      vendor === 'qualcomm' ? await this.getQnnVariantFromSoC() : undefined;
-    this.cachedSoCInfo = {
-      vendor,
-      hasNPU: vendor === 'qualcomm' && !!qnnVariant,
-      qnnVariant,
-    };
+    const ramGB = this.getTotalMemoryGB();
+    const appleChip = this.detectAppleChip(DeviceInfo.getDeviceId()) ?? (ramGB >= 6 ? 'A15' : 'A14');
+    this.cachedSoCInfo = {vendor:'apple', hasNPU:true, appleChip};
     return this.cachedSoCInfo;
   }
-  private async getQnnVariantFromSoC(): Promise<
-    '8gen2' | '8gen1' | 'min' | undefined
-  > {
-    const socModel = await this.fetchSoCModel();
-    if (!socModel) return undefined;
-    return this.classifySmNumber(socModel);
-  }
-  private async fetchSoCModel(): Promise<string> {
-    try {
-      const localDream = getLocalDreamModule();
-      if (localDream?.getSoCModel) return await localDream.getSoCModel();
-    } catch {
-      /* native module unavailable */
-    }
-    return '';
-  }
-  private classifySmNumber(
-    socModel: string,
-  ): '8gen2' | '8gen1' | 'min' | undefined {
-    const base = socModel.split('-')[0].toUpperCase();
-    // Must start with SM — matches local-dream's getChipsetSuffix fallback
-    if (!base.startsWith('SM')) return undefined;
-    const smMatch = /^SM(\d+)/.exec(base);
-    if (!smMatch) return undefined;
-    const num = Number.parseInt(smMatch[1], 10);
-    if (FLAGSHIP_8GEN2.has(num)) return '8gen2';
-    if (FLAGSHIP_8GEN1.has(num)) return '8gen1';
-    return 'min';
-  }
+
+
   private getIosImageRec(chip: SoCInfo['appleChip'], ramGB: number): ImageModelRecommendation {
     const coreml = 'coreml';
     if ((chip === 'A17Pro' || chip === 'A18') && ramGB >= 6)
@@ -273,41 +214,14 @@ class HardwareService {
       return { recommendedBackend: coreml, recommendedModels: ['low ram'], bannerText: 'Low RAM models recommended for your device', compatibleBackends: [coreml] };
     return { recommendedBackend: coreml, recommendedModels: ['v1-5-palettized', '2-1-base-palettized'], bannerText: 'SD 1.5 or SD 2.1 Palettized recommended for your device', compatibleBackends: [coreml] };
   }
-  private getQualcommImageRec(socInfo: SoCInfo): ImageModelRecommendation {
-    let label: string;
-    if (socInfo.qnnVariant === '8gen2') label = 'flagship';
-    else if (socInfo.qnnVariant === '8gen1') label = '';
-    else label = 'lightweight ';
 
-    let suffix: string;
-    if (socInfo.qnnVariant === '8gen2') suffix = 'NPU models for fastest inference';
-    else if (socInfo.qnnVariant === '8gen1') suffix = 'NPU models supported';
-    else suffix = 'lightweight NPU models recommended';
-    return { recommendedBackend: 'qnn', qnnVariant: socInfo.qnnVariant, bannerText: `Snapdragon ${label}\u2014 ${suffix}`, compatibleBackends: ['qnn', 'mnn'] };
-  }
   async getImageModelRecommendation(): Promise<ImageModelRecommendation> {
     if (this.cachedImageRecommendation) return this.cachedImageRecommendation;
     const socInfo = await this.getSoCInfo();
     const ramGB = this.getTotalMemoryGB();
     let rec: ImageModelRecommendation;
-    if (Platform.OS === 'ios') {
+    {
       rec = this.getIosImageRec(socInfo.appleChip, ramGB);
-    } else if (socInfo.vendor === 'qualcomm' && socInfo.hasNPU) {
-      rec = this.getQualcommImageRec(socInfo);
-    } else if (socInfo.vendor === 'qualcomm') {
-      rec = {
-        recommendedBackend: 'mnn',
-        bannerText:
-          'GPU models recommended \u2014 your Snapdragon doesn\u2019t support NPU acceleration',
-        compatibleBackends: ['mnn'],
-      };
-    } else {
-      rec = {
-        recommendedBackend: 'mnn',
-        bannerText:
-          'GPU models recommended \u2014 NPU requires Snapdragon 888+',
-        compatibleBackends: ['mnn'],
-      };
     }
     if (ramGB < 4) {
       rec.warning = 'Low RAM \u2014 expect slower performance';
@@ -322,29 +236,11 @@ class HardwareService {
     if (ramGB < 8) return 'high';
     return 'flagship';
   }
-  async getCpuCoreCount(): Promise<number> {
-    if (Platform.OS !== 'android') return 4;
-    try {
-      const cpuinfo = await RNFS.readFile('/proc/cpuinfo', 'utf8');
-      const matches = cpuinfo.match(/^processor\s*:/gm);
-      return matches ? matches.length : 4;
-    } catch { return 4; }
-  }
+  async getCpuCoreCount(): Promise<number> { return 4; }
   async getRecommendedThreadCount(): Promise<number> {
     const cores = await this.getCpuCoreCount();
     return cores <= 4 ? cores : Math.floor(cores * 0.8);
   }
-  async getOpenCLCapability(): Promise<{ supported: boolean; reason?: string }> {
-    if (this.cachedOpenCLCapability) return this.cachedOpenCLCapability;
-    if (Platform.OS !== 'android') return { supported: false, reason: 'not_android' };
-    try {
-      const hardware = (await DeviceInfo.getHardware()).toLowerCase();
-      // Support Qualcomm Adreno (qcom) and ARM Mali GPUs.
-      // Avoid 'arm' alone — it matches the CPU architecture string (arm64-v8a), not the GPU vendor.
-      const hasCompatibleGpu = hardware.includes('qcom') || hardware.includes('mali');
-      if (!hasCompatibleGpu) return (this.cachedOpenCLCapability = { supported: false, reason: 'no_compatible_gpu' });
-      return (this.cachedOpenCLCapability = { supported: true });
-    } catch { return (this.cachedOpenCLCapability = { supported: false, reason: 'detection_failed' }); }
-  }
+
 }
 export const hardwareService = new HardwareService();

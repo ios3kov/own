@@ -1,5 +1,5 @@
 import React from 'react';
-import { type StyleProp, type ViewStyle } from 'react-native';
+import { type StyleProp,type ViewStyle } from 'react-native';
 import { AnimatedEntry } from './AnimatedEntry';
 import { AnimatedPressable } from './AnimatedPressable';
 import { type HapticType } from '../utils/haptics';
@@ -55,6 +55,7 @@ export function AnimatedListItem({
         scaleValue={scaleValue}
         style={style}
         onPress={onPress}
+        accessibilityRole={onPress ? 'button' : undefined}
         onLongPress={onLongPress}
         disabled={disabled}
         testID={testID}

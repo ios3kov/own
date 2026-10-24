@@ -1,21 +1,20 @@
-import { requestDownloadConsent, type ModelDownloadPlan } from '../../services/downloadConsent';
+import { requestDownloadConsent,type ModelDownloadPlan } from '../../services/downloadConsent';
 /**
  * Standalone async image download handlers - no hooks.
  * All download state flows through useDownloadStore via the stable
  * image:<id> modelKey. The store is the single source of truth.
  */
-import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
-import { showAlert, AlertState } from '../../components/CustomAlert';
-import { modelManager, hardwareService, backgroundDownloadService } from '../../services';
-import { resolveCoreMLModelDir, downloadCoreMLTokenizerFiles } from '../../utils/coreMLModelUtils';
+import { showAlert,AlertState } from '../../components/CustomAlert';
+import { modelManager,backgroundDownloadService } from '../../services';
+import { resolveCoreMLModelDir,downloadCoreMLTokenizerFiles } from '../../utils/coreMLModelUtils';
 import { getUserFacingDownloadMessage } from '../../utils/downloadErrors';
 import { ONNXImageModel } from '../../types';
-import { useDownloadStore, isActiveStatus } from '../../stores/downloadStore';
+import { useDownloadStore,isActiveStatus } from '../../stores/downloadStore';
 import { makeImageModelKey } from '../../utils/modelKey';
 import { ImageModelDescriptor } from './types';
-import { getQnnWarningMessage, showQnnWarningAlert } from './imageDownloadQnn';
+
 import logger from '../../utils/logger';
 
 export interface ImageDownloadDeps {
@@ -33,7 +32,7 @@ interface ImageMetadata {
   imageModelDescription: string;
   imageModelSize: number;
   imageModelStyle?: string;
-  imageModelBackend?: 'mnn' | 'qnn' | 'coreml';
+  imageModelBackend?: 'coreml';
   imageModelRepo?: string;
   imageModelAttentionVariant?: string;
   imageModelDownloadUrl?: string;
@@ -472,20 +471,5 @@ export async function handleDownloadImageModel(
   modelInfo: ImageModelDescriptor,
   deps: ImageDownloadDeps,
 ): Promise<void> {
-  if (modelInfo.backend === 'qnn' && Platform.OS === 'android') {
-    const socInfo = await hardwareService.getSoCInfo();
-    const warningMessage = getQnnWarningMessage(modelInfo, socInfo);
-    if (warningMessage) {
-      showQnnWarningAlert({
-        warningMessage,
-        hasNPU: socInfo.hasNPU,
-        modelInfo,
-        onDownloadAnyway: () => {
-          proceedWithDownload(modelInfo, deps).catch(() => {});
-        },
-      }, deps);
-      return;
-    }
-  }
   await proceedWithDownload(modelInfo, deps);
 }

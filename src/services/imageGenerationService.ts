@@ -1,12 +1,12 @@
 /** ImageGenerationService - Handles image generation independently of UI lifecycle */
-import { localDreamGeneratorService as onnxImageGeneratorService } from './localDreamGenerator';
+import { coreMLImageGeneratorService } from './coreMLImageGenerator';
 import { activeModelService } from './activeModelService';
 import { llmService } from './llm';
-import { useAppStore, useChatStore } from '../stores';
+import { useAppStore,useChatStore } from '../stores';
 import { GeneratedImage } from '../types';
 import logger from '../utils/logger';
-import { shouldShowSharePrompt, emitSharePrompt } from '../utils/sharePrompt';
-import { buildEnhancementMessages, getConversationContext, cleanEnhancedPrompt, buildImageGenMeta } from './imageGenerationHelpers';
+import { shouldShowSharePrompt,emitSharePrompt } from '../utils/sharePrompt';
+import { buildEnhancementMessages,getConversationContext,cleanEnhancedPrompt,buildImageGenMeta } from './imageGenerationHelpers';
 
 const SHARE_PROMPT_DELAY_MS = 2000;
 
@@ -48,8 +48,7 @@ interface RunGenerationOptions {
   guidanceScale: number;
   imageWidth: number;
   imageHeight: number;
-  useOpenCL: boolean;
-}
+  }
 
 interface UpdateEnhancementOptions {
   conversationId: string | undefined;
@@ -178,9 +177,9 @@ class ImageGenerationService {
   }
 
   private async _ensureImageModelLoaded(activeImageModelId: string | null, activeImageModel: ActiveImageModel, desiredThreads: number): Promise<boolean> {
-    const isImageModelLoaded = await onnxImageGeneratorService.isModelLoaded();
-    const loadedPath = await onnxImageGeneratorService.getLoadedModelPath();
-    const loadedThreads = onnxImageGeneratorService.getLoadedThreads();
+    const isImageModelLoaded = await coreMLImageGeneratorService.isModelLoaded();
+    const loadedPath = await coreMLImageGeneratorService.getLoadedModelPath();
+    const loadedThreads = coreMLImageGeneratorService.getLoadedThreads();
     const needsThreadReload = loadedThreads == null || loadedThreads !== desiredThreads;
     if (isImageModelLoaded && loadedPath === activeImageModel.modelPath && !needsThreadReload) return true;
     if (!activeImageModelId) {
@@ -197,7 +196,7 @@ class ImageGenerationService {
     }
   }
 
-  private _saveResult(result: any, opts: { params: GenerateImageParams; activeImageModel: any; meta: { steps: number; guidanceScale: number; useOpenCL: boolean; startTime: number } }): GeneratedImage {
+  private _saveResult(result: any, opts: { params: GenerateImageParams; activeImageModel: any; meta: { steps: number; guidanceScale: number; startTime: number } }): GeneratedImage {
     const { params, activeImageModel, meta } = opts;
     result.modelId = activeImageModel.id;
     if (params.conversationId) result.conversationId = params.conversationId;
@@ -211,7 +210,7 @@ class ImageGenerationService {
         content: `Generated image for: "${params.prompt}"`,
         attachments: [{ id: result.id, type: 'image', uri: `file://${result.imagePath}`, width: result.width, height: result.height }],
         generationTimeMs: genTime,
-        generationMeta: buildImageGenMeta(activeImageModel, { steps: meta.steps, guidanceScale: meta.guidanceScale, result, useOpenCL: meta.useOpenCL }),
+        generationMeta: buildImageGenMeta(activeImageModel, { steps: meta.steps, guidanceScale: meta.guidanceScale, result }),
       });
     }
     this.updateState({ isGenerating: false, progress: null, status: null, previewPath: null, result, error: null });
@@ -219,42 +218,17 @@ class ImageGenerationService {
   }
 
   private async _runGenerationAndSave(opts: RunGenerationOptions): Promise<GeneratedImage | null> {
-    const { params, enhancedPrompt, activeImageModel, steps, guidanceScale, imageWidth, imageHeight, useOpenCL } = opts;
+    const { params, enhancedPrompt, activeImageModel, steps, guidanceScale, imageWidth, imageHeight } = opts;
 
-    // Check if this is the first GPU run (no OpenCL kernel cache yet)
-    let isFirstGpuRun = false;
-    if (useOpenCL) {
-      try {
-        const hasCache = await onnxImageGeneratorService.hasKernelCache(activeImageModel.modelPath);
-        isFirstGpuRun = !hasCache;
-      } catch (e) {
-        // If check fails, assume cache exists to avoid false positives
-        logger.warn('[ImageGen] Failed to check for OpenCL kernel cache:', e);
-      }
-    }
-
-    this.updateState({
-      status: isFirstGpuRun
-        ? 'Optimizing GPU for your device (~120s, one-time)...'
-        : 'Starting image generation...',
-    });
+    this.updateState({status:'Starting image generation...'});
     const startTime = Date.now();
     try {
-      const result = await onnxImageGeneratorService.generateImage(
-        { prompt: enhancedPrompt, negativePrompt: params.negativePrompt || '', steps, guidanceScale, seed: params.seed, width: imageWidth, height: imageHeight, previewInterval: params.previewInterval ?? 2, useOpenCL },
+      const result = await coreMLImageGeneratorService.generateImage(
+        { prompt: enhancedPrompt, negativePrompt: params.negativePrompt || '', steps, guidanceScale, seed: params.seed, width: imageWidth, height: imageHeight, previewInterval: params.previewInterval ?? 2 },
         (progress) => {
           if (this.cancelRequested) return;
           const displayStep = Math.min(progress.step, steps);
-          if (isFirstGpuRun) {
-            this.updateState({
-              progress: { step: displayStep, totalSteps: steps },
-              status: displayStep <= 1
-                ? 'Optimizing GPU for your device (~120s, one-time)...'
-                : `GPU optimization in progress... (${displayStep}/${steps})`,
-            });
-          } else {
-            this.updateState({ progress: { step: displayStep, totalSteps: steps }, status: `Generating image (${displayStep}/${steps})...` });
-          }
+          this.updateState({progress:{step:displayStep,totalSteps:steps},status:`Generating image (${displayStep}/${steps})...`});
         },
         (preview) => {
           if (this.cancelRequested) return;
@@ -263,7 +237,7 @@ class ImageGenerationService {
         },
       );
       if (this.cancelRequested || !result?.imagePath) { this.resetState(); return null; }
-      return this._saveResult(result, { params, activeImageModel, meta: { steps, guidanceScale, useOpenCL, startTime } });
+      return this._saveResult(result, { params, activeImageModel, meta: { steps, guidanceScale, startTime } });
     } catch (error: any) {
       const errorMsg = error?.message || 'Image generation failed';
       if (errorMsg.includes('cancelled')) {
@@ -323,13 +297,13 @@ class ImageGenerationService {
     if (!loaded) return null;
     if (this.cancelRequested) { this.resetState(); return null; }
 
-    return this._runGenerationAndSave({ params, enhancedPrompt, activeImageModel, steps, guidanceScale, imageWidth, imageHeight, useOpenCL: settings.imageUseOpenCL ?? true });
+    return this._runGenerationAndSave({ params, enhancedPrompt, activeImageModel, steps, guidanceScale, imageWidth, imageHeight });
   }
 
   async cancelGeneration(): Promise<void> {
     if (!this.state.isGenerating) return;
     this.cancelRequested = true;
-    try { await onnxImageGeneratorService.cancelGeneration(); } catch { /* Ignore */ }
+    try { await coreMLImageGeneratorService.cancelGeneration(); } catch { /* Ignore */ }
     this.resetState();
   }
 

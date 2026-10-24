@@ -17,8 +17,7 @@
 */
 
 import React from 'react';
-import { Platform } from 'react-native';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { render,fireEvent,act } from '@testing-library/react-native';
 
 // Navigation is globally mocked in jest.setup.ts
 
@@ -339,7 +338,7 @@ describe('DownloadManagerScreen', () => {
           downloadedAt: '2026-01-15T00:00:00.000Z',
           size: 2 * 1024 * 1024 * 1024,
           style: 'creative',
-          backend: 'mnn',
+          backend: 'coreml',
         },
       ],
     });
@@ -507,7 +506,7 @@ describe('DownloadManagerScreen', () => {
           downloadedAt: '2026-01-15T00:00:00.000Z',
           size: 2048,
           style: 'creative',
-          backend: 'mnn',
+          backend: 'coreml',
         },
       ],
     });
@@ -575,7 +574,7 @@ describe('DownloadManagerScreen', () => {
           downloadedAt: '2026-01-15T00:00:00.000Z',
           size: 2048,
           style: 'creative',
-          backend: 'mnn',
+          backend: 'coreml',
         },
       ],
       removeDownloadedImageModel,
@@ -607,7 +606,7 @@ describe('DownloadManagerScreen', () => {
           downloadedAt: '2026-01-15T00:00:00.000Z',
           size: 2048,
           style: 'creative',
-          backend: 'mnn',
+          backend: 'coreml',
         },
       ],
     });
@@ -780,57 +779,6 @@ describe('DownloadManagerScreen', () => {
     expect(result.getByText('valid.gguf')).toBeTruthy();
   });
 
-  it('retries failed text downloads on Android, including mmproj reset and reattach', async () => {
-    const originalOs = Platform.OS;
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    const setDownloadedModels = jest.fn();
-    mockStoreState(createDefaultState({ setDownloadedModels }));
-    mockModelManager.getDownloadedModels.mockResolvedValueOnce([standardModel]);
-
-    mockDownloadStoreDownloads = {
-      'author/vision/vision.gguf': {
-        modelKey: 'author/vision/vision.gguf',
-        downloadId: 'dl-main',
-        modelId: 'author/vision',
-        fileName: 'vision.gguf',
-        quantization: 'Q4_K_M',
-        modelType: 'text',
-        status: 'failed',
-        errorCode: 'http_416',
-        errorMessage: 'retry me',
-        bytesDownloaded: 1024,
-        totalBytes: 4096,
-        combinedTotalBytes: 4608,
-        progress: 0.25,
-        createdAt: Date.now(),
-        lastProgressAt: Date.now(),
-        mmProjDownloadId: 'dl-mmproj',
-        mmProjStatus: 'failed',
-      },
-    };
-
-    try {
-      const { getByTestId } = render(<DownloadManagerScreen />);
-
-      await act(async () => {
-        fireEvent.press(getByTestId('failed-retry-button'));
-      });
-
-      expect(mockSetStatus).toHaveBeenCalledWith('dl-main', 'pending');
-      expect(mockBackgroundDownloadService.retryDownload).toHaveBeenNthCalledWith(1, 'dl-main');
-      expect(mockSetStatus).toHaveBeenCalledWith('dl-mmproj', 'pending');
-      expect(mockBackgroundDownloadService.retryDownload).toHaveBeenNthCalledWith(2, 'dl-mmproj');
-      expect(mockModelManager.resetMmProjForRetry).toHaveBeenCalledWith('dl-main');
-      expect(mockModelManager.watchDownload).toHaveBeenCalledWith(
-        'dl-main',
-        expect.any(Function),
-        expect.any(Function),
-      );
-      expect(mockBackgroundDownloadService.startProgressPolling).toHaveBeenCalled();
-    } finally {
-      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOs });
-    }
-  });
 
   // ===== BRANCH COVERAGE TESTS =====
 
@@ -854,7 +802,7 @@ describe('DownloadManagerScreen', () => {
           downloadedAt: '2026-01-15T00:00:00.000Z',
           size: 2048,
           style: 'creative',
-          backend: 'mnn',
+          backend: 'coreml',
         },
       ],
     });
@@ -927,7 +875,7 @@ describe('DownloadManagerScreen', () => {
           downloadedAt: '2026-01-15T00:00:00.000Z',
           size: 1024,
           style: 'creative',
-          backend: 'mnn',
+          backend: 'coreml',
         },
       ],
     });
@@ -941,7 +889,6 @@ describe('DownloadManagerScreen', () => {
     // The size is shown without any quantization badge text
     expect(queryByText('Unknown')).toBeNull();
   });
-
 
 
 });

@@ -4,30 +4,33 @@
  * Manage connections to remote LLM servers (Ollama, LM Studio, etc.)
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React,{ useState,useCallback,useEffect } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
+View,
+Text,
+ScrollView,
+TouchableOpacity,
+ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useTheme, useThemedStyles } from '../theme';
+import { useTheme,useThemedStyles } from '../theme';
 import { useRemoteServerStore } from '../stores';
 import { RemoteServerModal } from '../components/RemoteServerModal';
 import { RootStackParamList } from '../navigation/types';
 import { remoteServerManager } from '../services/remoteServerManager';
 import { discoverLANServers } from '../services/networkDiscovery';
-import { CustomAlert, AlertState, initialAlertState, showAlert } from '../components/CustomAlert';
+import { CustomAlert,AlertState,initialAlertState,showAlert } from '../components/CustomAlert';
+import { Button } from '../components/Button';
+import { useServerStorageStatus } from '../services/serverPreferenceStorage';
 import { createStyles } from './RemoteServersScreen.styles';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList, 'RemoteServers'>;
 
 export const RemoteServersScreen: React.FC = () => {
+  const credentialsFailed=useServerStorageStatus(s=>s.failed);
   const navigation = useNavigation<NavigationProp>();
   const theme = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -113,6 +116,11 @@ export const RemoteServersScreen: React.FC = () => {
     ));
   }, [activeServerId, setActiveServerId]);
 
+  if (credentialsFailed) return <SafeAreaView style={styles.container}>
+    <Text accessibilityRole="alert" style={styles.emptyText}>Saved server credentials could not be opened safely. Your saved data has been kept. Unlock the device, then retry.</Text>
+    <Button title="Retry saved servers" onPress={()=>useRemoteServerStore.persist.rehydrate()}/>
+    <Button title="Back" variant="ghost" onPress={()=>navigation.goBack()}/>
+  </SafeAreaView>;
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>

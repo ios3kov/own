@@ -1,16 +1,15 @@
-import React, { useCallback } from 'react';
-import { TouchableOpacity, StyleSheet, type TouchableOpacityProps, type StyleProp, type ViewStyle, type GestureResponderEvent } from 'react-native';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  useReducedMotion,
+import React,{ useCallback } from 'react';
+import { TouchableOpacity,StyleSheet,type TouchableOpacityProps,type StyleProp,type ViewStyle,type GestureResponderEvent } from 'react-native';
+import Animated,{
+useSharedValue,
+useAnimatedStyle,
+withSpring,
+useReducedMotion,
 } from 'react-native-reanimated';
-import { triggerHaptic, type HapticType } from '../utils/haptics';
+import { triggerHaptic,type HapticType } from '../utils/haptics';
 
 // Use TouchableOpacity instead of Pressable as the base component.
 // Pressable wrapped in Reanimated's Animated.createAnimatedComponent inside
-// a Modal has a known double-tap issue on Android where the first tap gets
 // swallowed by the Dialog touch dispatch layer.
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 

@@ -1,28 +1,9 @@
 import React from 'react';
-import { View, Text, Switch, Platform, TouchableOpacity } from 'react-native';
+import { View,Text } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { useTheme, useThemedStyles } from '../../theme';
+import { useTheme,useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
-import { useClearGpuCache } from '../../hooks/useImageGenerationSettings';
 import { createStyles } from './styles';
-
-const ClearGPUCacheButton: React.FC = () => {
-  const { colors } = useTheme();
-  const styles = useThemedStyles(createStyles);
-  const { clearing, handleClearCache } = useClearGpuCache();
-
-  return (
-    <TouchableOpacity
-      style={[styles.settingHeader, styles.clearCacheButton, { backgroundColor: colors.surfaceLight }]}
-      onPress={handleClearCache}
-      disabled={clearing}
-    >
-      <Text style={[styles.settingDescription, { color: colors.primary }]}>
-        {clearing ? 'Clearing...' : 'Clear GPU Cache'}
-      </Text>
-    </TouchableOpacity>
-  );
-};
 
 /** Basic sliders: Image Steps + Image Size */
 export const ImageQualityBasicSliders: React.FC = () => {
@@ -145,23 +126,7 @@ export const ImageQualityAdvancedSliders: React.FC = () => {
         </View>
       </View>
 
-      {Platform.OS === 'android' && (
-        <View style={styles.settingGroup}>
-          <View style={styles.settingHeader}>
-            <Text style={styles.settingLabel}>GPU Acceleration</Text>
-            <Switch
-              value={settings.imageUseOpenCL ?? true}
-              onValueChange={(value) => updateSettings({ imageUseOpenCL: value })}
-              trackColor={{ false: colors.surfaceLight, true: colors.primary }}
-              thumbColor={colors.surface}
-            />
-          </View>
-          <Text style={styles.settingDescription}>
-            Use GPU for faster image generation. First run may be slower while optimizing for your device. For best performance, use NPU models on supported Snapdragon devices.
-          </Text>
-          {(settings.imageUseOpenCL ?? true) && <ClearGPUCacheButton />}
-        </View>
-      )}
+      {false}
     </>
   );
 };

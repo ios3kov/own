@@ -1,19 +1,19 @@
 import { DocumentSources } from './components/DocumentSources';
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Clipboard } from 'react-native';
-import { useTheme, useThemedStyles } from '../../theme';
+import React,{ useState } from 'react';
+import { View,Text,TouchableOpacity,Clipboard } from 'react-native';
+import { useTheme,useThemedStyles } from '../../theme';
 import Icon from 'react-native-vector-icons/Feather';
 import { stripControlTokens } from '../../utils/messageContent';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../CustomAlert';
+import { CustomAlert,showAlert,hideAlert,AlertState,initialAlertState } from '../CustomAlert';
 import { AnimatedEntry } from '../AnimatedEntry';
 import { triggerHaptic } from '../../utils/haptics';
 import { createStyles } from './styles';
 import { MessageAttachments } from './components/MessageAttachments';
 import { MessageContent } from './components/MessageContent';
 import { GenerationMeta } from './components/GenerationMeta';
-import { ActionMenuSheet, EditSheet } from './components/ActionMenuSheet';
+import { ActionMenuSheet,EditSheet } from './components/ActionMenuSheet';
 import { MarkdownText } from '../MarkdownText';
-import { parseThinkingContent, formatTime, formatDuration, buildMessageData } from './utils';
+import { parseThinkingContent,formatTime,formatDuration,buildMessageData } from './utils';
 import { ThinkingBlock } from './components/ThinkingBlock';
 import type { ChatMessageProps } from './types';
 import type { Message } from '../../types';
@@ -255,6 +255,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   const messageBody = (
     <TouchableOpacity
       testID={isUser ? 'user-message' : 'assistant-message'}
+      accessible={false}
       style={[
         styles.container,
         isUser ? styles.userContainer : styles.assistantContainer,

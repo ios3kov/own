@@ -7,19 +7,19 @@
 
 import type { ImageDownloadDeps } from '../../src/screens/ModelsScreen/imageDownloadActions';
 import {
-  Message,
-  Conversation,
-  DownloadedModel,
-  ModelInfo,
-  ModelFile,
-  DeviceInfo,
-  ModelRecommendation,
-  ONNXImageModel,
-  GeneratedImage,
-  MediaAttachment,
-  GenerationMeta,
-  Project,
-  ModelCredibility,
+Message,
+Conversation,
+DownloadedModel,
+ModelInfo,
+ModelFile,
+DeviceInfo,
+ModelRecommendation,
+ONNXImageModel,
+GeneratedImage,
+MediaAttachment,
+GenerationMeta,
+Project,
+ModelCredibility,
 } from '../../src/types';
 
 // ============================================================================
@@ -142,8 +142,7 @@ export interface DownloadedModelFactoryOptions {
   mmProjPath?: string;
   mmProjFileName?: string;
   mmProjFileSize?: number;
-  engine?: 'llama' | 'litert';
-  liteRTVision?: boolean;
+  engine?: 'llama';
 }
 
 export const createDownloadedModel = (options: DownloadedModelFactoryOptions = {}): DownloadedModel => ({
@@ -236,7 +235,7 @@ export const createDeviceInfo = (options: DeviceInfoFactoryOptions = {}): Device
   usedMemory: options.usedMemory ?? 4 * 1024 * 1024 * 1024, // 4GB
   availableMemory: options.availableMemory ?? 4 * 1024 * 1024 * 1024, // 4GB
   deviceModel: options.deviceModel ?? 'Test Device',
-  systemName: options.systemName ?? 'Android',
+  systemName: options.systemName ?? 'iOS',
   systemVersion: options.systemVersion ?? '13',
   isEmulator: options.isEmulator ?? false,
 });
@@ -285,7 +284,7 @@ export interface ONNXImageModelFactoryOptions {
   downloadedAt?: string;
   size?: number;
   style?: string;
-  backend?: 'mnn' | 'qnn' | 'coreml';
+  backend?: 'coreml';
   attentionVariant?: 'split_einsum' | 'original';
 }
 
@@ -297,7 +296,7 @@ export const createONNXImageModel = (options: ONNXImageModelFactoryOptions = {})
   downloadedAt: options.downloadedAt ?? new Date().toISOString(),
   size: options.size ?? 2 * 1024 * 1024 * 1024, // 2GB
   style: options.style ?? 'creative',
-  backend: options.backend ?? 'mnn',
+  backend: options.backend ?? 'coreml',
   attentionVariant: options.attentionVariant,
 });
 

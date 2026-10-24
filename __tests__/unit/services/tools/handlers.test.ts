@@ -1,3 +1,4 @@
+import 'react-native-url-polyfill/auto';
 /**
  * Tool Handlers Unit Tests
  *
@@ -494,6 +495,13 @@ describe('Tool Handlers', () => {
   // read_url — additional private URL patterns
   // ==========================================================================
   describe('read_url — private URL patterns', () => {
+    it.each(['http://[::1]/', 'http://2130706433/', 'http://0x7f000001/', 'http://127.1/', 'http://user:pass@[::1]/', 'http://[::ffff:127.0.0.1]/', 'http://[fd00::1]/', 'http://localhost./'])('blocks normalized local address %s before fetching', async url => {
+      global.fetch = jest.fn();
+      const result = await runTool('read_url', {url});
+      expect(result.error).toContain('Blocked');
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
     it.each([
       ['10.x.x.x',         'http://10.0.0.1/api'],     // NOSONAR
       ['172.16.x.x',       'http://172.16.0.1/api'],   // NOSONAR

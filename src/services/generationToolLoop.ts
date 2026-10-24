@@ -1,22 +1,21 @@
-/* eslint-disable max-lines */
+
 /** Tool-calling generation loop. Extracted to keep generationService.ts under the max-lines limit. */
 import { llmService } from './llm';
 import type { StreamToken } from './llm';
-import { liteRTService } from './litert';
-import { useChatStore, useRemoteServerStore, useAppStore } from '../stores';
-import { Message, DocumentSource } from '../types';
-import { getToolsAsOpenAISchema, executeToolCall } from './tools';
-import type { ToolCall, ToolResult } from './tools/types';
+
+import { useChatStore,useRemoteServerStore,useAppStore } from '../stores';
+import { Message,DocumentSource } from '../types';
+import { getToolsAsOpenAISchema,executeToolCall } from './tools';
+import type { ToolCall,ToolResult } from './tools/types';
 import { providerRegistry } from './providers';
-import type { GenerationOptions, CompletionResult } from './providers/types';
+import type { GenerationOptions,CompletionResult } from './providers/types';
 import logger from '../utils/logger';
 const MAX_TOOL_ITERATIONS = 3;
 const MAX_TOTAL_TOOL_CALLS = 5;
-// LiteRT runs the tool loop natively (automaticToolCalling), so the JS caps above don't
 // apply to it. Bound the native loop here instead: once a single response exceeds this many
 // tool calls we stop executing them and tell the model to answer, which prevents the KV cache
 // from overflowing the (small, ~4096) context window mid-turn → degenerate output / crash.
-const MAX_LITERT_TOOL_CALLS = 3;
+
 type StreamChunk = string | StreamToken;
 function parseXmlStyleToolCall(body: string, idSuffix: number): ToolCall | null {
   const funcMatch = body.match(/<function=(\w+)>/);
@@ -293,115 +292,9 @@ async function callLocalWithRetry(
   throw new Error(lastError?.message || String(lastError) || 'Unknown LLM error after tool execution');
 }
 
-function isLiteRTActive(): boolean {
-  const { downloadedModels, activeModelId } = useAppStore.getState();
-  return downloadedModels.find((m: any) => m.id === activeModelId)?.engine === 'litert' && liteRTService.isModelLoaded();
-}
 
 /** On first iteration: last user message. On tool-result iterations: formatted tool results. */
-function buildLiteRTSendText(messages: Message[]): string {
-  const toolResults: Message[] = [];
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'tool') toolResults.unshift(messages[i]);
-    else break;
-  }
-  if (toolResults.length > 0) {
-    const parts = toolResults.map(m => `${m.toolName || 'tool'}: ${m.content}`);
-    return `Tool results:\n${parts.join('\n\n')}\n\nPlease continue based on these results.`;
-  }
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'user') {
-      const c = messages[i].content;
-      return typeof c === 'string' ? c : '';
-    }
-  }
-  return '';
-}
 
-export function buildLiteRTHistory(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: string }> {
-  let lastUserIdx = -1;
-  for (let i = messages.length - 1; i >= 0; i--) { if (messages[i].role === 'user') { lastUserIdx = i; break; } }
-  if (lastUserIdx <= 0) return [];
-  return messages.slice(0, lastUserIdx)
-    .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content)
-    .map(m => ({ role: m.role as 'user' | 'assistant', content: typeof m.content === 'string' ? m.content : '' }))
-    .filter(h => h.content.trim() !== '');
-}
-
-function buildLiteRTToolCallHandler(ctx: ToolLoopContext, conversationId: string) {
-  // Per-turn counter: this closure is rebuilt once per generation, so it resets each new
-  // message and the native loop reuses it for every tool call within the turn.
-  let toolCallCount = 0;
-  return async (name: string, args: Record<string, unknown>): Promise<string> => {
-    if (ctx.isAborted()) return 'Aborted';
-    toolCallCount++;
-    if (toolCallCount > MAX_LITERT_TOOL_CALLS) {
-      logger.log(`[ToolLoop][LiteRT] tool call cap reached (${MAX_LITERT_TOOL_CALLS}) — refusing "${name}", instructing model to answer`);
-      return `Tool call limit reached (${MAX_LITERT_TOOL_CALLS} per response). Do not call any more tools. Answer now using the information you already have.`;
-    }
-    logger.log(`[ToolLoop][LiteRT] native tool call ${toolCallCount}/${MAX_LITERT_TOOL_CALLS} — name=${name}, args=${JSON.stringify(args).substring(0, 200)}`);
-    ctx.callbacks?.onToolCallStart?.(name, args as Record<string, any>);
-    const toolCall: ToolCall = { id: `native-tc-${Date.now()}`, name, arguments: args as Record<string, any> };
-    if (ctx.projectId) (toolCall as any).context = { projectId: ctx.projectId };
-    const result = await executeToolCall(toolCall);
-    if (ctx.isAborted()) return 'Aborted';
-    ctx.onDocumentSources?.(result.documentSources || []);
-    ctx.callbacks?.onToolCallComplete?.(name, result);
-    const resultContent = result.error ? `Error: ${result.error}` : result.content;
-    const toolCallMsg: Message = { id: `tc-${Date.now()}-${name}`, role: 'assistant', content: '',
-      toolCalls: [{ id: toolCall.id, name, arguments: JSON.stringify(toolCall.arguments) }], timestamp: Date.now() };
-    const toolResultMsg: Message = { id: `tr-${Date.now()}-${name}`, role: 'tool', content: resultContent,
-      toolCallId: toolCall.id, toolName: name, timestamp: Date.now() };
-    useChatStore.getState().addMessage(conversationId, toolCallMsg);
-    useChatStore.getState().addMessage(conversationId, toolResultMsg);
-    logger.log(`[ToolLoop][LiteRT] tool ${name} completed — resultLen=${resultContent.length}, first200="${resultContent.substring(0, 200)}"`);
-    return resultContent;
-  };
-}
-
-async function callLiteRTForLoop(
-  conversationId: string,
-  messages: Message[],
-  opts: { tools: any[]; onStream?: (data: StreamToken) => void; ctx?: ToolLoopContext },
-): Promise<{ fullResponse: string; toolCalls: ToolCall[] }> {
-  const { tools, onStream, ctx } = opts;
-  const systemMsg = messages.find(m => m.role === 'system');
-  const systemPrompt = typeof systemMsg?.content === 'string' ? systemMsg.content : '';
-  const text = buildLiteRTSendText(messages);
-  const history = buildLiteRTHistory(messages);
-  const lastUser = [...messages].reverse().find(m => m.role === 'user');
-  const imageUris = lastUser?.attachments
-    ?.filter((a: any) => a.type === 'image' && typeof a.uri === 'string' && a.uri.trim().length > 0)
-    .map((a: any) => a.uri);
-  const liteRTSettings = useAppStore.getState().settings;
-  const samplerConfig = {
-    temperature: liteRTSettings.liteRTTemperature,
-    topK: 40,
-    topP: liteRTSettings.liteRTTopP,
-  };
-  logger.log(`[ToolLoop][LiteRT] callLiteRTForLoop — convId=${conversationId}, text=${text.length}ch, sysPrompt=${systemPrompt.length}ch, tools=${tools.length}, history=${history.length}, imageCount=${imageUris?.length ?? 0}`);
-  logger.log(`[ToolLoop][LiteRT] samplerConfig — temperature=${samplerConfig.temperature} topK=${samplerConfig.topK} topP=${samplerConfig.topP}`);
-  logger.log(`[ToolLoop][LiteRT] sysPrompt first500: "${systemPrompt.substring(0, 500)}"`);
-  logger.log(`[ToolLoop][LiteRT] sending text: "${text.substring(0, 300)}"`);
-  if (!text) {
-    logger.warn('[ToolLoop][LiteRT] no message text — aborting');
-    return { fullResponse: '', toolCalls: [] };
-  }
-  await liteRTService.prepareConversation(conversationId, systemPrompt, { samplerConfig, tools, history });
-  const onToolCall = ctx ? buildLiteRTToolCallHandler(ctx, conversationId) : undefined;
-  const fullResponse = await liteRTService.generateRaw(
-    text,
-    imageUris,
-    {
-      onToken: token => onStream?.({ content: token }),
-      onToolCall,
-      onReasoning: token => onStream?.({ reasoningContent: token }),
-    },
-  );
-  logger.log(`[ToolLoop][LiteRT] raw response (${fullResponse.length}ch): "${fullResponse.substring(0, 400)}"`);
-  // Native SDK handles all tool→model cycles internally; toolCalls always empty here
-  return { fullResponse, toolCalls: [] };
-}
 
 const TOOL_BEHAVIOR_GUIDANCE = '\n\nMake good use of the tools available to you. If you are uncertain or lack current information, use the appropriate tool rather than guessing. Never refuse or say you cannot help when a tool is available. For multiple distinct items, make a separate tool call for each. Call tools silently — do not announce them first.';
 
@@ -420,16 +313,14 @@ interface CallLLMOptions { onStream?: (data: StreamToken) => void; forceRemote?:
 async function callLLMWithRetry(
   messages: Message[],
   tools: any[],
-  { onStream, forceRemote, disableThinking, conversationId, ctx }: CallLLMOptions = {},
+  { onStream, forceRemote, disableThinking }: CallLLMOptions = {},
 ): Promise<{ fullResponse: string; toolCalls: ToolCall[] }> {
   // Append tool-use behavioral guidance to the system prompt when tools are present.
   // Only covers the "when and how" — schemas are injected separately by each engine.
   // We shallow-copy messages to avoid mutating the caller's array.
   const augmentedMessages = tools.length > 0 ? augmentSystemPromptForTools(messages) : messages;
 
-  if (isLiteRTActive() && conversationId) {
-    return callLiteRTForLoop(conversationId, augmentedMessages, { tools, onStream, ctx });
-  }
+  ;
   const activeServerId = useRemoteServerStore.getState().activeServerId;
   const useRemote = forceRemote || (!!activeServerId && providerRegistry.hasProvider(activeServerId) && !llmService.isModelLoaded());
   logger.log(`[ToolLoop] callLLM — remote=${useRemote}, tools=${tools.length}`);

@@ -3,18 +3,18 @@
  * All functions are pure/standalone — they receive state via parameter objects.
  */
 
-import { DownloadedModel, ONNXImageModel } from '../../types';
+import { DownloadedModel,ONNXImageModel } from '../../types';
 import { hardwareService } from '../hardware';
 import { llmService } from '../llm';
-import { liteRTService } from '../litert';
+
 import {
-  ModelType,
-  MemoryCheckResult,
-  MemoryCheckSeverity,
-  getMemoryBudgetPercent,
-  getMemoryWarningPercent,
-  TEXT_MODEL_OVERHEAD_MULTIPLIER,
-  IMAGE_MODEL_OVERHEAD_MULTIPLIER,
+ModelType,
+MemoryCheckResult,
+MemoryCheckSeverity,
+getMemoryBudgetPercent,
+getMemoryWarningPercent,
+TEXT_MODEL_OVERHEAD_MULTIPLIER,
+IMAGE_MODEL_OVERHEAD_MULTIPLIER,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ export function getCurrentlyLoadedMemoryGB(
 ): number {
   let totalGB = 0;
 
-  if (ids.loadedTextModelId && (llmService.isModelLoaded() || liteRTService.isModelLoaded())) {
+  if (ids.loadedTextModelId && (llmService.isModelLoaded())) {
     const textModel = lists.downloadedModels.find(m => m.id === ids.loadedTextModelId);
     if (textModel) {
       totalGB += estimateModelMemoryGB(textModel, 'text');
@@ -101,7 +101,7 @@ export function getOtherLoadedMemoryGB(
       totalGB += estimateModelMemoryGB(imageModel, 'image');
     }
   }
-  if (modelType === 'image' && ids.loadedTextModelId && (llmService.isModelLoaded() || liteRTService.isModelLoaded())) {
+  if (modelType === 'image' && ids.loadedTextModelId && (llmService.isModelLoaded())) {
     const textModel = lists.downloadedModels.find(m => m.id === ids.loadedTextModelId);
     if (textModel) {
       totalGB += estimateModelMemoryGB(textModel, 'text');

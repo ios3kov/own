@@ -19,22 +19,22 @@
  */
 
 import React from 'react';
-import { render, fireEvent, act, waitFor, cleanup } from '@testing-library/react-native';
+import { render,fireEvent,act,waitFor,cleanup } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAppStore } from '../../../src/stores/appStore';
 import { useChatStore } from '../../../src/stores/chatStore';
 import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
 import { useProjectStore } from '../../../src/stores/projectStore';
-import { resetStores, setupFullChat } from '../../utils/testHelpers';
+import { resetStores,setupFullChat } from '../../utils/testHelpers';
 import {
-  createDownloadedModel,
-  createONNXImageModel,
-  createConversation,
-  createUserMessage,
-  createAssistantMessage,
-  createVisionModel,
-  createImageAttachment,
-  createProject,
+createDownloadedModel,
+createONNXImageModel,
+createConversation,
+createUserMessage,
+createAssistantMessage,
+createVisionModel,
+createImageAttachment,
+createProject,
 } from '../../utils/factories';
 
 // Mock navigation
@@ -196,8 +196,8 @@ jest.mock('../../../src/services/modelManager', () => ({
   },
 }));
 
-jest.mock('../../../src/services/localDreamGenerator', () => ({
-  localDreamGeneratorService: {
+jest.mock('../../../src/services/coreMLImageGenerator', () => ({
+  coreMLImageGeneratorService: {
     deleteGeneratedImage: jest.fn(() => Promise.resolve()),
   },
 }));
@@ -580,7 +580,7 @@ describe('ChatScreen', () => {
             modelPath: '/models/sd',
             size: 1024,
             downloadedAt: new Date().toISOString(),
-            backend: 'mnn',
+            backend: 'coreml',
           },
         ],
       });

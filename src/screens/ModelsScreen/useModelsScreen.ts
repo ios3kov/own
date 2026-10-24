@@ -1,23 +1,23 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { Platform } from 'react-native';
+import { useState,useEffect,useCallback,useRef } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import RNFS from 'react-native-fs';
 import { unzip } from 'react-native-zip-archive';
-import { pick, types, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
-import { showAlert, AlertState, initialAlertState } from '../../components/CustomAlert';
+import { pick,types,isErrorWithCode,errorCodes } from '@react-native-documents/picker';
+import { showAlert,AlertState,initialAlertState } from '../../components/CustomAlert';
 import { useFocusTrigger } from '../../hooks/useFocusTrigger';
 import { useAppStore } from '../../stores';
-import { useDownloadStore, isActiveStatus } from '../../stores/downloadStore';
+import { useDownloadStore,isActiveStatus } from '../../stores/downloadStore';
 import { modelManager } from '../../services';
-import { liteRTService } from '../../services/litert';
+
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
 import { ONNXImageModel } from '../../types';
-import { ModelTab, NavigationProp } from './types';
+import { ModelTab,NavigationProp } from './types';
 import { initialFilterState } from './constants';
 import { getDirectorySize } from './utils';
 import { useTextModels } from './useTextModels';
 import { useImageModels } from './useImageModels';
-import { importGgufFiles, getErrorMessage } from './importHelpers';
+import { importGgufFiles,getErrorMessage } from './importHelpers';
+import { generateId } from '../../utils/generateId';
 import { isPickerStuck } from '../../utils/pickerErrorUtils';
 
 type ZipImportDeps = {
@@ -31,45 +31,43 @@ type ZipImportDeps = {
 async function importImageModelZip(sourceUri: string, fileName: string, deps: ZipImportDeps): Promise<void> {
   const { addDownloadedImageModel, activeImageModelId, setActiveImageModelId, setImportProgress, setAlertState } = deps;
   const imageModelsDir = modelManager.getImageModelsDirectory();
-  const modelId = `local_${fileName.replaceAll(/\.zip$/gi, '').replaceAll(/[^a-zA-Z0-9_-]/g, '_')}_${Date.now()}`;
+  const modelId = `local_${fileName.replaceAll(/\.zip$/gi, '').replaceAll(/[^a-zA-Z0-9_-]/g, '_')}_${generateId()}`;
   const modelDir = `${imageModelsDir}/${modelId}`;
   const zipPath = `${imageModelsDir}/${modelId}.zip`;
   if (!(await RNFS.exists(imageModelsDir))) await RNFS.mkdir(imageModelsDir);
-  setImportProgress({ fraction: 0.1, fileName });
-  if (Platform.OS === 'ios') await RNFS.moveFile(sourceUri, zipPath);
-  else await RNFS.copyFile(sourceUri, zipPath);
-  setImportProgress({ fraction: 0.5, fileName });
-  if (!(await RNFS.exists(modelDir))) await RNFS.mkdir(modelDir);
-  setImportProgress({ fraction: 0.6, fileName });
-  await unzip(zipPath, modelDir);
-  setImportProgress({ fraction: 0.85, fileName });
-  const dirContents = await RNFS.readDir(modelDir);
-  const hasMLModelC = dirContents.some(f => f.name.endsWith('.mlmodelc'));
-  const hasNestedMLModelC = !hasMLModelC && dirContents.some(f => f.isDirectory());
-  let resolvedModelDir = modelDir;
-  let backend: 'mnn' | 'qnn' | 'coreml' | undefined;
-  if (hasMLModelC || hasNestedMLModelC) {
-    backend = 'coreml';
-    resolvedModelDir = await resolveCoreMLModelDir(modelDir);
-  } else {
-    const hasMNN = dirContents.some(f => f.name.endsWith('.mnn'));
-    const hasQNN = dirContents.some(f => f.name.endsWith('.bin') || f.name.includes('qnn'));
-    if (hasMNN) backend = 'mnn';
-    else if (hasQNN) backend = 'qnn';
+  if (await RNFS.exists(modelDir) || await RNFS.exists(zipPath)) {
+    throw new Error('An import with this name already exists. Please retry.');
   }
-  await RNFS.unlink(zipPath).catch(() => { });
-  const totalSize = await getDirectorySize(resolvedModelDir);
-  setImportProgress({ fraction: 0.95, fileName });
-  const modelName = fileName.replaceAll(/\.zip$/gi, '').replaceAll(/[_-]/g, ' ');
-  const imageModel: ONNXImageModel = {
-    id: modelId, name: modelName, description: 'Locally imported image model',
-    modelPath: resolvedModelDir, downloadedAt: new Date().toISOString(), size: totalSize, backend,
-  };
-  await modelManager.addDownloadedImageModel(imageModel);
+  let directoryCreated = false;
+  let imageModel: ONNXImageModel;
+  try {
+    setImportProgress({ fraction: 0.1, fileName });
+    await RNFS.copyFile(sourceUri, zipPath);
+    setImportProgress({ fraction: 0.5, fileName });
+    await RNFS.mkdir(modelDir);
+    directoryCreated = true;
+    setImportProgress({ fraction: 0.6, fileName });
+    await unzip(zipPath, modelDir);
+    setImportProgress({ fraction: 0.85, fileName });
+    const resolvedModelDir = await resolveCoreMLModelDir(modelDir);
+    const totalSize = await getDirectorySize(resolvedModelDir);
+    setImportProgress({ fraction: 0.95, fileName });
+    const modelName = fileName.replaceAll(/\.zip$/gi, '').replaceAll(/[_-]/g, ' ');
+    imageModel = {
+      id: modelId, name: modelName, description: 'Locally imported image model',
+      modelPath: resolvedModelDir, downloadedAt: new Date().toISOString(), size: totalSize, backend:'coreml',
+    };
+    await modelManager.addDownloadedImageModel(imageModel);
+  } catch (error) {
+    if (directoryCreated) await RNFS.unlink(modelDir).catch(() => {});
+    throw error;
+  } finally {
+    await RNFS.unlink(zipPath).catch(() => {});
+  }
   addDownloadedImageModel(imageModel);
   if (!activeImageModelId) setActiveImageModelId(imageModel.id);
   setImportProgress({ fraction: 1, fileName });
-  setAlertState(showAlert('Success', `${modelName} imported successfully!`));
+  setAlertState(showAlert('Success', `${imageModel.name} imported successfully!`));
 }
 
 
@@ -115,13 +113,11 @@ export function useModelsScreen() {
   const isPickingRef = useRef(false);
 
   const validateImportFiles = (resolvedFiles: Array<{ name: string; uri: string }>): string | null => {
-    const singleLitert = resolvedFiles.length === 1 && resolvedFiles[0].name.toLowerCase().endsWith('.litertlm');
-    if (singleLitert && !liteRTService.isAvailable()) {
-      return 'litert_unsupported';
-    }
+
+    ;
     const allGguf = resolvedFiles.every(f => f.name.toLowerCase().endsWith('.gguf'));
     const singleZip = resolvedFiles.length === 1 && resolvedFiles[0].name.toLowerCase().endsWith('.zip');
-    if (!allGguf && !singleZip && !singleLitert) return 'invalid_format';
+    if (!allGguf && !singleZip) return 'invalid_format';
     if (resolvedFiles.length > 2) return 'too_many';
     return null;
   };
@@ -141,21 +137,18 @@ export function useModelsScreen() {
       }));
 
       const validationError = validateImportFiles(resolvedFiles);
-      if (validationError === 'litert_unsupported') {
-        setAlertState(showAlert('Not Supported', 'LiteRT models are only supported on Android.'));
-        return;
-      }
+
       if (validationError === 'invalid_format') {
         setAlertState(showAlert(
           'Invalid File',
           resolvedFiles.length > 1
             ? 'When selecting multiple files, all must be .gguf files (main model + mmproj projector).'
-            : 'Supported formats: .gguf (text models), .litertlm (LiteRT models), and .zip (image models).',
+            : 'Supported formats: .gguf (text models) and .zip (image models).',
         ));
         return;
       }
       if (validationError === 'too_many') {
-        setAlertState(showAlert('Too Many Files', 'Select 1 file (text/zip/litertlm) or 2 .gguf files (vision model + mmproj projector).'));
+        setAlertState(showAlert('Too Many Files', 'Select 1 file (text/zip) or 2 .gguf files (vision model + mmproj projector).'));
         return;
       }
 

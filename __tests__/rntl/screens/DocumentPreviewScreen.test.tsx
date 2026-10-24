@@ -3,10 +3,11 @@
  */
 
 import React from 'react';
-import { render, act, fireEvent } from '@testing-library/react-native';
+import { render,act,fireEvent } from '@testing-library/react-native';
 import RNFS from 'react-native-fs';
 
 const mockGoBack = jest.fn();
+let mockFilePath = '/mock/documents/test.txt';
 
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
@@ -17,7 +18,7 @@ jest.mock('@react-navigation/native', () => {
       setOptions: jest.fn(),
     }),
     useRoute: () => ({
-      params: { filePath: '/mock/documents/test.txt', fileName: 'test.txt', fileSize: 1024 },
+      params: { filePath: mockFilePath, fileName: 'test.txt', fileSize: 1024 },
     }),
   };
 });
@@ -44,6 +45,7 @@ import { DocumentPreviewScreen } from '../../../src/screens/DocumentPreviewScree
 describe('DocumentPreviewScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockFilePath = '/mock/documents/test.txt';
     (RNFS.exists as jest.Mock).mockResolvedValue(false);
     mockProcessDocument.mockResolvedValue({ textContent: 'Hello world content' });
   });
@@ -111,45 +113,30 @@ describe('DocumentPreviewScreen', () => {
     });
   });
 
-  describe('file path decoding', () => {
-    it('handles URL-encoded file paths', async () => {
-      jest.mock('@react-navigation/native', () => ({
-        ...jest.requireActual('@react-navigation/native'),
-        useNavigation: () => ({ goBack: jest.fn(), setOptions: jest.fn() }),
-        useRoute: () => ({
-          params: { filePath: 'file:///mock%20path/doc.txt', fileName: 'doc.txt', fileSize: 0 },
-        }),
-      }));
+  describe('exact document resolution', () => {
+    it('rebases a moved sandbox without guessing the filename', async () => {
+      mockFilePath = 'file:///var/mobile/Containers/Data/Application/11111111-1111-1111-1111-111111111111/Documents/Inbox/My%20notes.txt';
       (RNFS.exists as jest.Mock).mockResolvedValue(true);
-      mockProcessDocument.mockResolvedValue({ textContent: 'decoded content' });
-      // just verify no crash
       render(<DocumentPreviewScreen />);
       await flushPromises();
+      expect(mockProcessDocument).toHaveBeenCalledWith('/mock/documents/Inbox/My notes.txt', 'test.txt');
     });
-
-    it('tries uuid-stripped filename as fallback', async () => {
-      // Simulate: file not at original path, but found at stripped path
-      let callCount = 0;
-      (RNFS.exists as jest.Mock).mockImplementation(() => {
-        callCount++;
-        return Promise.resolve(callCount === 3); // third check succeeds
-      });
-
-      jest.doMock('@react-navigation/native', () => ({
-        ...jest.requireActual('@react-navigation/native'),
-        useNavigation: () => ({ goBack: jest.fn(), setOptions: jest.fn() }),
-        useRoute: () => ({
-          params: {
-            filePath: '/docs/abc123-myfile.txt',
-            fileName: 'abc123-myfile.txt',
-            fileSize: 0,
-          },
-        }),
-      }));
-
-      mockProcessDocument.mockResolvedValue({ textContent: 'content' });
-      render(<DocumentPreviewScreen />);
+    it('never substitutes an unrelated file with the same filename', async () => {
+      mockFilePath = '/missing/original.txt';
+      (RNFS.exists as jest.Mock).mockImplementation(path => Promise.resolve(path === '/mock/documents/test.txt'));
+      const {getByText} = render(<DocumentPreviewScreen />);
       await flushPromises();
+      expect(getByText(/File not found/)).toBeTruthy();
+      expect(RNFS.exists).toHaveBeenCalledTimes(1);
+      expect(mockProcessDocument).not.toHaveBeenCalled();
+    });
+    it('rejects traversal before passing a target to native code', async () => {
+      mockFilePath = 'file:///mock/documents/%2e%2e/other.txt';
+      const {getByText} = render(<DocumentPreviewScreen />);
+      await flushPromises();
+      expect(getByText(/cannot be opened/)).toBeTruthy();
+      expect(RNFS.exists).not.toHaveBeenCalled();
+      expect(mockProcessDocument).not.toHaveBeenCalled();
     });
   });
 

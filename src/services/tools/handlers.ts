@@ -1,9 +1,9 @@
 import { sourcesFromChunks } from '../documentSources';
 import type { DocumentSource } from '../../types';
-import { googleSearchUrl, parseGoogleResults } from './googleSearch';
+import { googleSearchUrl,parseGoogleResults } from './googleSearch';
 import { Platform } from 'react-native';
 import DeviceInfo from 'react-native-device-info';
-import { ToolCall, ToolResult } from './types';
+import { ToolCall,ToolResult } from './types';
 import logger from '../../utils/logger';
 
 function makeResult(call: ToolCall, start: number, opts: { content: string; error?: string; documentSources?: DocumentSource[] }): ToolResult {
@@ -62,7 +62,7 @@ async function handleWebSearch(query: string): Promise<string> {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1',
         'Accept': 'text/html',
       },
     });
@@ -229,13 +229,33 @@ async function handleGetDeviceInfo(infoType = 'all'): Promise<string> {
   return parts.join('\n\n');
 }
 
-/** Block SSRF: reject private/loopback/link-local/cloud-metadata URLs. */
+/** Reject direct local addresses after WHATWG URL canonicalization.
+ * DNS resolution and redirect destinations still need native enforcement.
+ */
 function isPrivateUrl(url: string): boolean {
-  const m = url.match(/^https?:\/\/([^/:]+)/i);
-  if (!m) return false;
-  const h = m[1].toLowerCase();
-  return h === 'localhost' || h === '[::1]' || h === 'metadata.google.internal'
-    || /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.|169\.254\.)/.test(h);
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { return true; }
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return true;
+  const host = parsed.hostname.toLowerCase().replace(/\.+$/, '');
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host === 'metadata.google.internal') return true;
+  if (host.startsWith('[')) {
+    // Only ordinary global-unicast IPv6 addresses are valid public tool targets.
+    // This also rejects mapped IPv4, loopback, link-local and unique-local forms.
+    return !/^\[[23][0-9a-f]{3}:/.test(host);
+  }
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+    return isPrivateIPv4Host(host);
+  }
+  return false;
+}
+
+function isPrivateIPv4Host(host:string):boolean {
+    const [first, second] = host.split('.').map(Number);
+    return first === 0 || first === 10 || first === 127 || first >= 224
+      || (first === 100 && second >= 64 && second <= 127)
+      || (first === 169 && second === 254)
+      || (first === 172 && second >= 16 && second <= 31)
+      || (first === 192 && second === 168);
 }
 
 function nodeToText(node: any): string {

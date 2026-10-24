@@ -5,7 +5,7 @@
  * Priority: P0 (Critical) - Download reliability.
  */
 
-import { NativeModules, NativeEventEmitter, Platform } from 'react-native';
+import { NativeModules,NativeEventEmitter,Platform } from 'react-native';
 
 // We need to test the class directly since the singleton auto-constructs.
 // Mock Platform and NativeModules before importing.
@@ -53,7 +53,7 @@ describe('BackgroundDownloadService', () => {
       });
 
     // Reset Platform.OS to android for most tests
-    Object.defineProperty(Platform, 'OS', { get: () => 'android' });
+    Object.defineProperty(Platform, 'OS', { get: () => 'ios' });
 
     // Re-require the module to get a fresh class
     jest.isolateModules(() => {
@@ -75,10 +75,7 @@ describe('BackgroundDownloadService', () => {
   // isAvailable
   // ========================================================================
   describe('isAvailable', () => {
-    it('returns true on Android with native module present', () => {
-      Object.defineProperty(Platform, 'OS', { get: () => 'android' });
-      expect(service.isAvailable()).toBe(true);
-    });
+
 
     it('returns true on iOS when native module is present', () => {
       Object.defineProperty(Platform, 'OS', { get: () => 'ios' });
@@ -1157,21 +1154,6 @@ describe('BackgroundDownloadService', () => {
       }
     });
 
-    it('returns false when excludePathFromBackup is not a function (Android)', async () => {
-      // Simulate Android where the native module lacks excludePathFromBackup
-      const originalMethod = (mockDownloadManagerModule as any)
-        .excludePathFromBackup;
-      delete (mockDownloadManagerModule as any).excludePathFromBackup;
-
-      try {
-        const result = await service.excludeFromBackup('/some/path');
-        expect(result).toBe(false);
-      } finally {
-        // Restore for other tests
-        (mockDownloadManagerModule as any).excludePathFromBackup =
-          originalMethod;
-      }
-    });
 
     it('calls native excludePathFromBackup when available (iOS)', async () => {
       (mockDownloadManagerModule as any).excludePathFromBackup = jest.fn(() =>

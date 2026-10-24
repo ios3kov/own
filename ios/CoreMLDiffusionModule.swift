@@ -6,7 +6,7 @@ import React
 import StableDiffusion
 
 /// React Native bridge for Apple's ml-stable-diffusion pipeline.
-/// Mirrors the Android LocalDreamModule interface so the TypeScript layer
+/// Provides the native Core ML image generation interface.
 /// can use a single abstraction via Platform.select().
 @objc(CoreMLDiffusionModule)
 class CoreMLDiffusionModule: RCTEventEmitter {
@@ -41,10 +41,9 @@ class CoreMLDiffusionModule: RCTEventEmitter {
     // If we're not actively generating, release the pipeline to free memory
     guard !generating else { return }
     if pipeline != nil {
-      NSLog("[CoreMLDiffusion] Memory warning received — unloading pipeline to prevent crash")
       pipeline = nil
       loadedModelPath = nil
-      sendEvent(withName: "LocalDreamError", body: [
+      sendEvent(withName: "OwnImageError", body: [
         "error": "Model unloaded due to low memory. Please try a smaller model."
       ])
     }
@@ -55,7 +54,7 @@ class CoreMLDiffusionModule: RCTEventEmitter {
   override static func requiresMainQueueSetup() -> Bool { false }
 
   override func supportedEvents() -> [String]! {
-    ["LocalDreamProgress", "LocalDreamError"]
+    ["OwnImageProgress", "OwnImageError"]
   }
 
   // MARK: - SDXL detection
@@ -266,7 +265,7 @@ class CoreMLDiffusionModule: RCTEventEmitter {
             if self.cancelRequested { return false }
 
             let progressValue = Double(progress.step) / Double(progress.stepCount)
-            self.sendEvent(withName: "LocalDreamProgress", body: [
+            self.sendEvent(withName: "OwnImageProgress", body: [
               "step": progress.step,
               "totalSteps": progress.stepCount,
               "progress": progressValue
@@ -278,8 +277,7 @@ class CoreMLDiffusionModule: RCTEventEmitter {
           // Catch errors from the pipeline (including TextEncoder failures)
           // and convert them to a JS-visible rejection instead of crashing.
           let msg = "Pipeline failed during image generation: \(error.localizedDescription)"
-          NSLog("[CoreMLDiffusion] %@", msg)
-          self.sendEvent(withName: "LocalDreamError", body: ["error": msg])
+          self.sendEvent(withName: "OwnImageError", body: ["error": msg])
 
           // If the error may indicate a corrupted model state, release it so
           // the next attempt triggers a fresh load.
@@ -323,7 +321,6 @@ class CoreMLDiffusionModule: RCTEventEmitter {
         // UI hangs.  The model will auto-reload on the next generation request.
         self.pipeline = nil
         self.loadedModelPath = nil
-        NSLog("[CoreMLDiffusion] Pipeline released after successful generation to reclaim memory")
 
         resolve([
           "id": imageId,
@@ -335,7 +332,7 @@ class CoreMLDiffusionModule: RCTEventEmitter {
 
       } catch {
         if !self.cancelRequested {
-          self.sendEvent(withName: "LocalDreamError", body: [
+          self.sendEvent(withName: "OwnImageError", body: [
             "error": error.localizedDescription
           ])
           reject("ERR_GENERATION", "Image generation failed: \(error.localizedDescription)", error)

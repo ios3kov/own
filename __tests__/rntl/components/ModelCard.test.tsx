@@ -792,7 +792,6 @@ describe('ModelCard', () => {
   });
 
   // ============================================================================
-  // Recommended config (curated entries like the LiteRT parent card)
   // ============================================================================
   describe('recommended config', () => {
     it('renders the pill with the default "Recommended" label when no pillLabel given', () => {

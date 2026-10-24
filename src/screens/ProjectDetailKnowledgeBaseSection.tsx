@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, Switch, ActivityIndicator, ScrollView, Platform } from 'react-native';
+import React,{ useState,useEffect,useCallback,useRef } from 'react';
+import { View,Text,TouchableOpacity,Switch,ActivityIndicator,ScrollView } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { pick, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
+import { pick,isErrorWithCode,errorCodes } from '@react-native-documents/picker';
 
 import { resolvePickedFileUri } from '../utils/resolvePickedFileUri';
 import { Button } from '../components/Button';
-import { showAlert, AlertState } from '../components/CustomAlert';
+import { showAlert,AlertState } from '../components/CustomAlert';
 import { ragService } from '../services/rag';
 import type { RagDocument } from '../services/rag';
 import { isPickerStuck } from '../utils/pickerErrorUtils';
@@ -43,10 +43,7 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({ projectId, colo
     setIsPicking(true);
     try {
       // iOS: 'import' → Apple copies the file before handing it to us, original untouched.
-      // Android: 'open' → returns a content:// URI; keepLocalCopy() copies it to a real path.
-      const files = Platform.OS === 'android'
-        ? await pick({ mode: 'open', allowMultiSelection: true })
-        : await pick({ mode: 'import', allowMultiSelection: true });
+      const files = (await pick({ mode: 'import', allowMultiSelection: true }));
       if (!files?.length) return;
 
       for (let i = 0; i < files.length; i++) {

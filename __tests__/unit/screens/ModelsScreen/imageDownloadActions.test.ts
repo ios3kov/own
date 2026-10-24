@@ -1,12 +1,11 @@
-import { Platform } from 'react-native';
 import { unzip } from 'react-native-zip-archive';
 import {
-  downloadHuggingFaceModel,
-  downloadCoreMLMultiFile,
-  proceedWithDownload,
-  handleDownloadImageModel,
-  registerAndNotify,
-  cancelSyntheticImageDownload,
+downloadHuggingFaceModel,
+downloadCoreMLMultiFile,
+proceedWithDownload,
+handleDownloadImageModel,
+registerAndNotify,
+cancelSyntheticImageDownload,
 } from '../../../../src/screens/ModelsScreen/imageDownloadActions';
 import { ImageModelDescriptor } from '../../../../src/screens/ModelsScreen/types';
 import { makeImageDownloadDeps } from '../../../utils/factories';
@@ -55,7 +54,7 @@ const mockStartDownload = jest.fn((_params: any) => Promise.resolve({ downloadId
 const mockDownloadFileTo = jest.fn((_opts: any): { downloadIdPromise?: Promise<string>; promise: Promise<void> } => ({ promise: Promise.resolve() }));
 const mockOnComplete = jest.fn((_id: string, cb: Function) => { completeCallbacks.push(cb); return jest.fn(); });
 const mockOnError = jest.fn((_id: string, cb: Function) => { errorCallbacks.push(cb); return jest.fn(); });
-const mockGetSoCInfo = jest.fn(() => Promise.resolve({ hasNPU: true, qnnVariant: '8gen2' }));
+const mockGetSoCInfo = jest.fn(() => Promise.resolve({ hasNPU: true, appleChip: 'A17 Pro' }));
 
 jest.mock('../../../../src/services', () => ({
   modelManager: {
@@ -94,7 +93,7 @@ function makeHFModelInfo(overrides: Partial<ImageModelDescriptor> = {}): ImageMo
     downloadUrl: 'https://example.com/model.zip',
     size: 1000000,
     style: 'creative',
-    backend: 'mnn',
+    backend: 'coreml',
     huggingFaceRepo: 'test/repo',
     huggingFaceFiles: [
       { path: 'unet/model.onnx', size: 500000 },
@@ -112,7 +111,7 @@ function makeZipModelInfo(overrides: Partial<ImageModelDescriptor> = {}): ImageM
     downloadUrl: 'https://example.com/model.zip',
     size: 2000000,
     style: 'creative',
-    backend: 'mnn',
+    backend: 'coreml',
     ...overrides,
   };
 }
@@ -225,7 +224,7 @@ describe('imageDownloadActions', () => {
         downloadedAt: new Date().toISOString(),
         size: 123,
         style: 'creative',
-        backend: 'mnn',
+        backend: 'coreml',
       },
       modelName: 'Img 1',
     });
@@ -235,23 +234,11 @@ describe('imageDownloadActions', () => {
     expect(deps.setAlertState).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success' }));
   });
 
-  it('handleDownloadImageModel shows incompatibility alert for unsupported QNN device', async () => {
-    const originalPlatform = Platform.OS;
-    Object.defineProperty(Platform, 'OS', { value: 'android' });
-    mockGetSoCInfo.mockResolvedValueOnce({ hasNPU: false, qnnVariant: 'min' });
-    const deps = makeDeps();
-
-    await handleDownloadImageModel(makeZipModelInfo({ backend: 'qnn' }), deps);
-
-    expect(deps.setAlertState).toHaveBeenCalledWith(expect.objectContaining({ title: 'Incompatible Model' }));
-    expect(mockStartDownload).not.toHaveBeenCalled();
-    Object.defineProperty(Platform, 'OS', { value: originalPlatform });
-  });
 
   it('handleDownloadImageModel proceeds for non-QNN models', async () => {
     const deps = makeDeps();
 
-    await handleDownloadImageModel(makeZipModelInfo({ backend: 'mnn' }), deps);
+    await handleDownloadImageModel(makeZipModelInfo({ backend: 'coreml' }), deps);
 
     expect(mockStartDownload).toHaveBeenCalled();
   });

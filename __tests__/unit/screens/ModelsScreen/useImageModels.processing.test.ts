@@ -1,4 +1,4 @@
-import { renderHook, act, waitFor } from '@testing-library/react-native';
+import { renderHook,act,waitFor } from '@testing-library/react-native';
 import { useImageModels } from '../../../../src/screens/ModelsScreen/useImageModels';
 
 const mockUseAppStore = jest.fn();
@@ -26,7 +26,7 @@ jest.mock('../../../../src/services', () => ({
     getImageModelRecommendation: jest.fn().mockResolvedValue({
       recommendedBackend: 'all',
       bannerText: 'ok',
-      compatibleBackends: ['mnn', 'qnn', 'coreml'],
+      compatibleBackends: ['coreml'],
     }),
   },
   backgroundDownloadService: {
@@ -38,10 +38,6 @@ jest.mock('../../../../src/screens/ModelsScreen/imageDownloadResume', () => ({
   resumeImageDownload: (...args: any[]) => mockResumeImageDownload(...args),
 }));
 
-jest.mock('../../../../src/services/huggingFaceModelBrowser', () => ({
-  fetchAvailableModels: jest.fn().mockResolvedValue([]),
-  guessStyle: jest.fn(() => 'all'),
-}));
 
 jest.mock('../../../../src/services/coreMLModelBrowser', () => ({
   fetchAvailableCoreMLModels: jest.fn().mockResolvedValue([]),

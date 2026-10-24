@@ -6,7 +6,7 @@
  * - blurType ternary: 'dark' when background === '#0A0A0A', 'light' otherwise
  */
 
-import { createElevation, COLORS_DARK, COLORS_LIGHT } from '../../../src/theme/palettes';
+import { createElevation,COLORS_DARK,COLORS_LIGHT } from '../../../src/theme/palettes';
 
 describe('createElevation', () => {
   describe('with dark colors (background === "#0A0A0A")', () => {
@@ -74,9 +74,6 @@ describe('createElevation', () => {
       expect(elevation.level0.borderColor).toBe('transparent');
     });
 
-    it('level3 and level4 have android overlay color', () => {
-      expect(elevation.level3.blur.android.overlayColor).toBeDefined();
-      expect(elevation.level4.blur.android.overlayColor).toBeDefined();
-    });
+
   });
 });

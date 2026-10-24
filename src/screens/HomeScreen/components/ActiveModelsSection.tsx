@@ -1,13 +1,13 @@
-import { APPLE_MODEL_ID, useFoundationStore } from '../../../services/foundationModels';
+import { APPLE_MODEL_ID,useFoundationStore } from '../../../services/foundationModels';
 import { useAppStore } from '../../../stores/appStore';
 import React from 'react';
-import { View, Text, ActivityIndicator, TouchableOpacity, StyleSheet } from 'react-native';
+import { View,Text,ActivityIndicator,TouchableOpacity,StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { AttachStep } from 'react-native-spotlight-tour';
 import { AnimatedPressable } from '../../../components/AnimatedPressable';
-import { useTheme, useThemedStyles } from '../../../theme';
+import { useTheme,useThemedStyles } from '../../../theme';
 import { createStyles } from '../styles';
-import { DownloadedModel, ONNXImageModel, RemoteModel } from '../../../types';
+import { DownloadedModel,ONNXImageModel,RemoteModel } from '../../../types';
 import { getMmProjFileSize } from '../../../utils/modelHelpers';
 import { LoadingState } from '../hooks/useHomeScreen';
 
@@ -62,7 +62,7 @@ const TextModelCard: React.FC<TextModelCardProps> = ({
   const appleAvailable = useFoundationStore(s => s.availability.available);
 
   return (
-    <AnimatedPressable style={styles.modelCard} onPress={onPress} hapticType="selection">
+    <AnimatedPressable style={styles.modelCard} onPress={onPress} hapticType="selection" testID="text-model-picker" accessibilityRole="button" accessibilityLabel="Choose text model">
       <View style={styles.modelCardHeader}>
         <Icon name="message-square" size={16} color={colors.textMuted} />
         <Text style={styles.modelCardLabel}>Text</Text>

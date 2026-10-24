@@ -4,10 +4,7 @@
 
 jest.mock('react-native', () => ({
   Platform: { OS: 'ios', select: (obj: any) => obj.ios },
-  PermissionsAndroid: {
-    request: jest.fn(),
-    PERMISSIONS: { WRITE_EXTERNAL_STORAGE: 'android.permission.WRITE_EXTERNAL_STORAGE' },
-  },
+
 }));
 
 jest.mock('react-native-fs', () => ({
@@ -27,11 +24,11 @@ jest.mock('../../../../src/components', () => ({
   showAlert: (title: string, message: string) => ({ visible: true, title, message, buttons: [] }),
 }));
 
-import { Platform, PermissionsAndroid } from 'react-native';
+import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
 import { saveImageToGallery } from '../../../../src/screens/ChatScreen/useSaveImage';
 
-const mockRequest = PermissionsAndroid.request as jest.Mock;
+
 const mockExists = RNFS.exists as jest.Mock;
 const mockMkdir = RNFS.mkdir as jest.Mock;
 const mockCopyFile = RNFS.copyFile as jest.Mock;
@@ -94,26 +91,5 @@ describe('saveImageToGallery', () => {
     );
   });
 
-  it('requests WRITE_EXTERNAL_STORAGE permission on android', async () => {
-    (Platform as any).OS = 'android';
-    await saveImageToGallery('file:///tmp/img.png', setAlertState);
-    expect(mockRequest).toHaveBeenCalledWith(
-      'android.permission.WRITE_EXTERNAL_STORAGE',
-      expect.any(Object),
-    );
-  });
 
-  it('saves to ExternalStorage on android', async () => {
-    (Platform as any).OS = 'android';
-    await saveImageToGallery('file:///tmp/img.png', setAlertState);
-    const [, dest] = mockCopyFile.mock.calls[0];
-    expect(dest).toContain('/ext/Pictures/Own/');
-  });
-
-  it('shows android-specific path in success alert', async () => {
-    (Platform as any).OS = 'android';
-    await saveImageToGallery('file:///tmp/img.png', setAlertState);
-    const alert = setAlertState.mock.calls[0][0];
-    expect(alert.message).toContain('Pictures/Own');
-  });
 });

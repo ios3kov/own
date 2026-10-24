@@ -41,6 +41,25 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 @objc(OwnSceneDelegate)
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
   var window: UIWindow?
+  private var privacyCover: UIView?
+
+  func showPrivacyCover() {
+    guard let window, privacyCover == nil else { return }
+    let cover = UIView(frame: window.bounds)
+    cover.backgroundColor = .systemBackground
+    cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    cover.accessibilityIdentifier = "own-privacy-cover"
+    window.addSubview(cover)
+    privacyCover = cover
+  }
+
+  func hidePrivacyCover() {
+    privacyCover?.removeFromSuperview()
+    privacyCover = nil
+  }
+
+  func sceneWillResignActive(_ scene: UIScene) { showPrivacyCover() }
+  func sceneDidBecomeActive(_ scene: UIScene) { hidePrivacyCover() }
 
   func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
     guard let windowScene = scene as? UIWindowScene,

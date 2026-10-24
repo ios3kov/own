@@ -1,20 +1,20 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React,{ useEffect,useState,useCallback } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
+View,
+Text,
+ScrollView,
+TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { Card } from '../components';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
-import { useTheme, useThemedStyles } from '../theme';
+import { CustomAlert,showAlert,hideAlert,AlertState,initialAlertState } from '../components/CustomAlert';
+import { useTheme,useThemedStyles } from '../theme';
 import { SPACING } from '../constants';
-import { useAppStore, useChatStore } from '../stores';
+import { useAppStore,useChatStore } from '../stores';
 import { useDownloadStore } from '../stores/downloadStore';
-import { hardwareService, modelManager } from '../services';
+import { hardwareService,modelManager } from '../services';
 import { OrphanedFilesSection } from './OrphanedFilesSection';
 import { createStyles } from './StorageSettingsScreen.styles';
 
@@ -176,11 +176,7 @@ export const StorageSettingsScreen: React.FC = () => {
                 <View style={styles.modelInfo}>
                   <Text style={styles.modelName} numberOfLines={1}>{model.name}</Text>
                   <Text style={styles.modelMeta}>
-                    {(() => {
-                      if (model.backend === 'coreml') return 'Core ML';
-                      if (model.backend === 'qnn') return 'Qualcomm NPU';
-                      return 'GPU';
-                    })()}
+                    Core ML
                     {model.style ? ` • ${model.style}` : ''}
                   </Text>
                 </View>

@@ -1,6 +1,5 @@
 import { requireDownloadConsent } from './downloadConsent';
-import { initWhisper, WhisperContext, RealtimeTranscribeEvent, AudioSessionIos } from 'whisper.rn';
-import { Platform, PermissionsAndroid } from 'react-native';
+import { initWhisper,WhisperContext,RealtimeTranscribeEvent,AudioSessionIos } from 'whisper.rn';
 import RNFS from 'react-native-fs';
 import logger from '../utils/logger';
 import { backgroundDownloadService } from './backgroundDownloadService';
@@ -173,36 +172,15 @@ class WhisperService {
   getLoadedModelPath(): string | null { return this.currentModelPath; }
 
   async requestPermissions(): Promise<boolean> {
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          {
-            title: 'Microphone Permission',
-            message: 'This app needs access to your microphone for voice input.',
-            buttonPositive: 'OK',
-            buttonNegative: 'Cancel',
-          }
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-      } catch (error) {
-        logger.error('[Whisper] Failed to request permission:', error);
-        return false;
-      }
+    try {
+      await AudioSessionIos.setCategory('PlayAndRecord', ['AllowBluetooth', 'MixWithOthers']);
+      await AudioSessionIos.setMode('Default');
+      await AudioSessionIos.setActive(true);
+      return true;
+    } catch (error) {
+      logger.error('[Whisper] iOS audio session/permission error:', error);
+      return false;
     }
-    if (Platform.OS === 'ios') {
-      try {
-        // Configure audio session for recording - this also triggers the permission prompt
-        await AudioSessionIos.setCategory('PlayAndRecord', ['AllowBluetooth', 'MixWithOthers']);
-        await AudioSessionIos.setMode('Default');
-        await AudioSessionIos.setActive(true);
-        return true;
-      } catch (error) {
-        logger.error('[Whisper] iOS audio session/permission error:', error);
-        return false;
-      }
-    }
-    return true;
   }
 
   async startRealtimeTranscription(
@@ -259,14 +237,14 @@ class WhisperService {
         maxLen: options?.maxLen || 0, // 0 = no limit
         realtimeAudioSec: 30, // Process in 30-second chunks
         realtimeAudioSliceSec: 3, // Slice every 3 seconds for faster intermediate results
-        ...(Platform.OS === 'ios' && {
+        ...(({
           audioSessionOnStartIos: {
             category: 'PlayAndRecord',
             options: ['AllowBluetooth', 'MixWithOthers'],
             mode: 'Default',
           },
           audioSessionOnStopIos: 'restore',
-        }),
+        })),
       });
 
       logger.log('[WhisperService] transcribeRealtime started successfully');

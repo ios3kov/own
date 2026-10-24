@@ -26,11 +26,20 @@ export interface IndexDocumentParams {
 }
 
 class RagService {
+  private indexing=new Set<string>();
   async ensureReady(): Promise<void> {
     await ragDatabase.ensureReady();
   }
 
   async indexDocument(params: IndexDocumentParams): Promise<number> {
+    const keys=[JSON.stringify([params.projectId,'path',params.filePath]),JSON.stringify([params.projectId,'name',params.fileName])];
+    if (keys.some(key=>this.indexing.has(key))) throw new Error('This document is already being indexed');
+    keys.forEach(key=>this.indexing.add(key));
+    try { return await this.indexDocumentImpl(params); }
+    finally { keys.forEach(key=>this.indexing.delete(key)); }
+  }
+
+  private async indexDocumentImpl(params: IndexDocumentParams): Promise<number> {
     const { projectId, filePath, fileName, fileSize, onProgress } = params;
     await this.ensureReady();
 
@@ -55,8 +64,7 @@ class RagService {
     }
 
     onProgress?.({ stage: 'indexing', message: 'Indexing chunks...' });
-    const docId = ragDatabase.insertDocument({ projectId, name: fileName, path: filePath, size: fileSize });
-    const rowIds = ragDatabase.insertChunks(docId, chunks);
+    const {docId,rowIds} = ragDatabase.insertDocumentWithChunks({ projectId, name: fileName, path: filePath, size: fileSize }, chunks);
 
     onProgress?.({ stage: 'embedding', message: 'Generating embeddings...' });
     try {

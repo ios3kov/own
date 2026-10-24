@@ -1,26 +1,26 @@
 import { limitChatHistory } from '../utils/modelResponseSettings';
 import { replySpeech } from './replySpeech';
-import { foundationModelService, isAppleModelSelected } from './foundationModels';
+import { foundationModelService,isAppleModelSelected } from './foundationModels';
 import { generateFoundationResponse } from './foundationGeneration';
 /** GenerationService - Handles LLM generation independently of UI lifecycle */
 import { llmService } from './llm';
-import { liteRTService } from './litert';
+
 import { getActiveEngineService } from './engines';
-import { useAppStore, useChatStore, useRemoteServerStore } from '../stores';
-import { Message, GenerationMeta, MediaAttachment, DocumentSource } from '../types';
+import { useAppStore,useChatStore,useRemoteServerStore } from '../stores';
+import { Message,GenerationMeta,MediaAttachment,DocumentSource } from '../types';
 import { runToolLoop } from './generationToolLoop';
 import type { ToolResult } from './tools/types';
 import { providerRegistry } from './providers';
 import logger from '../utils/logger';
-import { shouldShowSharePrompt, emitSharePrompt } from '../utils/sharePrompt';
+import { shouldShowSharePrompt,emitSharePrompt } from '../utils/sharePrompt';
 import {
-  buildGenerationMetaImpl,
-  buildToolLoopHandlersImpl,
-  prepareGenerationImpl,
-  generateResponseImpl,
-  generateRemoteResponseImpl,
-  generateRemoteWithToolsImpl,
-  type GenerationWithToolsRequest,
+buildGenerationMetaImpl,
+buildToolLoopHandlersImpl,
+prepareGenerationImpl,
+generateResponseImpl,
+generateRemoteResponseImpl,
+generateRemoteWithToolsImpl,
+type GenerationWithToolsRequest,
 } from './generationServiceHelpers';
 
 const SHARE_PROMPT_DELAY_MS = 1500;
@@ -227,7 +227,6 @@ class GenerationService {
       if (isAppleModelSelected()) await foundationModelService.stopGeneration();
       // Stop all engines and remote
       await llmService.stopGeneration().catch(() => { });
-      await liteRTService.stopGeneration().catch(() => { });
       const provider = this.getCurrentProvider();
       if (provider) provider.stopGeneration().catch(() => { });
       if (this.currentRemoteAbortController) {

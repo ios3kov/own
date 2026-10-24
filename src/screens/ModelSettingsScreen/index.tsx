@@ -1,14 +1,14 @@
 import { SimpleModelSettings } from '../../components/SimpleModelSettings';
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, InteractionManager, KeyboardAvoidingView, Platform } from 'react-native';
+import React,{ useState,useEffect } from 'react';
+import { View,Text,ScrollView,TouchableOpacity,InteractionManager,KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
-import { AttachStep, useSpotlightTour } from 'react-native-spotlight-tour';
+import { AttachStep,useSpotlightTour } from 'react-native-spotlight-tour';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '../../components';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../../components/CustomAlert';
+import { CustomAlert,showAlert,hideAlert,AlertState,initialAlertState } from '../../components/CustomAlert';
 import { consumePendingSpotlight } from '../../components/onboarding/spotlightState';
-import { useTheme, useThemedStyles } from '../../theme';
+import { useTheme,useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
 import { createStyles } from './styles';
 import { SystemPromptSection } from './SystemPromptSection';
@@ -59,7 +59,7 @@ export const ModelSettingsScreen: React.FC = () => {
         </TouchableOpacity>
         <Text style={styles.title}>Model Settings</Text>
       </View>
-      <KeyboardAvoidingView style={styles.flex1} behavior={Platform.OS==='ios'?'padding':undefined}>
+      <KeyboardAvoidingView style={styles.flex1} behavior={('padding')}>
       <ScrollView testID="model-settings-scroll" keyboardShouldPersistTaps="handled" style={styles.scrollView} contentContainerStyle={styles.content}>
         <AttachStep index={6} fill>
           <TouchableOpacity

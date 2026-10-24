@@ -1,22 +1,22 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React,{ useState,useEffect,useCallback,useRef } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Switch,
-  ActivityIndicator,
-  Alert,
-  Platform,
+View,
+Text,
+FlatList,
+TouchableOpacity,
+Switch,
+ActivityIndicator,
+Alert,
+Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation,useRoute,RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
-import { pick, isErrorWithCode, errorCodes } from '@react-native-documents/picker';
+import { pick,isErrorWithCode,errorCodes } from '@react-native-documents/picker';
 import { resolvePickedFileUri } from '../utils/resolvePickedFileUri';
 import logger from '../utils/logger';
-import { useTheme, useThemedStyles } from '../theme';
+import { useTheme,useThemedStyles } from '../theme';
 import { createStyles } from './KnowledgeBaseScreen.styles';
 import { useProjectStore } from '../stores';
 import { ragService } from '../services/rag';
@@ -73,10 +73,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
     logger.log(`[KnowledgeBase] picker opening — platform: ${Platform.OS}, projectId: ${projectId}`);
     try {
       // iOS: 'import' → Apple copies the file before handing it to us, original untouched.
-      // Android: 'open' → returns a content:// URI; keepLocalCopy() copies it to a real path.
-      const files = Platform.OS === 'android'
-        ? await pick({ mode: 'open', allowMultiSelection: true })
-        : await pick({ mode: 'import', allowMultiSelection: true });
+      const files = (await pick({ mode: 'import', allowMultiSelection: true }));
       if (!files?.length) {
         logger.log('[KnowledgeBase] picker returned empty result');
         return;

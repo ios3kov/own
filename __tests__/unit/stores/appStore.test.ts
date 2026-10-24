@@ -6,13 +6,13 @@
  */
 
 import { useAppStore } from '../../../src/stores/appStore';
-import { resetStores, getAppState } from '../../utils/testHelpers';
+import { resetStores,getAppState } from '../../utils/testHelpers';
 import {
-  createDownloadedModel,
-  createDeviceInfo,
-  createModelRecommendation,
-  createONNXImageModel,
-  createGeneratedImage,
+createDownloadedModel,
+createDeviceInfo,
+createModelRecommendation,
+createONNXImageModel,
+createGeneratedImage,
 } from '../../utils/factories';
 
 describe('appStore', () => {
@@ -924,7 +924,7 @@ describe('appStore', () => {
     });
 
     it('has flashAttn enabled by default on iOS (test env platform)', () => {
-      // The store initializes flashAttn as Platform.OS !== 'android'.
+      // The store initializes flashAttn as Platform.OS !== 'ios'.
       // The react-native preset sets defaultPlatform to 'ios', so without resetStores()
       // the store should default to true. We verify by loading a fresh store instance.
       jest.resetModules();
@@ -938,12 +938,6 @@ describe('appStore', () => {
       }
     });
 
-    it('flashAttn default formula: false on Android, true elsewhere', () => {
-      // The store default is Platform.OS !== 'android'. Verify the formula directly.
-      const formula = (os: string) => os !== 'android';
-      expect(formula('android')).toBe(false); // Android → flash attn off by default
-      expect(formula('ios')).toBe(true);      // iOS     → flash attn on by default
-    });
 
     it('updateSettings can toggle flashAttn', () => {
       const { updateSettings } = useAppStore.getState();
@@ -1304,4 +1298,12 @@ describe('appStore', () => {
     });
   });
 
+});
+
+describe('tool preferences survive restore', () => {
+  it.each([[[]], [['web_search']]])('keeps an explicit saved tool list %j', enabledTools => {
+    const state = useAppStore.getState();
+    const restored = useAppStore.persist.getOptions().merge!({settings:{enabledTools}},state);
+    expect(restored.settings.enabledTools).toEqual(enabledTools);
+  });
 });

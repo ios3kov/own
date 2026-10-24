@@ -46,21 +46,18 @@ The emotional arc for all content: **Recognition -> Return -> Freedom**. Name wh
 - Never use `lucide-react` or any other icon library — only `react-native-vector-icons`.
 - Follow the 5-category text hierarchy: TITLE → BODY → SUBTITLE/DESCRIPTION → META.
 
-## Pre-Commit Quality Gates
+## Pre-Push Quality Gates
 
-All quality gates run automatically via Husky on every `git commit`, scoped to the file types you staged:
+The installed Husky pre-push hook checks the pushed change range:
 
-| Staged file type | Checks that run automatically |
+| Changed file type | Required checks |
 |---|---|
-| `.ts` / `.tsx` / `.js` / `.jsx` | eslint (staged only), `tsc --noEmit`, `npm test` |
-| `.swift` | swiftlint (staged only), `npm run test:ios` |
-| `.kt` / `.kts` | `compileDebugKotlin` (type check), `lintDebug`, `npm run test:android` |
+| `.ts` / `.tsx` / `.js` / `.jsx` | ESLint, TypeScript and related Jest tests |
+| `.swift` | SwiftLint and the native/simulator iOS test suite |
 
-**Requirements:**
-- SwiftLint: `brew install swiftlint` (skipped with a warning if not installed)
-- Android checks require the Gradle wrapper in `android/`
+Use Node24, Xcode and CocoaPods. Significant changes also require the full applicable unit/integration coverage suite and an iOS build. The host-dependent actual Apple-model probe is explicit (`npm run test:ios:apple`); it remains a required supported-device acceptance check even when ordinary CI cannot run it. Record skips and external review-service gaps separately.
 
-Before writing new code, ensure tests exist for your changes. If the hook fails, fix the issue and recommit — never skip with `--no-verify`.
+Fix failing checks before pushing. Never bypass hooks with `--no-verify`. The hook must stop on failure. See package.json and scripts/test-ios.sh for the live commands. Physical-device, traffic and performance acceptance remain separate from simulator success.
 
 ## Testing Requirements
 

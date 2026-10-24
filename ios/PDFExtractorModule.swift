@@ -1,6 +1,13 @@
 import Foundation
 import PDFKit
 
+// Do not even evaluate private diagnostic payloads in a Release build.
+func pdfDebugLog(_ message: @autoclosure () -> String) {
+#if DEBUG
+  print(message())
+#endif
+}
+
 @objc(PDFExtractorModule)
 class PDFExtractorModule: NSObject {
 
@@ -13,7 +20,7 @@ class PDFExtractorModule: NSObject {
   // swiftlint:disable:next cyclomatic_complexity
   func extractText(_ filePath: String, maxChars: Double, resolver resolve: @escaping RCTPromiseResolveBlock, rejecter reject: @escaping RCTPromiseRejectBlock) {
     DispatchQueue.global(qos: .userInitiated).async {
-      print("[PDFExtractor] Received filePath: \(filePath)")
+      pdfDebugLog("[PDFExtractor] Received filePath: \(filePath)")
 
       // Parse the file path as a URL
       var url: URL?
@@ -28,24 +35,24 @@ class PDFExtractorModule: NSObject {
         return
       }
 
-      print("[PDFExtractor] Parsed URL: \(url.path)")
-      print("[PDFExtractor] URL scheme: \(url.scheme ?? "none")")
+      pdfDebugLog("[PDFExtractor] Parsed URL: \(url.path)")
+      pdfDebugLog("[PDFExtractor] URL scheme: \(url.scheme ?? "none")")
 
       // For security-scoped resources (files from document picker), we need to request access
       let didStartAccessing = url.startAccessingSecurityScopedResource()
-      print("[PDFExtractor] Security-scoped access: \(didStartAccessing)")
+      pdfDebugLog("[PDFExtractor] Security-scoped access: \(didStartAccessing)")
 
       // Check if file exists
       let fileManager = FileManager.default
       var isDirectory: ObjCBool = false
       let exists = fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
-      print("[PDFExtractor] File exists: \(exists), isDirectory: \(isDirectory.boolValue)")
+      pdfDebugLog("[PDFExtractor] File exists: \(exists), isDirectory: \(isDirectory.boolValue)")
 
       if !exists {
         // Try alternate path without file:// prefix components
         let alternatePath = url.path
         let alternateExists = fileManager.fileExists(atPath: alternatePath, isDirectory: &isDirectory)
-        print("[PDFExtractor] Alternate path exists: \(alternateExists)")
+        pdfDebugLog("[PDFExtractor] Alternate path exists: \(alternateExists)")
       }
 
       defer {
@@ -56,7 +63,7 @@ class PDFExtractorModule: NSObject {
 
       // Check if file is readable
       let isReadable = fileManager.isReadableFile(atPath: url.path)
-      print("[PDFExtractor] File is readable: \(isReadable)")
+      pdfDebugLog("[PDFExtractor] File is readable: \(isReadable)")
 
       // Attempt to open the PDF document
       guard let document = PDFDocument(url: url) else {
@@ -77,7 +84,7 @@ class PDFExtractorModule: NSObject {
             let data = try Data(contentsOf: url, options: .mappedIfSafe)
             let firstBytes = data.prefix(8)
             let header = firstBytes.map { String(format: "%02X", $0) }.joined(separator: " ")
-            print("[PDFExtractor] File header (hex): \(header)")
+            pdfDebugLog("[PDFExtractor] File header (hex): \(header)")
 
             if data.count < 5 {
               errorMessage = "File is too small to be a valid PDF: \(data.count) bytes"
@@ -91,12 +98,12 @@ class PDFExtractorModule: NSObject {
           }
         }
 
-        print("[PDFExtractor] Error: \(errorMessage)")
+        pdfDebugLog("[PDFExtractor] Error: \(errorMessage)")
         reject("PDF_ERROR", errorMessage, nil as NSError?)
         return
       }
 
-      print("[PDFExtractor] Successfully opened PDF with \(document.pageCount) pages")
+      pdfDebugLog("[PDFExtractor] Successfully opened PDF with \(document.pageCount) pages")
 
       let limit = Int(maxChars)
       var fullText = ""
@@ -115,7 +122,7 @@ class PDFExtractorModule: NSObject {
         }
       }
 
-      print("[PDFExtractor] Extracted \(fullText.count) characters")
+      pdfDebugLog("[PDFExtractor] Extracted \(fullText.count) characters")
       resolve(fullText)
     }
   }

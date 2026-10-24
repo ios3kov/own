@@ -1,7 +1,7 @@
 /**
  * Generate a unique ID using crypto.getRandomValues when available,
  * with a Date.now()-based fallback for environments where the Web Crypto
- * API is not exposed (e.g. older Hermes builds on Android).
+ * API is not exposed.
  */
 export function generateId(): string {
   let random: string;

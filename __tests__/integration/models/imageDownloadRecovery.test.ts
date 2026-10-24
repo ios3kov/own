@@ -126,7 +126,7 @@ describe('image download recovery integration', () => {
           imageModelName: 'Test Model',
           imageModelDescription: 'desc',
           imageModelSize: 1000,
-          imageModelBackend: 'mnn',
+          imageModelBackend: 'coreml',
         }),
       },
     ]);

@@ -1,16 +1,16 @@
 import { DownloadCancelledError } from '../../services/downloadConsent';
-import { useState, useCallback, useMemo, useEffect } from 'react';
-import { Keyboard, BackHandler } from 'react-native';
+import { useState,useCallback,useMemo,useEffect } from 'react';
+import { Keyboard,BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { showAlert, AlertState } from '../../components/CustomAlert';
-import { RECOMMENDED_MODELS, TRENDING_FAMILIES, MODEL_ORGS } from '../../constants';
+import { showAlert,AlertState } from '../../components/CustomAlert';
+import { RECOMMENDED_MODELS,TRENDING_FAMILIES,MODEL_ORGS } from '../../constants';
 import { useAppStore } from '../../stores';
-import { useDownloadStore, isActiveStatus } from '../../stores/downloadStore';
+import { useDownloadStore,isActiveStatus } from '../../stores/downloadStore';
 import { makeModelKey } from '../../utils/modelKey';
-import { huggingFaceService, modelManager, hardwareService, activeModelService } from '../../services';
-import { ModelInfo, ModelFile, DownloadedModel } from '../../types';
-import { FilterDimension, FilterState, ModelTypeFilter, CredibilityFilter, SizeFilter, SortOption } from './types';
-import { initialFilterState, SIZE_OPTIONS, VISION_PIPELINE_TAG, CODE_FALLBACK_QUERY } from './constants';
+import { huggingFaceService,modelManager,hardwareService,activeModelService } from '../../services';
+import { ModelInfo,ModelFile,DownloadedModel } from '../../types';
+import { FilterDimension,FilterState,ModelTypeFilter,CredibilityFilter,SizeFilter,SortOption } from './types';
+import { initialFilterState,SIZE_OPTIONS,VISION_PIPELINE_TAG,CODE_FALLBACK_QUERY } from './constants';
 import { getModelType } from './utils';
 import logger from '../../utils/logger';
 import { getUserFacingDownloadMessage } from '../../utils/downloadErrors';
@@ -184,7 +184,6 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
 
   const handleSelectModel = async (model: ModelInfo) => {
     setSelectedModel(model); setIsLoadingFiles(true);
-    // Curated entries under the Own/ namespace (e.g. the synthetic LiteRT
     // parent) ship with their files baked into the ModelInfo — skip the
     // HuggingFace fetch and use them as-is. Real HF models always go through
     // the fetch path even when factories/mocks pre-populate model.files.

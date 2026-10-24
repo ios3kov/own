@@ -1,25 +1,25 @@
 // ActiveModelService — THE ONLY PLACE models should be loaded/unloaded from.
 import { llmService } from '../llm';
-import { localDreamGeneratorService as onnxImageGeneratorService } from '../localDreamGenerator';
+import { coreMLImageGeneratorService } from '../coreMLImageGenerator';
 import { hardwareService } from '../hardware';
 import { useAppStore } from '../../stores';
 import { ONNXImageModel } from '../../types';
 import type {
-  ActiveModelInfo,
-  ResourceUsage,
-  ModelType,
-  MemoryCheckResult,
-  ModelChangeListener,
+ActiveModelInfo,
+ResourceUsage,
+ModelType,
+MemoryCheckResult,
+ModelChangeListener,
 } from './types';
 import {
-  checkMemoryForModel as _checkMemoryForModel,
-  checkMemoryForDualModel as _checkMemoryForDualModel,
-  getCurrentlyLoadedMemoryGB as _getCurrentlyLoadedMemoryGB,
+checkMemoryForModel as _checkMemoryForModel,
+checkMemoryForDualModel as _checkMemoryForDualModel,
+getCurrentlyLoadedMemoryGB as _getCurrentlyLoadedMemoryGB,
 } from './memory';
-import { doLoadTextModel, doLoadImageModel } from './loaders';
+import { doLoadTextModel,doLoadImageModel } from './loaders';
 import {
-  getResourceUsage as _getResourceUsage,
-  syncWithNativeState as _syncWithNativeState,
+getResourceUsage as _getResourceUsage,
+syncWithNativeState as _syncWithNativeState,
 } from './utils';
 export type {
   ModelType,
@@ -161,15 +161,8 @@ class ActiveModelService {
     modelId: string,
     model: ONNXImageModel,
   ): Promise<{ canLoad: boolean; error?: string }> {
-    if (model.backend === 'qnn') {
-      const socInfo = await hardwareService.getSoCInfo();
-      if (!socInfo.hasNPU) {
-        return {
-          canLoad: false,
-          error:
-            'NPU models require a Qualcomm Snapdragon processor. Your device does not have a compatible NPU. Please use a GPU model instead.',
-        };
-      }
+    if (model.backend && model.backend !== 'coreml') {
+      return {canLoad:false, error:'This image model is not supported. Choose a Core ML model.'};
     }
     const totalMemGB = hardwareService.getTotalMemoryGB();
     if (totalMemGB <= 4 && this.loadedTextModelId && llmService.isModelLoaded()) {
@@ -191,7 +184,7 @@ class ActiveModelService {
       this.loadedImageModelId === modelId &&
       this.loadedImageModelThreads !== imageThreads;
     if (this.loadedImageModelId === modelId) {
-      const isLoaded = await onnxImageGeneratorService.isModelLoaded();
+      const isLoaded = await coreMLImageGeneratorService.isModelLoaded();
       if (isLoaded && !needsThreadReload) {
         if (store.activeImageModelId !== modelId) {
           store.setActiveImageModelId(modelId);
@@ -248,7 +241,7 @@ class ActiveModelService {
       await this.imageLoadPromise;
     }
     const store = useAppStore.getState();
-    const isNativeLoaded = await onnxImageGeneratorService.isModelLoaded();
+    const isNativeLoaded = await coreMLImageGeneratorService.isModelLoaded();
     if (
       !store.activeImageModelId &&
       !this.loadedImageModelId &&
@@ -260,7 +253,7 @@ class ActiveModelService {
     this.notifyListeners();
     try {
       if (isNativeLoaded) {
-        await onnxImageGeneratorService.unloadModel();
+        await coreMLImageGeneratorService.unloadModel();
       }
       this.loadedImageModelId = null;
       this.loadedImageModelThreads = null;

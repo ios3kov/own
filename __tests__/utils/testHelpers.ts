@@ -12,15 +12,15 @@ import { useProjectStore } from '../../src/stores/projectStore';
 import { useWhisperStore } from '../../src/stores/whisperStore';
 import { useRemoteServerStore } from '../../src/stores/remoteServerStore';
 import {
-  createConversation,
-  createMessage,
-  createDownloadedModel,
-  createDeviceInfo,
-  createONNXImageModel,
-  createGeneratedImage,
-  resetIdCounter,
-  ConversationFactoryOptions,
-  DownloadedModelFactoryOptions,
+createConversation,
+createMessage,
+createDownloadedModel,
+createDeviceInfo,
+createONNXImageModel,
+createGeneratedImage,
+resetIdCounter,
+ConversationFactoryOptions,
+DownloadedModelFactoryOptions,
 } from './factories';
 
 // ============================================================================
@@ -61,7 +61,6 @@ export const resetStores = (): void => {
       imageThreads: 4,
       imageWidth: 512,
       imageHeight: 512,
-      imageUseOpenCL: true,
       modelLoadingStrategy: 'performance',
       enableGpu: true,
       inferenceBackend: 'cpu' as const,
@@ -72,10 +71,6 @@ export const resetStores = (): void => {
       enhanceImagePrompts: false,
       enabledTools: ['calculator', 'get_current_datetime'],
       thinkingEnabled: true,
-      liteRTBackend: 'gpu' as const,
-      liteRTTemperature: 0.7,
-      liteRTTopP: 0.9,
-      liteRTMaxTokens: 4096,
     },
     downloadedImageModels: [],
     activeImageModelId: null,

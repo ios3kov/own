@@ -1,19 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {NavigationContainer} from '@react-navigation/native';
-import {ModelSettingsScreen} from '../../../src/screens/ModelSettingsScreen';
+import { NavigationContainer } from '@react-navigation/native';
+import { ModelSettingsScreen } from '../../../src/screens/ModelSettingsScreen';
 import React from 'react';
-import {render,fireEvent,act,waitFor} from '@testing-library/react-native';
-import {SimpleModelSettings} from '../../../src/components/SimpleModelSettings';
-import {useAppStore} from '../../../src/stores/appStore';
-import {useRemoteServerStore} from '../../../src/stores/remoteServerStore';
-import {useResponseProfilesStore} from '../../../src/stores/responseProfilesStore';
-import {APPLE_MODEL_ID} from '../../../src/services/foundationModels';
-import {generationService} from '../../../src/services/generationService';
-import {llmService} from '../../../src/services/llm';
-import {resetStores,setupWithActiveModel,setupWithConversation} from '../../utils/testHelpers';
+import { render,fireEvent,act,waitFor } from '@testing-library/react-native';
+import { SimpleModelSettings } from '../../../src/components/SimpleModelSettings';
+import { useAppStore } from '../../../src/stores/appStore';
+import { useRemoteServerStore } from '../../../src/stores/remoteServerStore';
+import { useResponseProfilesStore } from '../../../src/stores/responseProfilesStore';
+import { APPLE_MODEL_ID } from '../../../src/services/foundationModels';
+import { generationService } from '../../../src/services/generationService';
+import { llmService } from '../../../src/services/llm';
+import { resetStores,setupWithActiveModel,setupWithConversation } from '../../utils/testHelpers';
 
 jest.mock('../../../src/services/llm');
-jest.mock('../../../src/services/litert');
+
 jest.mock('../../../src/utils/sharePrompt',()=>({shouldShowSharePrompt:()=>false,emitSharePrompt:jest.fn()}));
 describe('understandable model settings to real generation state',()=>{
   beforeEach(()=>{resetStores();jest.clearAllMocks();useResponseProfilesStore.setState({profiles:[],active:{}});useAppStore.getState().setActiveModelId(APPLE_MODEL_ID);});

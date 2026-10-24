@@ -11,7 +11,6 @@ export type HapticType =
 
 const options = {
   enableVibrateFallback: true,
-  ignoreAndroidSystemSettings: false,
 };
 
 export function triggerHaptic(type: HapticType): void {

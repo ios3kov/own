@@ -1,25 +1,25 @@
-import { APPLE_MODEL_ID, APPLE_MODEL_NAME, useFoundationStore } from '../../services/foundationModels';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { AlertState, initialAlertState } from '../../components';
-import { useAppStore, useChatStore, useProjectStore, useRemoteServerStore } from '../../stores';
+import { APPLE_MODEL_ID,APPLE_MODEL_NAME,useFoundationStore } from '../../services/foundationModels';
+import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
+import { useNavigation,useRoute,RouteProp } from '@react-navigation/native';
+import { AlertState,initialAlertState } from '../../components';
+import { useAppStore,useChatStore,useProjectStore,useRemoteServerStore } from '../../stores';
 import logger from '../../utils/logger';
 import {
-  llmService, generationService, imageGenerationService, activeModelService,
-  ImageGenerationState, hardwareService, QueuedMessage,
-  contextCompactionService,
+llmService,generationService,imageGenerationService,activeModelService,
+ImageGenerationState,hardwareService,QueuedMessage,
+contextCompactionService,
 } from '../../services';
-import { liteRTService } from '../../services/litert';
-import { Message, MediaAttachment, Project, DownloadedModel, DebugInfo, RemoteModel, INFERENCE_BACKENDS } from '../../types';
+
+import { Message,MediaAttachment,Project,DownloadedModel,DebugInfo,RemoteModel } from '../../types';
 import { RootStackParamList } from '../../navigation/types';
-import { ensureModelLoadedFn, handleModelSelectFn, handleUnloadModelFn, initiateModelLoad, useChatImageModelEffects, useChatModelStateSync } from './useChatModelActions';
-import { startGenerationFn, handleSendFn, handleStopFn, handleSelectProjectFn } from './useChatGenerationActions';
-import { handleRetryMessageFn, handleEditMessageFn, handleDeleteConversationFn, handleGenerateImageFromMsgFn } from './useChatMessageHandlers';
-import { getDisplayMessages, getPlaceholderText, ChatMessageItem, StreamingState } from './types';
+import { ensureModelLoadedFn,handleModelSelectFn,handleUnloadModelFn,initiateModelLoad,useChatImageModelEffects,useChatModelStateSync } from './useChatModelActions';
+import { startGenerationFn,handleSendFn,handleStopFn,handleSelectProjectFn } from './useChatGenerationActions';
+import { handleRetryMessageFn,handleEditMessageFn,handleDeleteConversationFn,handleGenerateImageFromMsgFn } from './useChatMessageHandlers';
+import { getDisplayMessages,getPlaceholderText,ChatMessageItem,StreamingState } from './types';
 import { saveImageToGallery } from './useSaveImage';
 import {
-  isSuspiciousRecoveredImageModel,
-  isSuspiciousRecoveredTextModel,
+isSuspiciousRecoveredImageModel,
+isSuspiciousRecoveredTextModel,
 } from '../../utils/modelSelectorFilters';
 
 export type { AlertState, ChatMessageItem, StreamingState };
@@ -236,11 +236,7 @@ export const useChatScreen = () => {
   // Check if there are pending settings that require model reload
   const hasPendingSettings = (() => {
     if (activeModelId === APPLE_MODEL_ID || !loadedSettings) return false;
-    // LiteRT reloads when backend or context length changes — both are baked into the engine at load time
-    if (activeModel?.engine === 'litert') {
-      return settings.liteRTBackend !== loadedSettings.liteRTBackend ||
-             settings.liteRTMaxTokens !== loadedSettings.liteRTMaxTokens;
-    }
+    ;
     return (
       settings.nThreads !== loadedSettings.nThreads ||
       settings.nBatch !== loadedSettings.nBatch ||
@@ -249,22 +245,14 @@ export const useChatScreen = () => {
       settings.inferenceBackend !== loadedSettings.inferenceBackend ||
       settings.gpuLayers !== loadedSettings.gpuLayers ||
       settings.flashAttn !== loadedSettings.flashAttn ||
-      // Compare effective cache type — OpenCL forces f16 regardless of user setting
-      (settings.inferenceBackend === INFERENCE_BACKENDS.OPENCL ? 'f16' : settings.cacheType) !== loadedSettings.cacheType
+      (settings.cacheType) !== loadedSettings.cacheType
     );
   })();
 
   const handleReloadTextModel = useCallback(async () => {
     if (!activeModelInfo.modelId || activeModelInfo.isRemote) return;
     setShowModelSelector(true);
-    if (activeModel?.engine === 'litert') {
-      // Unload LiteRT engine before reloading with the new backend
-      if (liteRTService.isModelLoaded()) {
-        await liteRTService.unloadModel().catch(() => { });
-      }
-    // Must unload first — loadTextModel skips if the same model ID is already loaded,
-    // which means setLoadedSettings would never run and the banner would persist.
-    } else if (llmService.isModelLoaded()) {
+    if (llmService.isModelLoaded()) {
       await activeModelService.unloadTextModel();
     }
     await initiateModelLoad(modelDeps, false);

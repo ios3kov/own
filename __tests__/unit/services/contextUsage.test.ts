@@ -1,5 +1,5 @@
-import {beginContextUsage,measureLocalContext,useContextUsage,contextUsageLabel} from '../../../src/services/contextUsage';
-import {useChatStore} from '../../../src/stores/chatStore';
+import { beginContextUsage,measureLocalContext,useContextUsage,contextUsageLabel } from '../../../src/services/contextUsage';
+import { useChatStore } from '../../../src/stores/chatStore';
 describe('context use at the actual local inference boundary',()=>{
   beforeEach(()=>{useContextUsage.setState({latest:null});useChatStore.setState({streamingForConversationId:'c'});});
   it('uses the tokenizer on the formatted tools, documents and media prompt, plus reply reserve',async()=>{
@@ -33,5 +33,30 @@ describe('context use at the actual local inference boundary',()=>{
     await measureLocalContext(context,{messages:[],n_predict:15},20);
     expect(contextUsageLabel(useContextUsage.getState().latest!)).toContain('95%');
     expect(contextUsageLabel(useContextUsage.getState().latest!)).toContain('Older messages may need to be shortened.');
+  });
+});
+
+describe('unknown context limits and cancelled requests',()=>{
+  it('does not tokenize without an owned active chat',async()=>{
+    const context:any={getFormattedChat:jest.fn()};
+    useContextUsage.setState({latest:null});
+    await measureLocalContext(context,{});
+    beginContextUsage('another-chat');
+    useChatStore.setState({streamingForConversationId:'c'});
+    await measureLocalContext(context,{});
+    expect(context.getFormattedChat).not.toHaveBeenCalled();
+  });
+  it('does not display a made-up budget for unbounded or invalid limits',async()=>{
+    useChatStore.setState({streamingForConversationId:'c'});
+    const context:any={getFormattedChat:async()=>({prompt:'prompt'}),tokenize:async()=>({tokens:[1,2]})};
+    for (const [reserve,capacity] of [[-1,20],[0,20],[6,-1],[6,1.5],[6,undefined]]) {
+      beginContextUsage('c');await measureLocalContext(context,{n_predict:reserve,chatTemplate:'custom'},capacity);
+      expect(contextUsageLabel(useContextUsage.getState().latest!)).toContain('unavailable');
+    }
+  });
+  it('rejects a malformed tokenizer result',async()=>{
+    useChatStore.setState({streamingForConversationId:'c'});beginContextUsage('c');
+    await measureLocalContext({getFormattedChat:async()=>({prompt:'prompt'}),tokenize:async()=>({tokens:null})} as any,{n_predict:6},20);
+    expect(useContextUsage.getState().latest?.promptTokens).toBeNull();
   });
 });

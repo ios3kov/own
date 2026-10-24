@@ -65,7 +65,7 @@ class DownloadManagerModule: RCTEventEmitter {
     var bytesDownloaded: Int64
     var status: String // pending, running, paused, completed, failed
     var startedAt: Double
-    // v3 fields — mirrors Android WorkManager columns so JS hydration works on both platforms
+    // v3 fields persist background-download state for JavaScript hydration.
     var modelKey: String?
     var modelType: String
     var combinedTotalBytes: Int64

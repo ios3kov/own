@@ -1,6 +1,6 @@
 import { useAppStore } from '../stores';
 import { llmService } from './llm';
-import { liteRTService } from './litert';
+
 
 /**
  * Returns the service for the currently active text engine, or null if no
@@ -8,9 +8,9 @@ import { liteRTService } from './litert';
  * (stopGeneration, isModelLoaded, unloadModel). For engine-specific
  * operations keep the explicit branch — it should be visible at the call site.
  */
-export function getActiveEngineService(): typeof llmService | typeof liteRTService | null {
+export function getActiveEngineService(): typeof llmService | null {
   const { downloadedModels, activeModelId } = useAppStore.getState();
   const model = downloadedModels.find(m => m.id === activeModelId);
   if (!model) return null;
-  return model.engine === 'litert' ? liteRTService : llmService;
+  return (llmService);
 }

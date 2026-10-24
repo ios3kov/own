@@ -63,7 +63,6 @@ describe('llama.rn Contract', () => {
         reasonNoGPU: '',
         devices: ['Apple M1'],
         model: { metadata: { 'general.name': 'test-model' } } as any,
-        androidLib: undefined,
         systemInfo: 'Apple M1 Pro',
         completion: jest.fn(),
         tokenize: jest.fn(),

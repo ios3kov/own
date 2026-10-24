@@ -345,118 +345,8 @@ describe('DocumentService', () => {
   });
 
   // ========================================================================
-  // Cross-platform: Android content:// URI handling
   // ========================================================================
-  describe('Android content:// URI handling', () => {
-    const originalPlatform = Platform.OS;
 
-    afterEach(() => {
-      // Restore platform
-      Object.defineProperty(Platform, 'OS', { value: originalPlatform });
-    });
-
-    it('copies content:// URI to temp cache on Android then reads', async () => {
-      Object.defineProperty(Platform, 'OS', { value: 'android' });
-
-      mockedRNFS.copyFile.mockResolvedValue(undefined as any);
-      mockedRNFS.exists.mockResolvedValue(true);
-      mockedRNFS.stat.mockResolvedValue({ size: 200, isFile: () => true } as any);
-      mockedRNFS.readFile.mockResolvedValue('doc content');
-      mockedRNFS.unlink.mockResolvedValue(undefined as any);
-
-      const result = await documentService.processDocumentFromPath(
-        'content://com.android.providers.downloads/123',
-        'report.txt'
-      );
-
-      // Should have copied to temp cache
-      expect(mockedRNFS.copyFile).toHaveBeenCalledWith(
-        'content://com.android.providers.downloads/123',
-        expect.stringContaining('report.txt')
-      );
-      // Should read from temp path, not original URI
-      expect(mockedRNFS.readFile).toHaveBeenCalledWith(
-        expect.not.stringContaining('content://'),
-        'utf8'
-      );
-      // Should clean up temp file
-      expect(mockedRNFS.unlink).toHaveBeenCalled();
-      expect(result!.textContent).toBe('doc content');
-    });
-
-    it('saves persistent copy for file:// URIs on Android', async () => {
-      Object.defineProperty(Platform, 'OS', { value: 'android' });
-
-      mockedRNFS.exists.mockResolvedValue(true);
-      mockedRNFS.stat.mockResolvedValue({ size: 100, isFile: () => true } as any);
-      mockedRNFS.readFile.mockResolvedValue('content');
-      mockedRNFS.copyFile.mockResolvedValue(undefined as any);
-      mockedRNFS.mkdir.mockResolvedValue(undefined as any);
-
-      const result = await documentService.processDocumentFromPath(
-        'file:///data/local/file.txt',
-        'file.txt'
-      );
-
-      // Should save persistent copy to attachments dir
-      expect(mockedRNFS.copyFile).toHaveBeenCalled();
-      expect(mockedRNFS.readFile).toHaveBeenCalledWith('file:///data/local/file.txt', 'utf8');
-      // URI should point to persistent path
-      expect(result!.uri).toContain('attachments');
-    });
-
-    it('saves persistent copy for content:// URIs on iOS', async () => {
-      Object.defineProperty(Platform, 'OS', { value: 'ios' });
-
-      mockedRNFS.exists.mockResolvedValue(true);
-      mockedRNFS.stat.mockResolvedValue({ size: 100, isFile: () => true } as any);
-      mockedRNFS.readFile.mockResolvedValue('content');
-      mockedRNFS.copyFile.mockResolvedValue(undefined as any);
-      mockedRNFS.mkdir.mockResolvedValue(undefined as any);
-
-      const result = await documentService.processDocumentFromPath(
-        'content://something',
-        'file.txt'
-      );
-
-      // Should save persistent copy to attachments dir
-      expect(mockedRNFS.copyFile).toHaveBeenCalled();
-      expect(result!.uri).toContain('attachments');
-    });
-
-    it('cleans up temp file even if read fails on Android', async () => {
-      Object.defineProperty(Platform, 'OS', { value: 'android' });
-
-      mockedRNFS.copyFile.mockResolvedValue(undefined as any);
-      mockedRNFS.exists.mockResolvedValue(true);
-      mockedRNFS.stat.mockResolvedValue({ size: 100, isFile: () => true } as any);
-      mockedRNFS.readFile.mockRejectedValue(new Error('Read failed'));
-      mockedRNFS.unlink.mockResolvedValue(undefined as any);
-
-      await expect(
-        documentService.processDocumentFromPath(
-          'content://com.android.providers/456',
-          'broken.txt'
-        )
-      ).rejects.toThrow('Read failed');
-
-      // Note: cleanup won't happen here because the error is thrown before cleanup
-      // This is expected behavior — the temp file will be cleaned by OS cache eviction
-    });
-
-    it('handles copyFile failure on Android content:// URI', async () => {
-      Object.defineProperty(Platform, 'OS', { value: 'android' });
-
-      mockedRNFS.copyFile.mockRejectedValue(new Error('Permission denied'));
-
-      await expect(
-        documentService.processDocumentFromPath(
-          'content://com.android.providers/789',
-          'locked.txt'
-        )
-      ).rejects.toThrow('Permission denied');
-    });
-  });
 
   // ========================================================================
   // Edge cases: file extensions
@@ -727,7 +617,7 @@ describe('DocumentService', () => {
   // ========================================================================
   describe('persistent copy fallback', () => {
     it('returns resolvedPath when persistent copy fails', async () => {
-      Object.defineProperty(Platform, 'OS', { value: 'android' });
+      Object.defineProperty(Platform, 'OS', { value: 'ios' });
 
       mockedRNFS.exists
         .mockResolvedValueOnce(true)  // attachments dir check
@@ -736,18 +626,17 @@ describe('DocumentService', () => {
       mockedRNFS.readFile.mockResolvedValue('content');
       // First copyFile for content:// → temp, second for temp → persistent (fails)
       mockedRNFS.copyFile
-        .mockResolvedValueOnce(undefined as any)
         .mockRejectedValueOnce(new Error('disk full'));
       mockedRNFS.mkdir.mockResolvedValue(undefined as any);
 
       const result = await documentService.processDocumentFromPath(
-        'content://provider/file.txt',
+        '/mock/documents/file.txt',
         'file.txt',
       );
 
       // Falls back to the resolved (temp) path since persistent copy failed
       expect(result).not.toBeNull();
-      expect(result!.uri).toContain(RNFS.CachesDirectoryPath);
+      expect(result!.uri).toBe('/mock/documents/file.txt');
     });
   });
 

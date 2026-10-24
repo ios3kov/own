@@ -1,6 +1,5 @@
-import type { ThemeColors, ThemeShadows } from '../../theme';
+import type { ThemeColors,ThemeShadows } from '../../theme';
 import { FONTS } from '../../constants';
-import { Platform } from 'react-native';
 
 export const PILL_ICON_SIZE = 32;
 const NUM_PILL_ICONS = 2;
@@ -130,8 +129,8 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     minHeight: 36,
     maxHeight: 150,
     textAlignVertical: 'top' as const,
-    paddingTop: Platform.OS === 'ios' ? 10 : 6,
-    paddingBottom: Platform.OS === 'ios' ? 10 : 6,
+    paddingTop: (10),
+    paddingBottom: (10),
     paddingRight: 4,
   },
   // Icons row inside pill (right side)

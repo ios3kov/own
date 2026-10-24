@@ -170,11 +170,6 @@ describe('RAG Embedding Contract', () => {
       expect(filename).toContain('Q8_0');
     });
 
-    it('Android asset path follows models/ convention', () => {
-      const assetPath = 'models/all-MiniLM-L6-v2-Q8_0.gguf';
-
-      expect(assetPath).toMatch(/^models\//);
-    });
 
     it('destination is DocumentDirectoryPath for both platforms', () => {
       // Both platforms copy to DocumentDirectoryPath at runtime

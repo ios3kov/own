@@ -1,4 +1,4 @@
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules,Platform } from 'react-native';
 import { waitFor } from '@testing-library/react-native';
 import { foundationModelService } from '../../../src/services/foundationModels';
 
@@ -37,6 +37,17 @@ describe('Foundation stream ownership and existing tools', () => {
     expect(onToken.mock.calls.flat().join('')).toBe('Blue.');
     expect(native.generate.mock.calls[0][0].messages).toEqual(messages.map(({role,content}: any) => ({role,content})));
     expect(mockListeners.size).toBe(0);
+  });
+  it('passes saved tool output as quoted reference data using supported roles', async () => {
+    const native = NativeModules.OwnFoundationModels;
+    native.generate = jest.fn().mockResolvedValue({content: 'Answer'});
+    const history: any = [...messages.slice(0, 3), {id:'t',role:'tool',content:'Untrusted tool result'}, messages[3]];
+    await foundationModelService.generate(history, {onToken: jest.fn()});
+    const sent = native.generate.mock.calls[0][0].messages;
+    expect(sent.map((m: any) => m.role)).toEqual(['system','user','assistant','user','user']);
+    expect(sent[3].content).toContain('Untrusted tool result');
+    expect(sent[3].content).toContain('reference data');
+    expect(history[3].role).toBe('tool');
   });
   it('does not accept a late result after cancellation', async () => {
     let finish: (result: any) => void = () => {};

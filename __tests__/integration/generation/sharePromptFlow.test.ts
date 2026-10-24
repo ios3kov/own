@@ -15,25 +15,25 @@ import { useAppStore } from '../../../src/stores/appStore';
 import { generationService } from '../../../src/services/generationService';
 import { imageGenerationService } from '../../../src/services/imageGenerationService';
 import { llmService } from '../../../src/services/llm';
-import { localDreamGeneratorService } from '../../../src/services/localDreamGenerator';
+import { coreMLImageGeneratorService } from '../../../src/services/coreMLImageGenerator';
 import { activeModelService } from '../../../src/services/activeModelService';
 import { subscribeSharePrompt } from '../../../src/utils/sharePrompt';
 import {
-  resetStores,
-  setupWithActiveModel,
-  setupWithConversation,
-  flushPromises,
-  getAppState,
-  wait,
+resetStores,
+setupWithActiveModel,
+setupWithConversation,
+flushPromises,
+getAppState,
+wait,
 } from '../../utils/testHelpers';
-import { createMessage, createONNXImageModel } from '../../utils/factories';
+import { createMessage,createONNXImageModel } from '../../utils/factories';
 
 jest.mock('../../../src/services/llm');
-jest.mock('../../../src/services/localDreamGenerator');
+jest.mock('../../../src/services/coreMLImageGenerator');
 jest.mock('../../../src/services/activeModelService');
 
 const mockLlmService = llmService as jest.Mocked<typeof llmService>;
-const mockLocalDreamService = localDreamGeneratorService as jest.Mocked<typeof localDreamGeneratorService>;
+const mockLocalDreamService = coreMLImageGeneratorService as jest.Mocked<typeof coreMLImageGeneratorService>;
 const mockActiveModelService = activeModelService as jest.Mocked<typeof activeModelService>;
 
 describe('Share Prompt Flow Integration', () => {

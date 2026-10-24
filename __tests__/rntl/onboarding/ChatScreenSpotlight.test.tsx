@@ -10,15 +10,15 @@
  */
 
 import React from 'react';
-import { render, act } from '@testing-library/react-native';
+import { render,act } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAppStore } from '../../../src/stores/appStore';
-import { resetStores, setupFullChat } from '../../utils/testHelpers';
+import { resetStores,setupFullChat } from '../../utils/testHelpers';
 import { createGeneratedImage } from '../../utils/factories';
-import { mockGoTo, clearSpotlightMocks } from '../../utils/spotlightMocks';
+import { mockGoTo,clearSpotlightMocks } from '../../utils/spotlightMocks';
 import {
-  setPendingSpotlight,
-  peekPendingSpotlight,
+setPendingSpotlight,
+peekPendingSpotlight,
 } from '../../../src/components/onboarding/spotlightState';
 
 // Capture current state for step-chaining tests
@@ -132,8 +132,8 @@ jest.mock('../../../src/services/modelManager', () =>
   require('../../utils/spotlightMocks').createModelManagerMock()
 );
 
-jest.mock('../../../src/services/localDreamGenerator', () => ({
-  localDreamGeneratorService: {
+jest.mock('../../../src/services/coreMLImageGenerator', () => ({
+  coreMLImageGeneratorService: {
     deleteGeneratedImage: jest.fn(() => Promise.resolve()),
   },
 }));

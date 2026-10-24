@@ -1,13 +1,13 @@
 import { APPLE_MODEL_ID } from '../../services/foundationModels';
-import { Dispatch, SetStateAction, useEffect } from 'react';
+import { Dispatch,SetStateAction,useEffect } from 'react';
 import {
-  AlertState,
-  showAlert,
-  hideAlert,
+AlertState,
+showAlert,
+hideAlert,
 } from '../../components';
-import { llmService, activeModelService, modelManager } from '../../services';
-import { liteRTService } from '../../services/litert';
-import { DownloadedModel, RemoteModel, ONNXImageModel } from '../../types';
+import { llmService,activeModelService,modelManager } from '../../services';
+
+import { DownloadedModel,RemoteModel,ONNXImageModel } from '../../types';
 import logger from '../../utils/logger';
 
 type SetState<T> = Dispatch<SetStateAction<T>>;
@@ -65,7 +65,7 @@ async function doLoadTextModel(deps: ModelActionDeps): Promise<void> {
   try {
     await activeModelService.loadTextModel(activeModelId);
     const multimodalSupport = llmService.getMultimodalSupport();
-    deps.setSupportsVision(activeModel.engine === 'litert' ? !!activeModel.liteRTVision : (multimodalSupport?.vision || false));
+    deps.setSupportsVision(((multimodalSupport?.vision || false)));
     if (deps.modelLoadStartTimeRef.current && deps.settings.showGenerationDetails) {
       const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
       addSystemMsg(deps, `Model loaded: ${activeModel.name} (${loadTime}s)`);
@@ -116,7 +116,7 @@ export async function initiateModelLoad(
   try {
     await activeModelService.loadTextModel(activeModelId);
     const multimodalSupport = llmService.getMultimodalSupport();
-    deps.setSupportsVision(activeModel.engine === 'litert' ? !!activeModel.liteRTVision : (multimodalSupport?.vision || false));
+    deps.setSupportsVision(((multimodalSupport?.vision || false)));
     if (!alreadyLoading && deps.modelLoadStartTimeRef.current && deps.settings.showGenerationDetails) {
       const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
       addSystemMsg(deps, `Model loaded: ${activeModel.name} (${loadTime}s)`);
@@ -139,15 +139,7 @@ export async function ensureModelLoadedFn(
 ): Promise<void> {
   const { activeModel, activeModelId } = deps;
   if (!activeModel || !activeModelId) return;
-  if (activeModel.engine === 'litert') {
-    if (liteRTService.isModelLoaded()) {
-      deps.setSupportsVision(!!activeModel.liteRTVision);
-      return;
-    }
-    deps.setSupportsVision(!!activeModel.liteRTVision);
-    if (deps.activeModelId) await initiateModelLoad(deps, activeModelService.getActiveModels().text.isLoading);
-    return;
-  }
+  ;
   const loadedPath = llmService.getLoadedModelPath();
   const currentVisionSupport = llmService.getMultimodalSupport()?.vision || false;
   const needsReload = loadedPath !== activeModel.filePath ||
@@ -171,7 +163,7 @@ export async function proceedWithModelLoadFn(
   try {
     await activeModelService.loadTextModel(model.id);
     const multimodalSupport = llmService.getMultimodalSupport();
-    deps.setSupportsVision(model.engine === 'litert' ? !!model.liteRTVision : (multimodalSupport?.vision || false));
+    deps.setSupportsVision(((multimodalSupport?.vision || false)));
     if (deps.modelLoadStartTimeRef.current && deps.settings.showGenerationDetails && deps.activeConversationId) {
       const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
       deps.addMessage(deps.activeConversationId, {
@@ -320,8 +312,6 @@ export function useChatModelStateSync(deps: ModelStateSyncDeps): void {
   useEffect(() => {
     if (activeModelInfo.isRemote) {
       setSupportsVision(activeRemoteModel?.capabilities?.supportsVision ?? false);
-    } else if (activeModel?.engine === 'litert') {
-      setSupportsVision(!!activeModel.liteRTVision);
     } else if (activeModelMmProjPath && llmService.isModelLoaded()) {
       setSupportsVision(llmService.getMultimodalSupport()?.vision ?? false);
     } else {
@@ -336,9 +326,6 @@ export function useChatModelStateSync(deps: ModelStateSyncDeps): void {
     } else if (activeRemoteTextModelId) {
       setSupportsToolCalling(activeRemoteModel?.capabilities?.supportsToolCalling ?? false);
       setSupportsThinking(activeRemoteModel?.capabilities?.supportsThinking ?? false);
-    } else if (activeModel?.engine === 'litert' && liteRTService.isModelLoaded()) {
-      setSupportsToolCalling(true);
-      setSupportsThinking(true);
     } else if (llmService.isModelLoaded()) {
       setSupportsToolCalling(llmService.supportsToolCalling());
       setSupportsThinking(llmService.supportsThinking());

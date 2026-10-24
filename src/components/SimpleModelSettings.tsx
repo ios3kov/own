@@ -1,14 +1,15 @@
-import React,{useState,useRef,useEffect} from 'react';
-import {View,Text,TextInput} from 'react-native';
+import React,{ useState,useRef,useEffect } from 'react';
+import { View,Text,TextInput } from 'react-native';
 import Slider from '@react-native-community/slider';
-import {Button} from './Button';
-import {useAppStore} from '../stores';
-import {useRemoteServerStore} from '../stores/remoteServerStore';
-import {useResponseProfilesStore} from '../stores/responseProfilesStore';
-import {APPLE_MODEL_ID} from '../services/foundationModels';
-import {useThemedStyles} from '../theme';
-import type {ThemeColors} from '../theme';
-import {ResponseBackend,RESPONSE_CAPABILITIES,responseSnapshot,responseDefaults,builtInResponses} from '../utils/modelResponseSettings';
+import { Button } from './Button';
+import { TYPOGRAPHY,SPACING } from '../constants';
+import { useAppStore } from '../stores';
+import { useRemoteServerStore } from '../stores/remoteServerStore';
+import { useResponseProfilesStore } from '../stores/responseProfilesStore';
+import { APPLE_MODEL_ID } from '../services/foundationModels';
+import { useThemedStyles } from '../theme';
+import type { ThemeColors } from '../theme';
+import { ResponseBackend,RESPONSE_CAPABILITIES,responseSnapshot,responseDefaults,builtInResponses } from '../utils/modelResponseSettings';
 
 export function useResponseBackend():ResponseBackend {
   const id=useAppStore(s=>s.activeModelId);
@@ -16,7 +17,7 @@ export function useResponseBackend():ResponseBackend {
   const server=useRemoteServerStore(s=>s.activeServerId);
   if (id===APPLE_MODEL_ID) return 'apple';
   if (!id) return server?'remote':'none';
-  return engine==='litert'?'litert':'llama';
+  return engine==='llama'?'llama':'none';
 }
 function Choices({options,value,onChange}:{options:{title:string;value:number}[];value:number;onChange:(value:number)=>void}) {
   const styles=useThemedStyles(createStyles);
@@ -25,14 +26,14 @@ function Choices({options,value,onChange}:{options:{title:string;value:number}[]
 function MemoryNote({backend,memory}:{backend:ResponseBackend;memory?:number}) {
   const styles=useThemedStyles(createStyles);
   if (backend==='apple') return <Text style={styles.warning}>Apple manages memory. Long histories or replies may exceed its context. Choose less history if a request fails.</Text>;
-  if (backend!=='llama'&&backend!=='litert') return null;
+  if (backend!=='llama') return null;
   return <Text style={styles.warning}>
     {(memory&&memory<512*1024*1024)?'The last device check showed little free memory. ':''}
     Large histories and context sizes can slow replies or run out of memory. Device memory can change; these settings cannot guarantee a model will fit.
   </Text>;
 }
-function selectedChoices(values:ReturnType<typeof responseSnapshot>,backend:ResponseBackend) {
-  const temperature=backend==='litert'?values.liteRTTemperature!:values.temperature??0.7;
+function selectedChoices(values:ReturnType<typeof responseSnapshot>) {
+  const temperature=(values.temperature??0.7);
   return {temperature,variety:temperature<=0.4?0.2:temperature<=0.9?0.7:1.1,
     length:(values.maxTokens??1024)<=512?256:(values.maxTokens??1024)<=1024?1024:2048,
     history:values.historyTurns<=4?4:values.historyTurns<=12?12:24};
@@ -63,9 +64,9 @@ export function SimpleModelSettings({advancedContent}:{advancedContent?:React.Re
   const styles=useThemedStyles(createStyles);
   const values=responseSnapshot(backend,settings);
   const capability=RESPONSE_CAPABILITIES[backend];
-  const {temperature,variety,length,history}=selectedChoices(values,backend);
+  const {temperature,variety,length,history}=selectedChoices(values);
   const apply=(patch:Partial<typeof settings>)=>{
-    const reload=(patch.contextLength!==undefined&&patch.contextLength!==settings.contextLength)||(patch.liteRTMaxTokens!==undefined&&patch.liteRTMaxTokens!==settings.liteRTMaxTokens);
+    const reload=(patch.contextLength!==undefined&&patch.contextLength!==settings.contextLength);
     update(patch);setMessage(reload?'Answer style is saved. Reload the model to apply its new context size.':'Applied to your next reply.');
   };
   const choose=async(profile:typeof values)=>{
@@ -83,7 +84,7 @@ export function SimpleModelSettings({advancedContent}:{advancedContent?:React.Re
     {capability.variety?<View style={styles.section}>
       <Text style={styles.heading}>Wording variety</Text>
       <Text style={styles.help}>More variety makes wording less predictable. It does not improve accuracy. Speed and memory usually change little.</Text>
-      <Choices value={variety} options={[{title:'Focused',value:0.2},{title:'Natural',value:0.7},{title:'Varied',value:1.1}]} onChange={value=>apply(backend==='litert'?{liteRTTemperature:value}:{temperature:value})}/>
+      <Choices value={variety} options={[{title:'Focused',value:0.2},{title:'Natural',value:0.7},{title:'Varied',value:1.1}]} onChange={value=>apply(({temperature:value}))}/>
     </View>:null}
     <View style={styles.section}>
       <Text style={styles.heading}>Recent conversation</Text>
@@ -119,8 +120,10 @@ export function SimpleModelSettings({advancedContent}:{advancedContent?:React.Re
   </View>;
 }
 const createStyles=(colors:ThemeColors)=>({
-  container:{padding:16,gap:12},section:{gap:8},heading:{color:colors.text,fontSize:16,fontWeight:'600' as const},
-  help:{color:colors.textSecondary,fontSize:14,lineHeight:20},warning:{color:colors.textSecondary,fontSize:14,lineHeight:20},
-  choices:{flexDirection:'row' as const,flexWrap:'wrap' as const,gap:8},saved:{gap:4},
-  input:{color:colors.text,borderColor:colors.border,borderWidth:1,borderRadius:10,padding:12,minHeight:44},
+  container:{padding:SPACING.lg,gap:SPACING.md},section:{gap:SPACING.sm},
+  heading:{...TYPOGRAPHY.h3,color:colors.text},
+  help:{...TYPOGRAPHY.body,color:colors.textSecondary,lineHeight:20},
+  warning:{...TYPOGRAPHY.body,color:colors.textSecondary,lineHeight:20},
+  choices:{flexDirection:'row' as const,flexWrap:'wrap' as const,gap:SPACING.sm},saved:{gap:SPACING.xs},
+  input:{...TYPOGRAPHY.body,color:colors.text,borderColor:colors.border,borderWidth:1,borderRadius:10,padding:SPACING.md,minHeight:44},
 });

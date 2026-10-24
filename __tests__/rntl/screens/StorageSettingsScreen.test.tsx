@@ -15,7 +15,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { render,fireEvent,act } from '@testing-library/react-native';
 import { TouchableOpacity } from 'react-native';
 
 // Navigation is globally mocked in jest.setup.ts
@@ -207,7 +207,7 @@ describe('StorageSettingsScreen', () => {
 
   it('shows Image Models count in breakdown', () => {
     mockDownloadedImageModels = [
-      { id: 'i1', name: 'Img Model', description: '', modelPath: '/p', downloadedAt: '', size: 1024, style: 'creative', backend: 'mnn' },
+      { id: 'i1', name: 'Img Model', description: '', modelPath: '/p', downloadedAt: '', size: 1024, style: 'creative', backend: 'coreml' },
     ];
 
     const { getAllByText } = render(<StorageSettingsScreen />);
@@ -266,7 +266,7 @@ describe('StorageSettingsScreen', () => {
 
   it('shows Image Models section when image models exist', () => {
     mockDownloadedImageModels = [
-      { id: 'i1', name: 'SD Turbo', description: '', modelPath: '/p', downloadedAt: '', size: 2 * 1024 * 1024 * 1024, style: 'creative', backend: 'mnn' },
+      { id: 'i1', name: 'SD Turbo', description: '', modelPath: '/p', downloadedAt: '', size: 2 * 1024 * 1024 * 1024, style: 'creative', backend: 'coreml' },
     ];
 
     const { getAllByText } = render(<StorageSettingsScreen />);
@@ -284,25 +284,6 @@ describe('StorageSettingsScreen', () => {
     expect(getByText(/Core ML/)).toBeTruthy();
   });
 
-  it('renders image model with MNN backend as GPU', () => {
-    mockDownloadedImageModels = [
-      { id: 'i1', name: 'MNN Model', description: '', modelPath: '/p', downloadedAt: '', size: 1024, style: '', backend: 'mnn' },
-    ];
-
-    const { getByText } = render(<StorageSettingsScreen />);
-    expect(getByText('MNN Model')).toBeTruthy();
-    expect(getByText('GPU')).toBeTruthy();
-  });
-
-  it('renders image model with QNN backend as Qualcomm NPU', () => {
-    mockDownloadedImageModels = [
-      { id: 'i1', name: 'QNN Model', description: '', modelPath: '/p', downloadedAt: '', size: 1024, style: 'artistic', backend: 'qnn' },
-    ];
-
-    const { getByText } = render(<StorageSettingsScreen />);
-    expect(getByText('QNN Model')).toBeTruthy();
-    expect(getByText(/Qualcomm NPU/)).toBeTruthy();
-  });
 
   // ---- Orphaned files section tests ----
 
@@ -637,7 +618,7 @@ describe('StorageSettingsScreen', () => {
 
   it('renders image model with style info', () => {
     mockDownloadedImageModels = [
-      { id: 'i1', name: 'Styled Model', description: '', modelPath: '/p', downloadedAt: '', size: 1024, style: 'anime', backend: 'mnn' },
+      { id: 'i1', name: 'Styled Model', description: '', modelPath: '/p', downloadedAt: '', size: 1024, style: 'anime', backend: 'coreml' },
     ];
 
     const { getByText } = render(<StorageSettingsScreen />);
@@ -646,12 +627,12 @@ describe('StorageSettingsScreen', () => {
 
   it('renders image model without style', () => {
     mockDownloadedImageModels = [
-      { id: 'i1', name: 'No Style', description: '', modelPath: '/p', downloadedAt: '', size: 1024, style: '', backend: 'mnn' },
+      { id: 'i1', name: 'No Style', description: '', modelPath: '/p', downloadedAt: '', size: 1024, style: '', backend: 'coreml' },
     ];
 
     const { getByText } = render(<StorageSettingsScreen />);
     expect(getByText('No Style')).toBeTruthy();
-    expect(getByText('GPU')).toBeTruthy();
+    expect(getByText('Core ML')).toBeTruthy();
   });
 
   it('shows scanning text while scanning', async () => {

@@ -7,7 +7,7 @@ import { measureLocalContext } from './contextUsage';
 import { useAppStore } from '../stores';
 import type { Message } from '../types';
 import type { ToolCall } from './tools/types';
-import { recordGenerationStats, buildCompletionParams, buildThinkingCompletionParams, safeCompletion } from './llmHelpers';
+import { recordGenerationStats,buildCompletionParams,buildThinkingCompletionParams,safeCompletion } from './llmHelpers';
 import type { StreamToken } from './llm';
 import logger from '../utils/logger';
 
@@ -92,7 +92,7 @@ export interface ToolGenerationDeps {
   contextLength?: number;
   isThinkingEnabled: boolean;
   isGemma4Model: boolean;
-  disableCtxShift: boolean;
+  disableCtxShift?: boolean;
   manageContextWindow: (messages: Message[], extraReserve?: number) => Promise<Message[]>;
   convertToOAIMessages: (messages: Message[]) => any[];
   setPerformanceStats: (stats: any) => void;

@@ -48,7 +48,7 @@ jest.mock('../../../src/services/rag/embedding', () => ({
   },
 }));
 
-import { ragService, chunkDocument, retrievalService } from '../../../src/services/rag';
+import { ragService,chunkDocument,retrievalService } from '../../../src/services/rag';
 import { ragDatabase } from '../../../src/services/rag/database';
 import { documentService } from '../../../src/services/documentService';
 
@@ -380,5 +380,38 @@ describe('RAG Flow Integration', () => {
       expect(chunks[0].content).toContain('First');
       expect(chunks[0].content).toContain('Second');
     });
+  });
+});
+
+describe('failed document indexing and retry',()=>{
+  it('rolls back metadata with failed chunks and permits a subsequent full index',async()=>{
+    jest.clearAllMocks();(ragDatabase as any).ready=false;(ragDatabase as any).db=null;
+    mockDocService.processDocumentFromPath.mockResolvedValue({id:'qa',type:'document',uri:'/docs/qa.txt',fileName:'qa.txt',textContent:'A synthetic meeting note with enough original text to be indexed. '.repeat(20),fileSize:1000});
+    mockExecuteSync.mockImplementation((sql:string)=>{
+      if(sql.includes('INSERT INTO rag_chunks')) throw new Error('Synthetic disk full');
+      return {rows:[],insertId:41,rowsAffected:1};
+    });
+    const request={projectId:'qa',filePath:'/docs/qa.txt',fileName:'qa.txt',fileSize:1000};
+    await expect(ragService.indexDocument(request)).rejects.toThrow('Synthetic disk full');
+    expect(mockExecuteSync).toHaveBeenLastCalledWith('ROLLBACK');
+    mockExecuteSync.mockReset();mockExecuteSync.mockReturnValue({rows:[],insertId:42,rowsAffected:1});
+    await expect(ragService.indexDocument(request)).resolves.toBe(42);
+    expect(mockExecuteSync.mock.calls.filter(([sql])=>sql==='COMMIT').length).toBeGreaterThan(0);
+  });
+});
+
+describe('overlapping document import requests',()=>{
+  it('rejects a concurrent duplicate and releases the import guard after extraction fails',async()=>{
+    jest.clearAllMocks();(ragDatabase as any).ready=false;(ragDatabase as any).db=null;
+    mockExecuteSync.mockReturnValue({rows:[],insertId:42,rowsAffected:1});
+    let fail!:(reason:Error)=>void;
+    mockDocService.processDocumentFromPath.mockImplementationOnce(()=>new Promise((_resolve,reject)=>{fail=reject;}));
+    const request={projectId:'concurrent-qa',filePath:'/qa/same.txt',fileName:'same.txt',fileSize:10};
+    const first=ragService.indexDocument(request);
+    await Promise.resolve();await Promise.resolve();
+    await expect(ragService.indexDocument(request)).rejects.toThrow('already being indexed');
+    fail(new Error('Synthetic unreadable file'));await expect(first).rejects.toThrow('Synthetic unreadable file');
+    mockDocService.processDocumentFromPath.mockResolvedValue({id:'qa',type:'document',uri:'/qa/same.txt',fileName:'same.txt',textContent:'Synthetic source text with enough detail for the index. '.repeat(20),fileSize:1000});
+    await expect(ragService.indexDocument(request)).resolves.toBe(42);
   });
 });

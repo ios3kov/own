@@ -6,7 +6,7 @@ import { useAppStore } from '../stores/appStore';
 import * as Keychain from 'react-native-keychain';
 import type { RemoteServer } from '../types';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
-import { createOpenAIProvider, OpenAICompatibleProvider } from './providers/openAICompatibleProvider';
+import { createOpenAIProvider,OpenAICompatibleProvider } from './providers/openAICompatibleProvider';
 import { providerRegistry } from './providers/registry';
 import logger from '../utils/logger';
 
@@ -18,7 +18,7 @@ const KEYCHAIN_SERVICE = 'io.github.ios3kov.own.servers';
 
 export async function storeApiKeyImpl(serverId: string, apiKey: string): Promise<void> {
   try {
-    await Keychain.setGenericPassword(
+    const stored=await Keychain.setGenericPassword(
       `server_${serverId}`,
       apiKey,
       {
@@ -26,6 +26,7 @@ export async function storeApiKeyImpl(serverId: string, apiKey: string): Promise
         accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
       }
     );
+    if (!stored) throw new Error('Secure credential storage unavailable');
     logger.log('[RemoteServerManager] API key stored for server:', serverId);
   } catch (error) {
     logger.error('[RemoteServerManager] Failed to store API key:', error);

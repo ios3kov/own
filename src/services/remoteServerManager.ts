@@ -7,19 +7,19 @@
  * - Provider creation and management
  */
 
-import { RemoteServer, RemoteModel, ServerTestResult } from '../types';
+import { RemoteServer,RemoteModel,ServerTestResult } from '../types';
 import { useRemoteServerStore } from '../stores/remoteServerStore';
 import { OpenAICompatibleProvider } from './providers/openAICompatibleProvider';
 import { providerRegistry } from './providers/registry';
 import logger from '../utils/logger';
 import {
-  storeApiKeyImpl,
-  getApiKeyImpl,
-  removeApiKeyImpl,
-  createProviderForServerImpl,
-  setActiveRemoteTextModelImpl,
-  setActiveRemoteImageModelImpl,
-  initializeProvidersImpl,
+storeApiKeyImpl,
+getApiKeyImpl,
+removeApiKeyImpl,
+createProviderForServerImpl,
+setActiveRemoteTextModelImpl,
+setActiveRemoteImageModelImpl,
+initializeProvidersImpl,
 } from './remoteServerManagerUtils';
 
 class RemoteServerManager {
@@ -42,9 +42,13 @@ class RemoteServerManager {
       return existing;
     }
 
-    const id = store.addServer(config);
-    if (config.apiKey) {
-      await this.storeApiKey(id, config.apiKey);
+    const {apiKey,...metadata}=config;
+    const id = store.addServer(metadata);
+    try {
+      if (apiKey) await this.storeApiKey(id,apiKey);
+    } catch (error) {
+      store.removeServer(id);
+      throw error;
     }
 
     const server = store.getServerById(id);

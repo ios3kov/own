@@ -89,7 +89,6 @@ export const COLORS_DARK = {
 
 // ── Light shadows ────────────────────────────────────────────────────
 // Uses CSS boxShadow (RN 0.76+ with New Architecture) for cross-platform
-// shadow rendering. Works identically on iOS and Android.
 export const SHADOWS_LIGHT: ThemeShadows = {
   small: {
     boxShadow: '0px 1px 8px 0px rgba(0,0,0,0.18)',
@@ -146,7 +145,6 @@ export function createElevation(colors: ThemeColors) {
       borderRadius: 16,
       blur: {
         ios: { blurAmount: 10, blurType: colors.background === '#0A0A0A' ? 'dark' : 'light' },
-        android: { overlayColor: colors.overlay },
       },
     },
     level4: {
@@ -156,7 +154,6 @@ export function createElevation(colors: ThemeColors) {
       borderRadius: 16,
       blur: {
         ios: { blurAmount: 15, blurType: colors.background === '#0A0A0A' ? 'dark' : 'light' },
-        android: { overlayColor: colors.overlay },
       },
     },
     handle: {

@@ -1,12 +1,12 @@
-import {create} from 'zustand';
-import {persist,createJSONStorage} from 'zustand/middleware';
+import { create } from 'zustand';
+import { persist,createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {cleanResponseValues,ResponseBackend,ResponseValues} from '../utils/modelResponseSettings';
+import { cleanResponseValues,ResponseBackend,ResponseValues } from '../utils/modelResponseSettings';
 export type ResponseProfile={name:string;backend:ResponseBackend;values:ResponseValues};
 function validName(value:unknown):value is string {
   return typeof value==='string'&&value.trim().length>0&&value.length<=48&&!Array.from(value).some(character=>character.charCodeAt(0)<32);
 }
-const backends:ResponseBackend[]=['apple','llama','litert','remote'];
+const backends:ResponseBackend[]=['apple','llama','remote'];
 interface Profiles {
   profiles:ResponseProfile[];
   active:Partial<Record<ResponseBackend,ResponseValues>>;

@@ -1,28 +1,28 @@
 import { sourcesFromChunks } from '../../services/documentSources';
-import { foundationModelService, isAppleModelSelected } from '../../services/foundationModels';
-import { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import { foundationModelService,isAppleModelSelected } from '../../services/foundationModels';
+import { Dispatch,MutableRefObject,SetStateAction } from 'react';
 import {
-  AlertState,
-  showAlert,
-  hideAlert,
+AlertState,
+showAlert,
+hideAlert,
 } from '../../components';
 import { APP_CONFIG } from '../../constants';
 import {
-  llmService,
-  intentClassifier,
-  generationService,
-  imageGenerationService,
-  onnxImageGeneratorService,
-  ImageGenerationState,
-  buildToolSystemPromptHint,
-  contextCompactionService,
-  ragService,
-  retrievalService,
+llmService,
+intentClassifier,
+generationService,
+imageGenerationService,
+coreMLImageGeneratorService,
+ImageGenerationState,
+buildToolSystemPromptHint,
+contextCompactionService,
+ragService,
+retrievalService,
 } from '../../services';
-import { liteRTService } from '../../services/litert';
+
 import { embeddingService } from '../../services/rag/embedding';
-import { useChatStore, useProjectStore, useRemoteServerStore } from '../../stores';
-import { Message, MediaAttachment, Project, DownloadedModel, RemoteModel, ModelLoadingStrategy, CacheType } from '../../types';
+import { useChatStore,useProjectStore,useRemoteServerStore } from '../../stores';
+import { Message,MediaAttachment,Project,DownloadedModel,RemoteModel,ModelLoadingStrategy,CacheType } from '../../types';
 import logger from '../../utils/logger';
 type SetState<T> = Dispatch<SetStateAction<T>>;
 const FALLBACK_RECENT_MESSAGE_COUNT = 2;
@@ -157,11 +157,7 @@ export type StartGenerationCall = { setDebugInfo: SetState<any>; targetConversat
 async function ensureModelReady(deps: GenerationDeps): Promise<boolean> {
   if (isAppleModelSelected()) { await foundationModelService.assertReady(); return true; }
   if (deps.activeModelInfo?.isRemote) return true;
-  if (deps.activeModel?.engine === 'litert') {
-    if (liteRTService.isModelLoaded()) return true;
-    await deps.ensureModelLoaded();
-    return liteRTService.isModelLoaded();
-  }
+  ;
   const loadedPath = llmService.getLoadedModelPath();
   if (loadedPath && loadedPath === deps.activeModel!.filePath) return true;
   await deps.ensureModelLoaded();
@@ -203,7 +199,8 @@ async function generateWithCompactionRetry(
     await gen(compacted);
   }
 }
-async function injectRagContext(projectId: string | undefined, query: string, prompt: string): Promise<{prompt:string; sources:import('../../types').DocumentSource[]}> {
+async function injectRagContext(projectId: string | undefined, query: string, options: {prompt:string; canSearchTool:boolean}): Promise<{prompt:string; sources:import('../../types').DocumentSource[]}> {
+  const {prompt,canSearchTool}=options;
   if (!projectId) return {prompt,sources:[]};
   try {
     const docs = await ragService.getDocumentsByProject(projectId);
@@ -215,7 +212,7 @@ async function injectRagContext(projectId: string | undefined, query: string, pr
     }
     const docList = enabledDocs.map((d: import('../../services/rag').RagDocument) => `- ${d.name}`).join('\n');
     let kbPrompt = `\n\nYou have a knowledge base with these documents:\n${docList}`;
-    kbPrompt += '\nUse the search_knowledge_base tool to look up specific information from these documents.';
+    if (canSearchTool) kbPrompt += '\nUse the search_knowledge_base tool to look up specific information from these documents.';
     const r = await ragService.searchProject(projectId, query);
     if (r.chunks.length > 0) {
       kbPrompt += `\n\n${retrievalService.formatForPrompt(r)}`;
@@ -226,31 +223,26 @@ async function injectRagContext(projectId: string | undefined, query: string, pr
   }
   return {prompt,sources:[]};
 }
-/** Gemma 4 E2B/E4B need <|think|> prepended to activate thinking mode — both llama.cpp and LiteRT. */
-const applyGemma4ThinkToken = (prompt: string, isRemote: boolean, opts?: { isLiteRT?: boolean; thinkingEnabled?: boolean }): string => {
-  const { isLiteRT = false, thinkingEnabled = false } = opts ?? {};
-  const liteRTWantsThink = !isRemote && isLiteRT && thinkingEnabled;
+
+const applyGemma4ThinkToken = (prompt: string, isRemote: boolean, _opts?: {  thinkingEnabled?: boolean }): string => {
+
+
   const llamaWantsThink = !isRemote && llmService.isGemma4Model() && llmService.isThinkingEnabled();
-  return (liteRTWantsThink || llamaWantsThink) ? `<|think|>\n${prompt}` : prompt;
+  return llamaWantsThink ? `<|think|>\n${prompt}` : prompt;
 };
-function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, _messageText: string): { enabledTools: string[]; rawPrompt: string; isLiteRT: boolean } {
+function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, _messageText: string): { enabledTools: string[]; rawPrompt: string;  } {
   const project = conversation?.projectId ? useProjectStore.getState().getProject(conversation.projectId) : null;
   const { activeServerId, activeRemoteTextModelId } = useRemoteServerStore.getState();
   const localToolCalling = llmService.supportsToolCalling();
   const isRemoteActive = !!(activeServerId && activeRemoteTextModelId);
-  const isLiteRT = deps.activeModel?.engine === 'litert' && liteRTService.isModelLoaded();
-  const canUseTools = isAppleModelSelected() || localToolCalling || isRemoteActive || isLiteRT;
 
-  let enabledTools = canUseTools ? (deps.settings.enabledTools || []) : [];
+  const canUseTools = isAppleModelSelected() || localToolCalling || isRemoteActive;
 
-  // Auto-add search_knowledge_base for project chats even if not in user's enabled list
-  if (conversation?.projectId && !enabledTools.includes('search_knowledge_base')) {
-    enabledTools = [...enabledTools, 'search_knowledge_base'];
-  }
+  const enabledTools = canUseTools ? (deps.settings.enabledTools || []) : [];
 
   const rawPrompt = project?.systemPrompt || deps.settings.systemPrompt || APP_CONFIG.defaultSystemPrompt;
-  logger.log(`[ChatGen][resolveTools] isLiteRT=${isLiteRT}, canUseTools=${canUseTools}, enabledTools=[${enabledTools.join(', ')}]`);
-  return { enabledTools, rawPrompt, isLiteRT };
+  logger.log(`[ChatGen][resolveTools] canUseTools=${canUseTools}, enabledTools=[${enabledTools.join(', ')}]`);
+  return { enabledTools, rawPrompt };
 }
 export async function startGenerationFn(deps: GenerationDeps, call: StartGenerationCall): Promise<void> {
   const { setDebugInfo, targetConversationId, messageText } = call;
@@ -272,20 +264,19 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
     }
   }
   const conversation = useChatStore.getState().conversations.find(c => c.id === targetConversationId);
-  const { enabledTools, rawPrompt, isLiteRT } = resolveToolsAndPrompt(deps, conversation, messageText);
-  const ragContext = await injectRagContext(conversation?.projectId, messageText, rawPrompt);
+  const { enabledTools, rawPrompt } = resolveToolsAndPrompt(deps, conversation, messageText);
+
+  const ragContext = await injectRagContext(deps.settings.enabledTools?.includes('search_knowledge_base') ? conversation?.projectId : undefined, messageText, {prompt:rawPrompt,canSearchTool:enabledTools.includes('search_knowledge_base')});
   const basePrompt = ragContext.prompt;
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
   const activeTools = enabledTools;
-  // LiteRT passes tools natively via ConversationConfig — text hint would double-inject.
   // llama.cpp uses text hint only when it lacks native Jinja tool calling support.
-  const useTextHint = !isAppleModelSelected() && !isRemote && !isLiteRT && activeTools.length > 0 && !llmService.supportsToolCalling();
+  const useTextHint = !isAppleModelSelected() && !isRemote && activeTools.length > 0 && !llmService.supportsToolCalling();
   const systemPrompt = applyGemma4ThinkToken(
     useTextHint ? `${basePrompt}${buildToolSystemPromptHint(activeTools)}` : basePrompt,
     isRemote,
-    { isLiteRT, thinkingEnabled: deps.settings.thinkingEnabled },
   );
-  logger.log(`[ChatGen][DEBUG] isRemote=${isRemote}, isLiteRT=${isLiteRT}, useTextHint=${useTextHint}, tools=[${activeTools.join(', ')}], path=${activeTools.length > 0 ? 'withTools' : 'generate'}`);
+  logger.log(`[ChatGen][DEBUG] isRemote=${isRemote}, useTextHint=${useTextHint}, tools=[${activeTools.join(', ')}], path=${activeTools.length > 0 ? 'withTools' : 'generate'}`);
   logger.log(`[ChatGen][PROMPT] systemPrompt (${systemPrompt.length}ch): "${systemPrompt.substring(0, 800)}"`);
   const messagesForContext = buildMessagesForContext(targetConversationId, messageText, systemPrompt);
   messagesForContext[0].documentSources = ragContext.sources;
@@ -341,7 +332,7 @@ export async function executeDeleteConversationFn(
   if (!deps.activeConversationId) return;
   deps.setAlertState(hideAlert());
   if (deps.isStreaming) { await llmService.stopGeneration(); deps.clearStreamingMessage(); }
-  for (const id of deps.removeImagesByConversationId(deps.activeConversationId)) await onnxImageGeneratorService.deleteGeneratedImage(id);
+  for (const id of deps.removeImagesByConversationId(deps.activeConversationId)) await coreMLImageGeneratorService.deleteGeneratedImage(id);
   contextCompactionService.clearSummary(deps.activeConversationId);
   deps.deleteConversation(deps.activeConversationId);
   deps.setActiveConversation(null);
@@ -365,22 +356,23 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
     }
   }
   deps.generatingForConversationRef.current = targetConversationId;
-  // LiteRT: native history must be rewound to match the JS messages we're about to replay.
-  if (deps.activeModel?.engine === 'litert') liteRTService.invalidateConversation();
+
+  ;
   const conversation = useChatStore.getState().conversations.find(c => c.id === targetConversationId);
+  const { enabledTools, rawPrompt } = resolveToolsAndPrompt(deps, conversation, messageText);
   const messages = (conversation?.messages || []).filter((m: Message) => !m.isSystemInfo);
   const messagesUpToUser = messages.slice(0, messages.findIndex((m: Message) => m.id === userMessage.id) + 1)
     .map(m => m.id === userMessage.id ? { ...m, content: messageText } : m);
-  const { enabledTools, rawPrompt, isLiteRT: isLiteRTRegen } = resolveToolsAndPrompt(deps, conversation, messageText);
+
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
   const activeTools = enabledTools;
-  const ragContext = await injectRagContext(conversation?.projectId, messageText, rawPrompt);
+  const ragContext = await injectRagContext(deps.settings.enabledTools?.includes('search_knowledge_base') ? conversation?.projectId : undefined, messageText, {prompt:rawPrompt,canSearchTool:enabledTools.includes('search_knowledge_base')});
   const basePrompt = ragContext.prompt;
-  const useTextHint = !isAppleModelSelected() && !isRemote && !isLiteRTRegen && activeTools.length > 0 && !llmService.supportsToolCalling();
+  const useTextHint = !isAppleModelSelected() && !isRemote && activeTools.length > 0 && !llmService.supportsToolCalling();
   const systemPrompt = applyGemma4ThinkToken(
     useTextHint ? `${basePrompt}${buildToolSystemPromptHint(activeTools)}` : basePrompt,
     isRemote,
-    { isLiteRT: isLiteRTRegen, thinkingEnabled: deps.settings.thinkingEnabled },
+    {  thinkingEnabled: deps.settings.thinkingEnabled },
   );
   const { prefix, filtered } = applyCompactionPrefix(conversation, systemPrompt, messagesUpToUser);
   prefix[0].documentSources = ragContext.sources;

@@ -39,14 +39,10 @@ export interface ModelFile {
     downloadUrl: string;
     sha256?: string;
   };
-  // LiteRT-specific: whether this .litertlm file supports vision input. Used by
-  // buildDownloadedModel to set liteRTVision on the resulting DownloadedModel.
-  // Unset for non-LiteRT files and for LiteRT files imported locally where the
-  // capability is unknown.
-  liteRTVision?: boolean;
+
 }
 
-export type ModelEngine = 'llama' | 'litert';
+export type ModelEngine = 'llama';
 
 interface DownloadedModelBase {
   id: string;
@@ -68,20 +64,13 @@ export interface LlamaDownloadedModel extends DownloadedModelBase {
   mmProjFileSize?: number;
 }
 
-export interface LiteRTDownloadedModel extends DownloadedModelBase {
-  engine: 'litert';
-  liteRTVision: boolean;
-}
 
-export type DownloadedModel = LlamaDownloadedModel | LiteRTDownloadedModel;
+export type DownloadedModel = LlamaDownloadedModel;
 
 export function isLlamaModel(m: DownloadedModel): m is LlamaDownloadedModel {
   return m.engine === 'llama';
 }
 
-export function isLiteRTModel(m: DownloadedModel): m is LiteRTDownloadedModel {
-  return m.engine === 'litert';
-}
 
 export interface PersistedDownloadInfo {
   modelId: string;
@@ -114,22 +103,20 @@ export interface DownloadProgress {
 }
 
 // SoC detection types
-export type SoCVendor = 'qualcomm' | 'mediatek' | 'exynos' | 'tensor' | 'apple' | 'unknown';
+export type SoCVendor = 'apple' | 'unknown';
 export interface SoCInfo {
   vendor: SoCVendor;
   hasNPU: boolean;
-  qnnVariant?: '8gen2' | '8gen1' | 'min';
   appleChip?: 'A14' | 'A15' | 'A16' | 'A17Pro' | 'A18';
 }
 
 export interface ImageModelRecommendation {
-  recommendedBackend: 'qnn' | 'mnn' | 'coreml' | 'all';
-  qnnVariant?: '8gen2' | '8gen1' | 'min';
+  recommendedBackend: 'coreml' | 'all';
   /** Substrings matched against model name to identify recommended models */
   recommendedModels?: string[];
   bannerText: string;
   warning?: string;
-  compatibleBackends: Array<'mnn' | 'qnn' | 'coreml'>;
+  compatibleBackends: Array<'coreml'>;
 }
 
 // Hardware-related types
@@ -188,7 +175,7 @@ export interface GenerationMeta {
   tokensPerSecond?: number;
   /** Tokens per second — decode only, excluding prefill (text generation only) */
   decodeTokensPerSecond?: number;
-  /** Tokens per second — prefill/prompt processing speed (LiteRT only) */
+
   prefillTokensPerSecond?: number;
   /** Time to first token in milliseconds (text generation only) */
   timeToFirstToken?: number;
@@ -307,7 +294,7 @@ export interface ONNXImageModel {
   downloadedAt: string;
   size: number;
   style?: string;
-  backend?: 'mnn' | 'qnn' | 'coreml';
+  backend?: 'coreml';
   attentionVariant?: 'split_einsum' | 'original';
 }
 
@@ -324,12 +311,10 @@ export type ImageGenerationMode = 'auto' | 'manual';
 export type AutoDetectMethod = 'pattern' | 'llm';
 export type ModelLoadingStrategy = 'performance' | 'memory';
 export type CacheType = 'f16' | 'q8_0' | 'q4_0';
-export type InferenceBackend = 'cpu' | 'opencl' | 'htp' | 'metal';
-export type LiteRTBackend = 'cpu' | 'gpu' | 'npu';
+export type InferenceBackend = 'cpu' | 'metal';
+
 export const INFERENCE_BACKENDS = {
   CPU: 'cpu' as InferenceBackend,
-  OPENCL: 'opencl' as InferenceBackend,
-  HTP: 'htp' as InferenceBackend,
   METAL: 'metal' as InferenceBackend,
 } as const;
 /** 'auto' = smart detect, 'force' = always generate image, 'disabled' = never */
@@ -357,7 +342,6 @@ export interface ImageGenerationParams {
   steps?: number;
   guidanceScale?: number;
   seed?: number;
-  useOpenCL?: boolean;
 }
 export interface ImageGenerationProgress {
   step: number;

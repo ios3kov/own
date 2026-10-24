@@ -2,31 +2,31 @@
  * Integration Tests: Image Generation Flow
  *
  * Tests the integration between:
- * - imageGenerationService ↔ localDreamGeneratorService
+ * - imageGenerationService ↔ coreMLImageGeneratorService
  * - imageGenerationService ↔ useAppStore (generated images)
  */
 
 import { useAppStore } from '../../../src/stores/appStore';
 import { imageGenerationService } from '../../../src/services/imageGenerationService';
-import { localDreamGeneratorService } from '../../../src/services/localDreamGenerator';
+import { coreMLImageGeneratorService } from '../../../src/services/coreMLImageGenerator';
 import { activeModelService } from '../../../src/services/activeModelService';
 import { llmService } from '../../../src/services/llm';
 import {
-  resetStores,
-  flushPromises,
-  getAppState,
-  getChatState,
-  setupWithConversation,
+resetStores,
+flushPromises,
+getAppState,
+getChatState,
+setupWithConversation,
 } from '../../utils/testHelpers';
-import { createONNXImageModel, createGeneratedImage, createMessage } from '../../utils/factories';
+import { createONNXImageModel,createGeneratedImage,createMessage } from '../../utils/factories';
 import { Message } from '../../../src/types';
 
 // Mock the services
-jest.mock('../../../src/services/localDreamGenerator');
+jest.mock('../../../src/services/coreMLImageGenerator');
 jest.mock('../../../src/services/activeModelService');
 jest.mock('../../../src/services/llm');
 
-const mockLocalDreamService = localDreamGeneratorService as jest.Mocked<typeof localDreamGeneratorService>;
+const mockLocalDreamService = coreMLImageGeneratorService as jest.Mocked<typeof coreMLImageGeneratorService>;
 const mockActiveModelService = activeModelService as jest.Mocked<typeof activeModelService>;
 const mockLlmService = llmService as jest.Mocked<typeof llmService>;
 
@@ -137,7 +137,7 @@ describe('Image Generation Flow Integration', () => {
       expect(imageGenerationService.getState().isGenerating).toBe(false);
     });
 
-    it('should call localDreamGeneratorService with correct parameters', async () => {
+    it('should call coreMLImageGeneratorService with correct parameters', async () => {
       const imageModel = setupImageModelState();
 
       // Update settings
@@ -482,7 +482,7 @@ describe('Image Generation Flow Integration', () => {
         id: 'img-model-1',
         name: 'Test Image Model',
         modelPath: '/mock/image-model',
-        backend: 'qnn',
+        backend: 'coreml',
       });
       useAppStore.setState({
         downloadedImageModels: [imageModel],
@@ -924,48 +924,7 @@ describe('Image Generation Flow Integration', () => {
   });
 
   describe('generation with conversation metadata', () => {
-    it('should include correct backend metadata for QNN model', async () => {
-      const imageModel = createONNXImageModel({
-        id: 'qnn-model',
-        name: 'QNN SD Model',
-        modelPath: '/mock/qnn-model',
-        backend: 'qnn',
-      });
-      useAppStore.setState({
-        downloadedImageModels: [imageModel],
-        activeImageModelId: 'qnn-model',
-        generatedImages: [],
-        settings: {
-          imageSteps: 20,
-          imageGuidanceScale: 7.5,
-          imageWidth: 512,
-          imageHeight: 512,
-          imageThreads: 4,
-        } as any,
-      });
-      mockLocalDreamService.getLoadedModelPath.mockResolvedValue(imageModel.modelPath);
 
-      const conversationId = setupWithConversation();
-
-      mockActiveModelService.getActiveModels.mockReturnValue({
-        text: { model: null, isLoaded: false, isLoading: false },
-        image: { model: imageModel, isLoaded: true, isLoading: false },
-      });
-
-      await imageGenerationService.generateImage({
-        prompt: 'QNN metadata test',
-        conversationId,
-      });
-
-      const chatState = getChatState();
-      const conversation = chatState.conversations.find(c => c.id === conversationId);
-      const message = conversation?.messages[0];
-
-      expect(message?.generationMeta).toBeDefined();
-      // In test env, Platform.OS defaults to 'ios', so backend is always Core ML
-      expect(message?.generationMeta?.gpuBackend).toBe('Core ML (ANE)');
-      expect(message?.generationMeta?.gpu).toBe(true);
-    });
   });
 
   describe('cancelRequested during generation', () => {
@@ -1451,62 +1410,6 @@ describe('Image Generation Flow Integration', () => {
     });
   });
 
-  describe('OpenCL kernel cache branches', () => {
-    it('logs warning and sets isFirstGpuRun=false when hasKernelCache throws', async () => {
-      const imageModel = setupImageModelState();
-      useAppStore.setState({
-        ...useAppStore.getState(),
-        settings: { ...useAppStore.getState().settings, imageUseOpenCL: true },
-      });
-
-      mockLocalDreamService.isModelLoaded.mockResolvedValue(true);
-      mockLocalDreamService.getLoadedModelPath.mockResolvedValue(imageModel.modelPath);
-      mockLocalDreamService.getLoadedThreads.mockReturnValue(4);
-      mockLocalDreamService.hasKernelCache.mockRejectedValueOnce(new Error('cache check failed'));
-
-      // Track status updates
-      const statusUpdates: (string | null)[] = [];
-      const unsub = imageGenerationService.subscribe(s => { if (s.status) statusUpdates.push(s.status); });
-
-      await imageGenerationService.generateImage({ prompt: 'test' });
-
-      unsub();
-      // When hasKernelCache throws, isFirstGpuRun=false, so regular status is used
-      expect(statusUpdates.some(s => s?.includes('Starting image generation'))).toBe(true);
-    });
-
-    it('uses regular progress status when kernel cache exists (isFirstGpuRun=false)', async () => {
-      const imageModel = setupImageModelState();
-      useAppStore.setState({
-        ...useAppStore.getState(),
-        settings: { ...useAppStore.getState().settings, imageUseOpenCL: true },
-      });
-
-      mockLocalDreamService.isModelLoaded.mockResolvedValue(true);
-      mockLocalDreamService.getLoadedModelPath.mockResolvedValue(imageModel.modelPath);
-      mockLocalDreamService.getLoadedThreads.mockReturnValue(4);
-      mockLocalDreamService.hasKernelCache.mockResolvedValue(true); // cache exists
-
-
-      mockLocalDreamService.generateImage.mockImplementation(async (_params, progressCb) => {
-        progressCb?.({ step: 5, totalSteps: 20, progress: 0.25 });
-        return {
-          id: 'img-1', prompt: 'test', imagePath: '/path/img.png',
-          width: 512, height: 512, steps: 20, seed: 1, modelId: 'img-model-1',
-          createdAt: new Date().toISOString(),
-        };
-      });
-
-      const statusUpdates: (string | null)[] = [];
-      const unsub = imageGenerationService.subscribe(s => { if (s.status) statusUpdates.push(s.status); });
-
-      await imageGenerationService.generateImage({ prompt: 'test' });
-      unsub();
-
-      // Should include the "Generating image (5/20)..." status from else branch
-      expect(statusUpdates.some(s => s?.includes('Generating image'))).toBe(true);
-    });
-  });
 
   describe('_ensureImageModelLoaded with null activeImageModelId', () => {
     it('returns false and sets error when activeImageModelId is null but model not loaded', async () => {

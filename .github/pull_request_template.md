@@ -14,12 +14,6 @@
 
 <!-- Mandatory for any UI change. Remove sections that don't apply. -->
 
-### Android
-
-| Before | After |
-|--------|-------|
-|        |       |
-
 ### iOS
 
 | Before | After |
@@ -37,7 +31,6 @@
 
 ### Testing
 
-- [ ] I have tested on **Android** (physical device or emulator)
 - [ ] I have tested on **iOS** (physical device or simulator)
 - [ ] I have tested in **light mode** and **dark mode**
 - [ ] Existing tests pass locally (`npm test`)
@@ -45,18 +38,18 @@
 
 ### React Native Specific
 
-- [ ] No new native module without corresponding platform implementation (Android + iOS)
+- [ ] New native modules have a tested iOS implementation
 - [ ] New native modules are added to the Xcode project build target (`project.pbxproj`)
 - [ ] No hardcoded pixel values — uses `SPACING` / `TYPOGRAPHY` constants from the theme
 - [ ] Styles use `useThemedStyles` pattern (not inline or static `StyleSheet.create`)
-- [ ] Animations/gestures work smoothly on both platforms
+- [ ] Animations/gestures work smoothly on supported iOS versions
 - [ ] Large lists use `FlatList` / `FlashList` (not `.map()` inside `ScrollView`)
 - [ ] No unnecessary re-renders introduced (check with React DevTools Profiler if unsure)
 
 ### Performance & Models
 
 - [ ] Downloads / long-running tasks report progress to the UI
-- [ ] File paths are resolved correctly on both platforms (no hardcoded `/` vs `\\`)
+- [ ] File paths are resolved correctly on supported iOS versions (no hardcoded `/` vs `\\`)
 - [ ] Large files (models, assets) are not committed to the repository
 
 ### Security

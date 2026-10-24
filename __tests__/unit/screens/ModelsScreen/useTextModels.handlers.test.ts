@@ -9,7 +9,7 @@
  * - runSearch with code type and no query (CODE_FALLBACK_QUERY)
  */
 
-import { renderHook, act } from '@testing-library/react-native';
+import { renderHook,act } from '@testing-library/react-native';
 import { useTextModels } from '../../../../src/screens/ModelsScreen/useTextModels';
 
 // ── Navigation ────────────────────────────────────────────────────────
@@ -238,29 +238,7 @@ describe('runSearch', () => {
 // ── handleSelectModel ────────────────────────────────────────────────
 
 describe('handleSelectModel', () => {
-  it('short-circuits HF fetch when model id is in the Own/ namespace and ships files', async () => {
-    const { huggingFaceService } = jest.requireMock('../../../../src/services');
-    const getModelFilesSpy = jest.spyOn(huggingFaceService, 'getModelFiles');
-    const { result } = renderHook(() => useTextModels(setAlertState));
 
-    const curatedFile = { name: 'gemma-4-E2B-it.litertlm', size: 1000, quantization: 'mixed', downloadUrl: 'https://hf/x' };
-    const curatedModel: any = {
-      id: 'Own/litert-recommended',
-      name: 'Gemma 4 LiteRT',
-      author: 'google',
-      description: '',
-      downloads: 0, likes: 0, tags: ['litert'], lastModified: '',
-      files: [curatedFile],
-    };
-
-    await act(async () => {
-      await result.current.handleSelectModel(curatedModel);
-    });
-
-    expect(getModelFilesSpy).not.toHaveBeenCalled();
-    expect(result.current.modelFiles).toEqual([curatedFile]);
-    expect(result.current.selectedModel).toBe(curatedModel);
-  });
 
   it('falls through to HF fetch for non-Own models even when factories pre-populate files', async () => {
     const { huggingFaceService } = jest.requireMock('../../../../src/services');

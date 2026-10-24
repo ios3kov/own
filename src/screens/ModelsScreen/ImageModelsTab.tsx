@@ -1,20 +1,20 @@
-import React, { useEffect } from 'react';
-import { View, Text, TextInput, ActivityIndicator, TouchableOpacity, ScrollView, InteractionManager } from 'react-native';
+import React,{ useEffect } from 'react';
+import { View,Text,TextInput,ActivityIndicator,TouchableOpacity,ScrollView,InteractionManager } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import MaterialIcon from 'react-native-vector-icons/MaterialIcons';
-import { AttachStep, useSpotlightTour } from 'react-native-spotlight-tour';
+import { AttachStep,useSpotlightTour } from 'react-native-spotlight-tour';
 import { ModelCard } from '../../components';
 import { consumePendingSpotlight } from '../../components/onboarding/spotlightState';
-import { useTheme, useThemedStyles } from '../../theme';
-import { HFImageModel, getVariantLabel } from '../../services/huggingFaceModelBrowser';
+import { useTheme,useThemedStyles } from '../../theme';
+import { CoreMLImageModel as HFImageModel } from '../../services/coreMLModelBrowser';
 import { ImageModelRecommendation } from '../../types';
 import { useDownloadStore } from '../../stores/downloadStore';
 import { makeImageModelKey } from '../../utils/modelKey';
 import { createStyles } from './styles';
 import { ModelsScreenViewModel } from './useModelsScreen';
 import { ImageFilterBar } from './ImageFilterBar';
-import { BackendFilter, ImageFilterDimension } from './types';
-import { formatBytes, getImageModelCompatibility, hfModelToDescriptor } from './utils';
+import { BackendFilter,ImageFilterDimension } from './types';
+import { formatBytes,getImageModelCompatibility,hfModelToDescriptor } from './utils';
 
 type Props = Pick<ModelsScreenViewModel,
   | 'imageSearchQuery' | 'setImageSearchQuery'
@@ -35,7 +35,7 @@ type Props = Pick<ModelsScreenViewModel,
 >;
 
 interface ImageModelCardProps {
-  model: HFImageModel & { _coreml?: boolean; _coremlFiles?: any[] };
+  model: HFImageModel;
   index: number;
   imageRec: ImageModelRecommendation | null;
   isRecommendedModel: (model: HFImageModel) => boolean;
@@ -57,11 +57,7 @@ const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
   const isEntryOccupied = !!entry && entry.status !== 'completed' && entry.status !== 'cancelled';
   const isDownloading = isEntryOccupied;
   const progressValue = entry?.progress ?? 0;
-  let authorLabel: string;
-  if (model._coreml) authorLabel = 'Core ML';
-  else if (model.backend === 'qnn') authorLabel = 'NPU';
-  else authorLabel = 'GPU';
-  const variantSuffix = model.variant ? ` \u00B7 ${getVariantLabel(model.variant)}` : '';
+  const authorLabel = 'Core ML';
   return (
     <View>
       {recommended && (
@@ -75,7 +71,7 @@ const ImageModelCardItem: React.FC<ImageModelCardProps> = ({
           id: model.id,
           name: model.displayName,
           author: authorLabel,
-          description: `${formatBytes(model.size)}${variantSuffix}`,
+          description: formatBytes(model.size),
         }}
         isDownloading={isDownloading}
         downloadProgress={progressValue}
@@ -116,7 +112,7 @@ interface ScrollContentProps {
   hfModelsLoading: boolean;
   hfModelsError: string | null;
   loadHFModels: (forceRefresh?: boolean) => void;
-  filteredHFModels: (HFImageModel & { _coreml?: boolean; _coremlFiles?: any[] })[];
+  filteredHFModels: (HFImageModel)[];
   availableHFModels: HFImageModel[];
   isRecommendedModel: (model: HFImageModel) => boolean;
   handleDownloadImageModel: Props['handleDownloadImageModel'];
@@ -315,7 +311,7 @@ export const ImageModelsTab: React.FC<Props> = ({
         hfModelsLoading={hfModelsLoading}
         hfModelsError={hfModelsError}
         loadHFModels={loadHFModels}
-        filteredHFModels={filteredHFModels as (HFImageModel & { _coreml?: boolean; _coremlFiles?: any[] })[]}
+        filteredHFModels={filteredHFModels as (HFImageModel)[]}
         availableHFModels={availableHFModels}
         isRecommendedModel={isRecommendedModel}
         handleDownloadImageModel={handleDownloadImageModel}

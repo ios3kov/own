@@ -1,13 +1,13 @@
-import { NativeModules, Platform, AppState } from 'react-native';
+import { NativeModules,Platform,AppState } from 'react-native';
 import { generationService } from '../../../src/services/generationService';
 import { replySpeech } from '../../../src/services/replySpeech';
 import { llmService } from '../../../src/services/llm';
 import { useAppStore } from '../../../src/stores/appStore';
 import { useChatStore } from '../../../src/stores/chatStore';
-import { resetStores, setupWithActiveModel, setupWithConversation } from '../../utils/testHelpers';
+import { resetStores,setupWithActiveModel,setupWithConversation } from '../../utils/testHelpers';
 
 jest.mock('../../../src/services/llm');
-jest.mock('../../../src/services/litert');
+
 jest.mock('../../../src/utils/sharePrompt', () => ({shouldShowSharePrompt: () => false, emitSharePrompt: jest.fn()}));
 const tick = async () => { for (let i = 0; i < 12; i += 1) await Promise.resolve(); };
 

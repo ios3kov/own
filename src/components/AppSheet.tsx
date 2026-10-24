@@ -1,19 +1,17 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React,{ useRef,useEffect,useState,useCallback } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  Modal,
-  Animated,
-  Easing,
-  PanResponder,
-  Dimensions,
-  Platform,
-  Keyboard,
+View,
+Text,
+TouchableOpacity,
+TouchableWithoutFeedback,
+Modal,
+Animated,
+Easing,
+PanResponder,
+Dimensions,Keyboard
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, useThemedStyles } from '../theme';
+import { useTheme,useThemedStyles } from '../theme';
 import { createStyles } from './AppSheet.styles';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -148,7 +146,7 @@ export const AppSheet: React.FC<AppSheetProps> = ({
         useNativeDriver: true,
       }),
       Animated.timing(backdropOpacity, {
-        toValue: Platform.OS === 'ios' ? 0.6 : 0.7,
+        toValue: (0.6),
         duration: 250,
         useNativeDriver: true,
       }),
@@ -216,8 +214,8 @@ export const AppSheet: React.FC<AppSheetProps> = ({
 
   // Track keyboard height so the sheet lifts above the keyboard
   useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showEvent = ('keyboardWillShow');
+    const hideEvent = ('keyboardWillHide');
     const showSub = Keyboard.addListener(showEvent, (e) => setKeyboardHeight(e.endCoordinates.height));
     const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
     return () => { showSub.remove(); hideSub.remove(); };

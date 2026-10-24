@@ -122,19 +122,6 @@ describe('EmbeddingService', () => {
     });
   });
 
-  describe('load — Android copyFileAssets branch', () => {
-    it('copies from assets on Android when file does not exist', async () => {
-      const { Platform } = require('react-native');
-      Platform.OS = 'android';
-      mockExists.mockResolvedValue(false);
-      mockCopyFileAssets.mockResolvedValue(undefined);
-
-      await embeddingService.load();
-
-      expect(mockCopyFileAssets).toHaveBeenCalled();
-      Platform.OS = 'ios'; // restore
-    });
-  });
 
   describe('embed — error recovery branches', () => {
     it('unloads model and throws wrapped error on ggml native error', async () => {

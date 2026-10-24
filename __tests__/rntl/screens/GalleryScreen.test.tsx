@@ -20,8 +20,8 @@
  */
 
 import React from 'react';
-import { render, fireEvent, act } from '@testing-library/react-native';
-import { TouchableOpacity, Platform } from 'react-native';
+import { render,fireEvent,act } from '@testing-library/react-native';
+import { TouchableOpacity,Platform } from 'react-native';
 
 jest.mock('../../../src/hooks/useFocusTrigger', () => ({
   useFocusTrigger: () => 0,
@@ -151,7 +151,7 @@ jest.mock('../../../src/services', () => ({
     getState: jest.fn(() => mockImageGenState),
     cancelGeneration: jest.fn(() => mockCancelGeneration()),
   },
-  onnxImageGeneratorService: {
+  coreMLImageGeneratorService: {
     subscribe: jest.fn(() => jest.fn()),
     getGeneratedImages: jest.fn(() => mockGetGeneratedImages()),
     deleteGeneratedImage: jest.fn((...args: any[]) => (mockDeleteGeneratedImage as any)(...args)),

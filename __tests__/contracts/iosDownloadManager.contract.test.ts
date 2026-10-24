@@ -9,7 +9,6 @@
  */
 
 
-// The iOS module must match this interface (same as Android)
 interface DownloadManagerModuleInterface {
   startDownload(params: {
     url: string;
@@ -46,7 +45,6 @@ interface DownloadManagerModuleInterface {
 
   moveCompletedDownload(downloadId: number, targetPath: string): Promise<string>;
 
-  // iOS no-ops for API compatibility with Android's polling model
   startProgressPolling(): void;
   stopProgressPolling(): void;
 }
@@ -73,7 +71,7 @@ jest.mock('react-native', () => ({
   Platform: { OS: 'ios' },
 }));
 
-describe('iOS DownloadManagerModule Contract (parity with Android)', () => {
+describe('iOS DownloadManagerModule Contract', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -81,7 +79,7 @@ describe('iOS DownloadManagerModule Contract (parity with Android)', () => {
   // ========================================================================
   // Interface parity
   // ========================================================================
-  describe('Interface parity with Android', () => {
+  describe('Native interface', () => {
     it('exposes all required methods', () => {
       const requiredMethods = [
         'startDownload',
@@ -301,9 +299,8 @@ describe('iOS DownloadManagerModule Contract (parity with Android)', () => {
   });
 
   // ========================================================================
-  // Event names and shapes (same as Android)
   // ========================================================================
-  describe('Events (same names and shapes as Android)', () => {
+  describe('Download events', () => {
     it('emits DownloadProgress with expected shape', () => {
       const progressEvent = {
         downloadId: 1,
@@ -360,7 +357,7 @@ describe('iOS DownloadManagerModule Contract (parity with Android)', () => {
       expect(typeof errorEvent.reason).toBe('string');
     });
 
-    it('uses same event names as Android', () => {
+    it('uses the expected download event names', () => {
       // These event names are hardcoded in backgroundDownloadService.ts
       // and must match on both platforms.
       const expectedEvents = [
@@ -382,7 +379,7 @@ describe('iOS DownloadManagerModule Contract (parity with Android)', () => {
   // iOS-specific behaviors
   // ========================================================================
   describe('iOS-specific download behaviors', () => {
-    it('download status values match Android constants', () => {
+    it('uses the expected download status values', () => {
       // Both platforms must use the same status strings
       const validStatuses = ['pending', 'running', 'paused', 'completed', 'failed'];
 

@@ -1,23 +1,22 @@
-import { replySpeech, useReplySpeechState } from '../services/replySpeech';
-import React, { useState } from 'react';
+import { replySpeech,useReplySpeechState } from '../services/replySpeech';
+import React,{ useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Switch,
-  Platform,
+View,
+Text,
+ScrollView,
+TouchableOpacity,
+ActivityIndicator,
+Switch
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
-import { Card, Button } from '../components';
-import { CustomAlert, showAlert, hideAlert, AlertState, initialAlertState } from '../components/CustomAlert';
-import { useTheme, useThemedStyles } from '../theme';
-import type { ThemeColors, ThemeShadows } from '../theme';
-import { TYPOGRAPHY, SPACING } from '../constants';
-import { useAppStore, useWhisperStore } from '../stores';
+import { Card,Button } from '../components';
+import { CustomAlert,showAlert,hideAlert,AlertState,initialAlertState } from '../components/CustomAlert';
+import { useTheme,useThemedStyles } from '../theme';
+import type { ThemeColors,ThemeShadows } from '../theme';
+import { TYPOGRAPHY,SPACING } from '../constants';
+import { useAppStore,useWhisperStore } from '../stores';
 import { WHISPER_MODELS } from '../services';
 
 export const VoiceSettingsScreen: React.FC = () => {
@@ -52,7 +51,7 @@ export const VoiceSettingsScreen: React.FC = () => {
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        {Platform.OS === 'ios' && (
+        {((
           <Card style={styles.section}>
             <Text style={styles.modelName}>Read replies aloud</Text>
             <Text style={styles.description}>
@@ -63,8 +62,8 @@ export const VoiceSettingsScreen: React.FC = () => {
             <Button title="Stop speaking" variant="outline" size="small" onPress={() => { replySpeech.stop(); }} />
             {speechError ? <Text accessibilityRole="alert" style={styles.description}>{speechError}</Text> : null}
           </Card>
-        )}
-        {Platform.OS === 'ios' && (
+        ))}
+        {((
           <Card style={styles.section}>
             <Text style={styles.modelName}>Use Apple speech recognition</Text>
             <Text style={styles.description}>
@@ -76,7 +75,7 @@ export const VoiceSettingsScreen: React.FC = () => {
               onValueChange={value => updateSettings({allowAppleSpeech: value})}
             />
           </Card>
-        )}
+        ))}
         <Card style={styles.section}>
           <Text style={styles.description}>
             Download a Whisper model to enable on-device voice input. Whisper transcribes locally without sending audio to a server.

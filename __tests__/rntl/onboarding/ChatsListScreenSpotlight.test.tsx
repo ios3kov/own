@@ -8,12 +8,12 @@
  */
 
 import React from 'react';
-import { render, act } from '@testing-library/react-native';
+import { render,act } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { useAppStore } from '../../../src/stores/appStore';
 import { resetStores } from '../../utils/testHelpers';
 import { createDownloadedModel } from '../../utils/factories';
-import { mockGoTo, clearSpotlightMocks } from '../../utils/spotlightMocks';
+import { mockGoTo,clearSpotlightMocks } from '../../utils/spotlightMocks';
 
 jest.mock('react-native-spotlight-tour', () =>
   require('../../utils/spotlightMocks').createSpotlightTourMock()
@@ -35,8 +35,8 @@ jest.mock('../../../src/components/CustomAlert', () =>
   require('../../utils/spotlightMocks').createCustomAlertMock()
 );
 
-jest.mock('../../../src/services/localDreamGenerator', () => ({
-  onnxImageGeneratorService: {
+jest.mock('../../../src/services/coreMLImageGenerator', () => ({
+  coreMLImageGeneratorService: {
     deleteGeneratedImage: jest.fn(() => Promise.resolve()),
   },
 }));

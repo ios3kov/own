@@ -10,6 +10,6 @@ INCOMPLETE: device validation, full privacy review and remaining plan tasks are 
 
 ## Build
 
-Use Node 24, Xcode 27.1 and CocoaPods. Run npm ci, then pod install from ios/. Open ios/Own.xcworkspace and use the Own scheme. Bundle ID: io.github.ios3kov.own. Use your own development signing team.
+Use Node 24, Xcode 27.1 and CocoaPods. Run `RNLLAMA_SKIP_POSTINSTALL=1 npm ci`, then `pod install` from `ios/`. The Podfile builds the local model runtime from package sources; this supported install option avoids downloading unused native archives. Open ios/Own.xcworkspace and use the Own scheme. Bundle ID: io.github.ios3kov.own. Use your own development signing team.
 
 Third-party libraries and models retain their own licenses. Do not remove their notices.

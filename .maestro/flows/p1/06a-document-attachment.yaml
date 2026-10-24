@@ -109,9 +109,9 @@ tags:
     id: "document-picker-button"
 
 # Native file picker opens - wait briefly then dismiss
-# On Android, back dismisses the picker; on iOS, cancel button
+# Dismiss the iOS document picker using its Cancel button.
 - evalScript: "${console.log('DOC_ATTACH - Dismiss native picker')}"
-- back
+- tapOn: "Cancel"
 - takeScreenshot: 03-after-picker-dismiss
 
 # ==============================

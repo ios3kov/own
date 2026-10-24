@@ -1,11 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Platform } from 'react-native';
+import { useState,useEffect } from 'react';
 import { useAppStore } from '../stores';
-import { CacheType, INFERENCE_BACKENDS } from '../types';
+import { CacheType,INFERENCE_BACKENDS } from '../types';
 import { hardwareService } from '../services/hardware';
 
-/** Feature flag: Set to true to enable HTP/Hexagon NPU support. Currently disabled. */
-const HTP_ENABLED = false;
 
 export const CACHE_TYPE_DESCRIPTIONS: Record<CacheType, string> = {
   f16: 'Full precision — best quality, highest memory usage',
@@ -23,16 +20,10 @@ export function useTextGenerationAdvanced() {
   const isQuantizedCache = (settings?.cacheType ?? 'q8_0') !== 'f16';
   const currentCacheType: CacheType = settings?.cacheType ?? 'q8_0';
   const gpuLayersEffective = Math.min(settings?.gpuLayers ?? 1, GPU_LAYERS_MAX);
-  const defaultBackend = Platform.OS === 'ios' ? INFERENCE_BACKENDS.METAL : INFERENCE_BACKENDS.CPU;
+  const defaultBackend = (INFERENCE_BACKENDS.METAL);
   const isGpuEnabled = (settings?.inferenceBackend ?? defaultBackend) !== INFERENCE_BACKENDS.CPU;
-  const isAndroid = Platform.OS === 'android';
-  const selectedBackend = settings?.inferenceBackend ?? INFERENCE_BACKENDS.CPU;
-  const gpuForcesF16 =
-    selectedBackend === INFERENCE_BACKENDS.OPENCL ||
-    (HTP_ENABLED && selectedBackend === INFERENCE_BACKENDS.HTP);
-  // OpenCL and HTP force f16 in the native loader, so lock the UI to match.
-  const cacheDisabled = gpuForcesF16;
-  const displayCacheType = cacheDisabled ? 'f16' : currentCacheType;
+  const cacheDisabled = false;
+  const displayCacheType = currentCacheType;
   const [resolvedThreadCount, setResolvedThreadCount] = useState<number | null>(null);
 
   useEffect(() => {
@@ -72,8 +63,6 @@ export function useTextGenerationAdvanced() {
     displayCacheType,
     gpuLayersEffective,
     isGpuEnabled,
-    isAndroid,
-    gpuForcesF16,
     cacheDisabled,
     cpuThreadsSliderValue,
     cpuThreadsDisplayValue,

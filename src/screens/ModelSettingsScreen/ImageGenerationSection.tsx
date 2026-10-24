@@ -1,11 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, Switch, Platform, TouchableOpacity } from 'react-native';
+import React,{ useState } from 'react';
+import { View,Text,Switch } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { AdvancedToggle, Card } from '../../components';
+import { AdvancedToggle,Card } from '../../components';
 import { Button } from '../../components/Button';
-import { useTheme, useThemedStyles } from '../../theme';
+import { useTheme,useThemedStyles } from '../../theme';
 import { useAppStore } from '../../stores';
-import { useClearGpuCache } from '../../hooks/useImageGenerationSettings';
 import { createStyles } from './styles';
 
 // ─── Advanced Sub-Components ─────────────────────────────────────────────────
@@ -36,44 +35,6 @@ const EnhanceImageToggle: React.FC = () => {
   );
 };
 
-const ImageGpuSection: React.FC = () => {
-  const { colors } = useTheme();
-  const styles = useThemedStyles(createStyles);
-  const { settings, updateSettings } = useAppStore();
-  const { clearing, handleClearCache } = useClearGpuCache();
-  const trackColor = { false: colors.surfaceLight, true: `${colors.primary}80` };
-  const isOpenCL = settings?.imageUseOpenCL ?? true;
-
-  return (
-    <>
-      <View style={styles.toggleRow}>
-        <View style={styles.toggleInfo}>
-          <Text style={styles.toggleLabel}>OpenCL GPU Acceleration</Text>
-          <Text style={styles.toggleDesc}>
-            Use GPU for faster image generation. First run may be slower while optimizing for your device.
-          </Text>
-        </View>
-        <Switch
-          value={isOpenCL}
-          onValueChange={(value) => updateSettings({ imageUseOpenCL: value })}
-          trackColor={trackColor}
-          thumbColor={isOpenCL ? colors.primary : colors.textMuted}
-        />
-      </View>
-      {isOpenCL && (
-        <TouchableOpacity
-          style={[styles.toggleRow, styles.clearCacheRow]}
-          onPress={handleClearCache}
-          disabled={clearing}
-        >
-          <Text style={styles.clearCacheText}>
-            {clearing ? 'Clearing...' : 'Clear GPU Cache'}
-          </Text>
-        </TouchableOpacity>
-      )}
-    </>
-  );
-};
 
 const DetectionMethodRow: React.FC = () => {
   const styles = useThemedStyles(createStyles);
@@ -163,7 +124,7 @@ const ImageAdvancedSection: React.FC = () => {
       <DetectionMethodRow />
       <EnhanceImageToggle />
 
-      {Platform.OS === 'android' && <ImageGpuSection />}
+      {false}
     </>
   );
 };

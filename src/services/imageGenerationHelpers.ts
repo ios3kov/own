@@ -1,6 +1,5 @@
-import { Platform } from 'react-native';
 import { useChatStore } from '../stores';
-import { GeneratedImage, GenerationMeta, Message } from '../types';
+import { GeneratedImage,GenerationMeta,Message } from '../types';
 
 interface ActiveImageModel {
   id: string;
@@ -37,11 +36,10 @@ export function cleanEnhancedPrompt(raw: string): string {
 
 export function buildImageGenMeta(
   model: ActiveImageModel,
-  opts: { steps: number; guidanceScale: number; result: GeneratedImage; useOpenCL: boolean },
+  opts: { steps: number; guidanceScale: number; result: GeneratedImage },
 ): GenerationMeta {
-  const backend = model.backend ?? 'mnn';
-  const isGpu = Platform.OS === 'ios' || backend === 'qnn' || (backend === 'mnn' && opts.useOpenCL);
-  const gpuBackend = Platform.OS === 'ios' ? 'Core ML (ANE)' : backend === 'qnn' ? 'QNN (NPU)' : isGpu ? 'MNN (GPU)' : 'MNN (CPU)';
+  const isGpu = true;
+  const gpuBackend = 'Core ML';
   return {
     gpu: isGpu,
     gpuBackend,

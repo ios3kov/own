@@ -11,17 +11,17 @@
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render,fireEvent } from '@testing-library/react-native';
 import { useAppStore } from '../../../src/stores/appStore';
 import { useChatStore } from '../../../src/stores/chatStore';
 import { useProjectStore } from '../../../src/stores/projectStore';
 import { resetStores } from '../../utils/testHelpers';
 import {
-  createConversation,
-  createMessage,
-  createDownloadedModel,
-  createONNXImageModel,
-  createProject,
+createConversation,
+createMessage,
+createDownloadedModel,
+createONNXImageModel,
+createProject,
 } from '../../utils/factories';
 
 // Mock navigation
@@ -100,7 +100,7 @@ jest.mock('../../../src/components/CustomAlert', () => ({
 }));
 
 jest.mock('../../../src/services', () => ({
-  onnxImageGeneratorService: {
+  coreMLImageGeneratorService: {
     deleteGeneratedImage: jest.fn(() => Promise.resolve()),
   },
   activeModelService: {

@@ -9,11 +9,11 @@ class AuthService {
   async setPassphrase(passphrase: string): Promise<boolean> {
     try {
       const hash: string = await NativeModules.PrivacyCrypto.createVerifier(passphrase);
-      await Keychain.setGenericPassword(PASSPHRASE_KEY, hash, {
+      const stored=await Keychain.setGenericPassword(PASSPHRASE_KEY, hash, {
         service: SERVICE_NAME,
         accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED,
       });
-      return true;
+      return !!stored;
     } catch (error) {
       logger.error('Failed to set passphrase:', error);
       return false;

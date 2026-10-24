@@ -83,7 +83,7 @@ function makeEntry(overrides: Record<string, unknown> = {}) {
       imageModelName: 'Test Model',
       imageModelDescription: 'desc',
       imageModelSize: 1000,
-      imageModelBackend: 'mnn',
+      imageModelBackend: 'coreml',
     }),
     ...overrides,
   } as any;
@@ -222,7 +222,7 @@ describe('resumeImageDownload', () => {
         imageModelName: 'Test Model',
         imageModelDescription: 'desc',
         imageModelSize: 1000,
-        imageModelBackend: 'mnn',
+        imageModelBackend: 'coreml',
       }),
     });
     existingPaths.add(modelDir);
