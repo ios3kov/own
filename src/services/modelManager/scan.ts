@@ -4,7 +4,7 @@ import { DownloadedModel, LlamaDownloadedModel, LiteRTDownloadedModel, ModelFile
 import { buildDownloadedModel, persistDownloadedModel, loadDownloadedModels, saveModelsList } from './storage';
 import { copyFileWithProgress } from './copyFile';
 import { resolveCoreMLModelDir } from '../../utils/coreMLModelUtils';
- 
+
 export function isMMProjFile(fileName: string): boolean {
   const lower = fileName.toLowerCase();
   return lower.includes('mmproj') ||

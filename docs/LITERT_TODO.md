@@ -52,13 +52,13 @@
 - Gemma 4 E2B on GPU: TTFT ~7s, ~38-41 chars/sec
 
 
-i want to cleanup some branches haev got too many branches locally 
+i want to cleanup some branches haev got too many branches locally
 addmailto
 0.0.84
 85
-dev/integration -dont know what this is about dont delete 
+dev/integration -dont know what this is about dont delete
 fdroid/wrapper-and-fastlane
-feat/remote-server-api-keys can do 
+feat/remote-server-api-keys can do
  fix-file-delete-from-source-error
  fix-file-import
   fix-google-play-services
@@ -76,9 +76,3 @@ feat/remote-server-api-keys can do
   remove-phi-list
   ui-ux/improvements/0.0.88
   make-tool-heuristic-based
-
-
-
-
-
-  

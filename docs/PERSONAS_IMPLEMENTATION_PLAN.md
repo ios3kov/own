@@ -659,7 +659,7 @@ When a skill fires with `requiresApproval: true`:
 
 ### Screen 6: PersonaMemoryScreen
 
-**Route:** `PersonaMemory` with `personaId` param  
+**Route:** `PersonaMemory` with `personaId` param
 **Access:** From PersonaDetailSheet or PersonaEditScreen
 
 **Layout:**

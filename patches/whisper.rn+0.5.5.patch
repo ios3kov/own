@@ -19,7 +19,7 @@ index a056c22..346cd72 100644
 +  // the end-of-loop check, which double-removes the native job and crashes in
 +  // finishRealtimeTranscribeJob (SIGSEGV). Reset in rewind() per new job.
 +  private boolean isRealtimeFinished = false;
- 
+
    public WhisperContext(int id, ReactApplicationContext reactContext, long context) {
      this.id = id;
 @@ -102,6 +107,7 @@ public class WhisperContext {
@@ -28,12 +28,12 @@ index a056c22..346cd72 100644
      fullHandler = null;
 +    isRealtimeFinished = false;
    }
- 
+
    public int getId() {
 @@ -117,7 +123,12 @@ public class WhisperContext {
      return vadSimple(jobId, sliceIndex, nSamples, n);
    }
- 
+
 -  private void finishRealtimeTranscribe(WritableMap result) {
 +  private synchronized void finishRealtimeTranscribe(WritableMap result) {
 +    // Run at most once per job. Multiple code paths in the capture loop can reach
@@ -45,7 +45,7 @@ index a056c22..346cd72 100644
      finishRealtimeTranscribeJob(jobId, context, sliceNSamples.stream().mapToInt(i -> i).toArray());
    }
 @@ -465,6 +476,16 @@ public class WhisperContext {
- 
+
    public void release() {
      stopCurrentTranscribe();
 +    try {
@@ -60,14 +60,14 @@ index a056c22..346cd72 100644
 +    }
      freeContext(id, context);
    }
- 
+
 diff --git a/node_modules/whisper.rn/android/src/main/jni.cpp b/node_modules/whisper.rn/android/src/main/jni.cpp
 index b1fa548..5f0b7f1 100644
 --- a/node_modules/whisper.rn/android/src/main/jni.cpp
 +++ b/node_modules/whisper.rn/android/src/main/jni.cpp
 @@ -485,6 +485,13 @@ Java_com_rnwhisper_WhisperContext_finishRealtimeTranscribeJob(
      UNUSED(context_ptr);
- 
+
      rnwhisper::job *job = rnwhisper::job_get(job_id);
 +    // The job may already have been removed by fullWithJob completing/aborting,
 +    // or by a duplicate finishRealtimeTranscribe call from the realtime thread.

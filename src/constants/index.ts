@@ -211,4 +211,3 @@ export const SPACING = {
   xl: 24,
   xxl: 32,
 };
-

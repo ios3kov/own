@@ -73,4 +73,3 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
     cacheType: settings.cacheType,
   };
 }
-

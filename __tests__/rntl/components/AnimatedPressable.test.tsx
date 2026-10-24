@@ -21,9 +21,9 @@ jest.mock('../../../src/utils/haptics', () => ({
   triggerHaptic: jest.fn(),
 }));
 
- 
+
 const { triggerHaptic: mockTriggerHaptic } = require('../../../src/utils/haptics');
- 
+
 const Reanimated = require('react-native-reanimated');
 
 describe('AnimatedPressable', () => {

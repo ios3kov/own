@@ -19,7 +19,7 @@ end
 
 target 'Own' do
   config = use_native_modules!
-  
+
   use_react_native!(
     :path => config[:reactNativePath],
     # An absolute path to your application root.
@@ -37,7 +37,7 @@ target 'Own' do
       :mac_catalyst_enabled => false,
       # :ccache_enabled => true
     )
-    
+
     # fmt 11's consteval detection fails with this React Native/Xcode combination.
     fmt_base = File.join(installer.sandbox.root, 'fmt', 'include', 'fmt', 'base.h')
     if File.exist?(fmt_base)

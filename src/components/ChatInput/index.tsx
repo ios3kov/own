@@ -310,4 +310,3 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 const spotlightStyles = StyleSheet.create({
   centered: { alignSelf: 'center' },
 });
-

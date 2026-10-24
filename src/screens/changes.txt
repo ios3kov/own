@@ -1,4 +1,4 @@
-in download screen  
+in download screen
 
 or or other person
 
@@ -210,7 +210,7 @@ or or other person
   directly.
 
 
- 
+
 › Implement {feature}
- 
+
   gpt-5.4 low · ~/Desktop/Own-mobile-ai

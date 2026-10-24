@@ -489,4 +489,3 @@ export async function handleDownloadImageModel(
   }
   await proceedWithDownload(modelInfo, deps);
 }
-

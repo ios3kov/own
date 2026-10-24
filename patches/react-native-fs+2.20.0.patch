@@ -5,23 +5,23 @@ index cb2ca23..3994605 100644
 @@ -1,3 +1,4 @@
 +#import "OwnPrivacyNetworkPolicy.h"
  #import "Downloader.h"
- 
+
  @implementation RNFSDownloadParams
 @@ -33,6 +34,10 @@
    _bytesWritten = 0;
- 
+
    NSURL* url = [NSURL URLWithString:_params.fromUrl];
 +  if (!OwnPrivacyAllowsURL(url)) {
 +    _params.errorCallback(OwnPrivacyNetworkError());
 +    return nil;
 +  }
- 
+
    if ([[NSFileManager defaultManager] fileExistsAtPath:_params.toFile]) {
      _fileHandle = [NSFileHandle fileHandleForWritingAtPath:_params.toFile];
 @@ -61,6 +66,8 @@
      config.URLCache = nil;
    }
- 
+
 +  config.HTTPShouldSetCookies = NO;
 +  config.HTTPCookieStorage = nil;
    config.HTTPAdditionalHeaders = _params.headers;
@@ -30,7 +30,7 @@ index cb2ca23..3994605 100644
 @@ -193,4 +200,21 @@
      return _resumeData != nil;
  }
- 
+
 +- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
 +    willPerformHTTPRedirection:(NSHTTPURLResponse *)response newRequest:(NSURLRequest *)request
 +    completionHandler:(void (^)(NSURLRequest *))completionHandler
@@ -56,10 +56,10 @@ index 9463c81..1f3868c 100644
 @@ -1,3 +1,4 @@
 +#import "OwnPrivacyNetworkPolicy.h"
  #import "Uploader.h"
- 
+
  @implementation RNFSUploadParams
 @@ -20,6 +21,10 @@
- 
+
    NSString *method = _params.method;
    NSURL *url = [NSURL URLWithString:_params.toUrl];
 +  if (!OwnPrivacyAllowsURL(url)) {
@@ -71,7 +71,7 @@ index 9463c81..1f3868c 100644
    BOOL binaryStreamOnly = _params.binaryStreamOnly;
 @@ -103,6 +108,8 @@
    [req setHTTPBody:reqBody];
- 
+
    NSURLSessionConfiguration *sessionConfiguration = [NSURLSessionConfiguration defaultSessionConfiguration];
 +  sessionConfiguration.HTTPShouldSetCookies = NO;
 +  sessionConfiguration.HTTPCookieStorage = nil;
@@ -81,7 +81,7 @@ index 9463c81..1f3868c 100644
 @@ -152,4 +159,21 @@
    [_task cancel];
  }
- 
+
 +- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
 +    willPerformHTTPRedirection:(NSHTTPURLResponse *)response newRequest:(NSURLRequest *)request
 +    completionHandler:(void (^)(NSURLRequest *))completionHandler

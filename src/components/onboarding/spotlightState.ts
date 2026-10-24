@@ -16,4 +16,3 @@ export function consumePendingSpotlight(): number | null {
 export function peekPendingSpotlight(): number | null {
   return pendingStep;
 }
-

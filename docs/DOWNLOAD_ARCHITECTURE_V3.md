@@ -258,4 +258,3 @@ Vision models download two files: the main GGUF and an mmproj file.
 - `setStatus` detects mmproj events via `entry.mmProjDownloadId === downloadId` and updates `mmProjStatus` only — mmproj failure never fails the main entry.
 - If mmproj fails: model is registered as `isVisionModel: false`. A "Repair Vision" affordance is shown. State persists across restarts (stored in `downloadedModels`).
 - Progress bar combines both: `(bytesDownloaded + mmProjBytesDownloaded) / combinedTotalBytes`.
-

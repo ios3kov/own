@@ -1,5 +1,5 @@
 # GPU Acceleration Issues & Findings
-**Date:** April 22, 2026  
+**Date:** April 22, 2026
 **Status:** Investigation Complete - Ready for Implementation
 
 ---
@@ -40,8 +40,8 @@ When using OpenCL backend with quantized KV cache (`cache_type_k: "q8_0"` or `ca
 ### GitHub Evidence
 **[mybigday/llama.rn Issue #229](https://github.com/mybigday/llama.rn/issues/229) - CONFIRMED MATCH**
 
-**Reported by:** ArindamRayMukherjee  
-**Date Opened:** October 15, 2025  
+**Reported by:** ArindamRayMukherjee
+**Date Opened:** October 15, 2025
 **Status:** OPEN (unfixed)
 
 **Environment:**
@@ -158,9 +158,9 @@ return {
     use_mmap: !shouldDisableMmap(modelPath), vocab_only: false, flash_attn_type,
     kv_unified: true, no_extra_bufts: false,
     // ✅ Only set cache_type_k/v if NOT using OpenCL (where they cause SIGSEGV)
-    ...(backend !== INFERENCE_BACKENDS.OPENCL && { 
-      cache_type_k: cacheType, 
-      cache_type_v: cacheType 
+    ...(backend !== INFERENCE_BACKENDS.OPENCL && {
+      cache_type_k: cacheType,
+      cache_type_v: cacheType
     }),
   },
   nThreads, nBatch, ctxLen, nGpuLayers,
@@ -312,10 +312,10 @@ android/app/src/main/assets/ggml-hexagon/
 ### 3. Flash Attention Already Disabled for HTP
 ```typescript
 // src/services/llmHelpers.ts:69-72
-const gpuBackendIncompatible = 
-  backend === INFERENCE_BACKENDS.OPENCL || 
+const gpuBackendIncompatible =
+  backend === INFERENCE_BACKENDS.OPENCL ||
   (HTP_ENABLED && backend === INFERENCE_BACKENDS.HTP);
-const flash_attn_type = (settings.flashAttn === false || gpuBackendIncompatible) 
+const flash_attn_type = (settings.flashAttn === false || gpuBackendIncompatible)
   ? 'off' : 'auto';
 ```
 
@@ -430,7 +430,7 @@ n_parallel: 1  // Blocking mode only
 - [Issue #18075](https://github.com/ggml-org/llama.cpp/issues/18075): Flash attention runs on **CPU instead of HTP**, not crash
 - "FLASH_ATTN: fattn-27 (8K) [CPU]" — falls back, doesn't crash
 
-**Uncertainty:** 
+**Uncertainty:**
 - Does it actually crash, or just fall back to CPU?
 - If it just falls back, disabling it removes the performance loss
 - **Action:** Test with flash_attn enabled to see actual behavior
@@ -548,9 +548,9 @@ baseParams: {
 
 ```typescript
 // Test only - don't commit without verification
-const gpuBackendIncompatible = 
+const gpuBackendIncompatible =
   backend === INFERENCE_BACKENDS.OPENCL;  // Remove HTP from here
-const flash_attn_type = (settings.flashAttn === false || gpuBackendIncompatible) 
+const flash_attn_type = (settings.flashAttn === false || gpuBackendIncompatible)
   ? 'off' : 'auto';
 ```
 
@@ -701,8 +701,8 @@ flash_attn_type: 'off'  // Keep disabled until tested
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** April 22, 2026  
+**Document Version:** 1.0
+**Last Updated:** April 22, 2026
 **Status:** Ready for Implementation (OpenCL Section) + Testing (HTP Section)
 
 ---

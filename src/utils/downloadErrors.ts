@@ -131,4 +131,3 @@ export function getDownloadStatusLabel(status: string, reasonCode?: string, reas
   if (status === 'running' || status === 'downloading') return 'Downloading...';
   return toUserMessage(reason, reasonCode);
 }
-

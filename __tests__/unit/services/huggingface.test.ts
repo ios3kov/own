@@ -1,4 +1,4 @@
- 
+
 declare const global: any;
 
 /**
