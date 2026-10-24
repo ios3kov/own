@@ -14,10 +14,10 @@ private enum TestPaths {
   static let tmpShouldNotExist = "/tmp/should-not-exist.gguf"
 }
 
-private func makeTempDirectory() -> URL {
+private func makeTempDirectory() throws -> URL {
   let url = FileManager.default.temporaryDirectory
     .appendingPathComponent(UUID().uuidString, isDirectory: true)
-  try! FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+  try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
   return url
 }
 
@@ -33,7 +33,7 @@ final class PDFExtractorModuleTests: XCTestCase {
   }
 
   /// Creates an n-page PDF and returns its file URL in the temp directory.
-  private func makeTempPDF(pages: [(text: String, rect: CGRect)] = []) -> URL {
+  private func makeTempPDF(pages: [(text: String, rect: CGRect)] = []) throws -> URL {
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString + ".pdf")
     let pageSize = CGRect(x: 0, y: 0, width: 612, height: 792)
@@ -45,12 +45,12 @@ final class PDFExtractorModuleTests: XCTestCase {
         page.text.draw(in: page.rect, withAttributes: attrs)
       }
     }
-    try! data.write(to: url)
+    try data.write(to: url)
     return url
   }
 
-  private func singlePage(text: String) -> URL {
-    makeTempPDF(pages: [(text, CGRect(x: 72, y: 72, width: 468, height: 648))])
+  private func singlePage(text: String) throws -> URL {
+    try makeTempPDF(pages: [(text, CGRect(x: 72, y: 72, width: 468, height: 648))])
   }
 
   func testPrivatePDFDiagnosticPayloadIsNotEvaluatedInRelease() {
@@ -75,8 +75,8 @@ final class PDFExtractorModuleTests: XCTestCase {
 
   // MARK: extractText — happy path
 
-  func testExtractTextResolvesWithContent() {
-    let url = singlePage(text: "Hello, PDF World!")
+  func testExtractTextResolvesWithContent() throws {
+    let url = try singlePage(text: "Hello, PDF World!")
     let exp = expectation(description: "resolve")
 
     module.extractText(
@@ -96,8 +96,8 @@ final class PDFExtractorModuleTests: XCTestCase {
     try? FileManager.default.removeItem(at: url)
   }
 
-  func testExtractTextFromMultiPagePDF() {
-    let url = makeTempPDF(pages: [
+  func testExtractTextFromMultiPagePDF() throws {
+    let url = try makeTempPDF(pages: [
       ("Page one content", CGRect(x: 72, y: 72, width: 468, height: 648)),
       ("Page two content", CGRect(x: 72, y: 72, width: 468, height: 648)),
     ])
@@ -120,9 +120,9 @@ final class PDFExtractorModuleTests: XCTestCase {
     try? FileManager.default.removeItem(at: url)
   }
 
-  func testExtractTextFromEmptyPDF() {
+  func testExtractTextFromEmptyPDF() throws {
     // PDF with a page but no text drawn — should resolve with empty string
-    let url = makeTempPDF(pages: [("", CGRect(x: 72, y: 72, width: 468, height: 648))])
+    let url = try makeTempPDF(pages: [("", CGRect(x: 72, y: 72, width: 468, height: 648))])
     let exp = expectation(description: "empty pdf resolve")
 
     module.extractText(
@@ -144,9 +144,9 @@ final class PDFExtractorModuleTests: XCTestCase {
 
   // MARK: extractText — truncation
 
-  func testExtractTextTruncatesAtMaxChars() {
+  func testExtractTextTruncatesAtMaxChars() throws {
     let longText = String(repeating: "A", count: 300)
-    let url = singlePage(text: longText)
+    let url = try singlePage(text: longText)
     let exp = expectation(description: "truncate")
 
     module.extractText(
@@ -170,9 +170,9 @@ final class PDFExtractorModuleTests: XCTestCase {
     try? FileManager.default.removeItem(at: url)
   }
 
-  func testExtractTextDoesNotTruncateWhenUnderLimit() {
+  func testExtractTextDoesNotTruncateWhenUnderLimit() throws {
     let shortText = "Short"
-    let url = singlePage(text: shortText)
+    let url = try singlePage(text: shortText)
     let exp = expectation(description: "no truncate")
 
     module.extractText(
@@ -217,11 +217,11 @@ final class PDFExtractorModuleTests: XCTestCase {
     waitForExpectations(timeout: 5)
   }
 
-  func testExtractTextRejectsNonPDFFile() {
+  func testExtractTextRejectsNonPDFFile() throws {
     // Write a plain-text file and pass it as a PDF
     let url = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString + ".pdf")
-    try! "not a pdf".write(to: url, atomically: true, encoding: .utf8)
+    try "not a pdf".write(to: url, atomically: true, encoding: .utf8)
     let exp = expectation(description: "reject non-pdf")
 
     module.extractText(
@@ -253,10 +253,10 @@ final class CoreMLDiffusionModuleTests: XCTestCase {
     module = CoreMLDiffusionModule()
   }
 
-  private func makeModelDirectory(components: [String]) -> URL {
-    let url = makeTempDirectory()
+  private func makeModelDirectory(components: [String]) throws -> URL {
+    let url = try makeTempDirectory()
     for component in components {
-      try! FileManager.default.createDirectory(
+      try FileManager.default.createDirectory(
         at: url.appendingPathComponent(component),
         withIntermediateDirectories: true
       )
@@ -279,8 +279,8 @@ final class CoreMLDiffusionModuleTests: XCTestCase {
     XCTAssertEqual(events.count, 2)
   }
 
-  func testValidateModelDirectoryAcceptsStandardUnetLayout() {
-    let url = makeModelDirectory(components: [
+  func testValidateModelDirectoryAcceptsStandardUnetLayout() throws {
+    let url = try makeModelDirectory(components: [
       "TextEncoder.mlmodelc",
       "Unet.mlmodelc",
       "VAEDecoder.mlmodelc",
@@ -292,8 +292,8 @@ final class CoreMLDiffusionModuleTests: XCTestCase {
     XCTAssertNil(CoreMLDiffusionModule.validateModelDirectory(at: url))
   }
 
-  func testValidateModelDirectoryAcceptsChunkedSDXLLayout() {
-    let url = makeModelDirectory(components: [
+  func testValidateModelDirectoryAcceptsChunkedSDXLLayout() throws {
+    let url = try makeModelDirectory(components: [
       "TextEncoder.mlmodelc",
       "TextEncoder2.mlmodelc",
       "UnetChunk1.mlmodelc",
@@ -308,8 +308,8 @@ final class CoreMLDiffusionModuleTests: XCTestCase {
     XCTAssertNil(CoreMLDiffusionModule.validateModelDirectory(at: url))
   }
 
-  func testValidateModelDirectoryRejectsIncompleteChunkedSDXLLayout() {
-    let url = makeModelDirectory(components: [
+  func testValidateModelDirectoryRejectsIncompleteChunkedSDXLLayout() throws {
+    let url = try makeModelDirectory(components: [
       "TextEncoder.mlmodelc",
       "TextEncoder2.mlmodelc",
       "UnetChunk1.mlmodelc",
@@ -880,7 +880,7 @@ final class ModelFileStorageTests: XCTestCase {
   }
 
   func testNestedModelPathStaysWithinDestination() throws {
-    let root = makeTempDirectory()
+    let root = try makeTempDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
     let result = try DownloadManagerModule.modelFileDestination("Unet.mlmodelc/weights/weight.bin", in: root.path)
     XCTAssertEqual(result.path, root.appendingPathComponent("Unet.mlmodelc/weights/weight.bin").path)
@@ -893,20 +893,20 @@ final class ModelFileStorageTests: XCTestCase {
   }
 
   func testRejectsSymlinkLeadingOutsideModelDirectory() throws {
-    let root = makeTempDirectory(), outside = makeTempDirectory()
+    let root = try makeTempDirectory(), outside = try makeTempDirectory()
     defer { try? FileManager.default.removeItem(at: root); try? FileManager.default.removeItem(at: outside) }
     try FileManager.default.createSymbolicLink(at: root.appendingPathComponent("weights"), withDestinationURL: outside)
     XCTAssertThrowsError(try DownloadManagerModule.modelFileDestination("weights/escape.bin", in: root.path))
   }
 
   func testSaveFailureThrowsInsteadOfReportingCompletion() throws {
-    let root = makeTempDirectory()
+    let root = try makeTempDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
     XCTAssertThrowsError(try DownloadManagerModule.saveModelFile(from: root.appendingPathComponent("missing"), relativePath: "weights/model.bin", destinationDir: root.path))
   }
 
   func testFailedReplacementPreservesExistingModelFile() throws {
-    let root = makeTempDirectory()
+    let root = try makeTempDirectory()
     defer { try? FileManager.default.removeItem(at: root) }
     let target = root.appendingPathComponent("model.bin")
     try Data("existing model".utf8).write(to: target)

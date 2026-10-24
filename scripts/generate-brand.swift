@@ -27,12 +27,12 @@ func render(_ size: Int, _ destination: URL) throws {
   context.setStrokeColor(CGColor(gray: 1, alpha: 1))
   context.setLineWidth(64); context.setLineCap(.round); context.setLineJoin(.round)
   context.strokeEllipse(in: CGRect(x: 168, y: 400, width: 176, height: 224))
-  let w = CGMutablePath(); w.move(to: CGPoint(x: 414, y: 400))
-  for p in [CGPoint(x: 458,y:624),CGPoint(x:540,y:468),CGPoint(x:622,y:624),CGPoint(x:666,y:400)] { w.addLine(to:p) }
-  context.addPath(w); context.strokePath()
-  let n = CGMutablePath(); n.move(to:CGPoint(x:744,y:624)); n.addLine(to:CGPoint(x:744,y:400))
-  n.move(to:CGPoint(x:744,y:472)); n.addCurve(to:CGPoint(x:928,y:476), control1:CGPoint(x:744,y:380), control2:CGPoint(x:928,y:380)); n.addLine(to:CGPoint(x:928,y:624))
-  context.addPath(n); context.strokePath()
+  let middleStroke = CGMutablePath(); middleStroke.move(to: CGPoint(x: 414, y: 400))
+  for vertex in [CGPoint(x: 458,y:624),CGPoint(x:540,y:468),CGPoint(x:622,y:624),CGPoint(x:666,y:400)] { middleStroke.addLine(to:vertex) }
+  context.addPath(middleStroke); context.strokePath()
+  let lastStroke = CGMutablePath(); lastStroke.move(to:CGPoint(x:744,y:624)); lastStroke.addLine(to:CGPoint(x:744,y:400))
+  lastStroke.move(to:CGPoint(x:744,y:472)); lastStroke.addCurve(to:CGPoint(x:928,y:476), control1:CGPoint(x:744,y:380), control2:CGPoint(x:928,y:380)); lastStroke.addLine(to:CGPoint(x:928,y:624))
+  context.addPath(lastStroke); context.strokePath()
   guard let image = context.makeImage(),
     let output = CGImageDestinationCreateWithURL(destination as CFURL, UTType.png.identifier as CFString, 1, nil) else { fatalError("Cannot export PNG") }
   CGImageDestinationAddImage(output, image, nil)
