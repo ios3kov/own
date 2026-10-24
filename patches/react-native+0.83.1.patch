@@ -4,12 +4,12 @@ index 0303970..7543b0a 100644
 +++ b/node_modules/react-native/Libraries/Network/RCTHTTPRequestHandler.mm
 @@ -6,6 +6,7 @@
   */
-
+ 
  #import <React/RCTHTTPRequestHandler.h>
 +#import "OwnPrivacyNetworkPolicy.h"
-
+ 
  #import <mutex>
-
+ 
 @@ -93,6 +94,9 @@ RCT_EXPORT_MODULE()
        [configuration setHTTPCookieStorage:[NSHTTPCookieStorage sharedHTTPCookieStorage]];
      }
@@ -18,7 +18,7 @@ index 0303970..7543b0a 100644
 +    configuration.HTTPCookieStorage = nil;
 +    configuration.HTTPCookieAcceptPolicy = NSHTTPCookieAcceptPolicyNever;
      _session = [NSURLSession sessionWithConfiguration:configuration delegate:self delegateQueue:callbackQueue];
-
+ 
      _delegates = [[NSMapTable alloc] initWithKeyOptions:NSPointerFunctionsStrongMemory
 @@ -101,7 +105,8 @@ RCT_EXPORT_MODULE()
    }
@@ -29,7 +29,7 @@ index 0303970..7543b0a 100644
 +  else [task cancel];
    return task;
  }
-
+ 
 @@ -136,12 +141,18 @@ RCT_EXPORT_MODULE()
                      newRequest:(NSURLRequest *)request
               completionHandler:(void (^)(NSURLRequest *))completionHandler
@@ -53,3 +53,4 @@ index 0303970..7543b0a 100644
 +  }
    completionHandler(nextRequest);
  }
+ 

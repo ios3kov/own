@@ -4,7 +4,7 @@ index 8fce879..5475585 100644
 +++ b/node_modules/@react-native-voice/voice/android/build.gradle
 @@ -1,34 +1,18 @@
  apply plugin: 'com.android.library'
-
+ 
 -repositories {
 -    mavenLocal()
 -    jcenter()
@@ -26,13 +26,13 @@ index 8fce879..5475585 100644
 +def DEFAULT_COMPILE_SDK_VERSION = 34
 +def DEFAULT_MIN_SDK_VERSION = 24
 +def DEFAULT_TARGET_SDK_VERSION = 34
-
+ 
  android {
 -    compileSdkVersion rootProject.hasProperty('compileSdkVersion') ? rootProject.compileSdkVersion : DEFAULT_COMPILE_SDK_VERSION
 -    buildToolsVersion rootProject.hasProperty('buildToolsVersion') ? rootProject.buildToolsVersion : DEFAULT_BUILD_TOOLS_VERSION
 +    namespace "com.wenkesj.voice"
 +    compileSdk rootProject.hasProperty('compileSdkVersion') ? rootProject.compileSdkVersion : DEFAULT_COMPILE_SDK_VERSION
-
+ 
      defaultConfig {
 -        minSdkVersion 15
 +        minSdkVersion rootProject.hasProperty('minSdkVersion') ? rootProject.minSdkVersion : DEFAULT_MIN_SDK_VERSION
@@ -47,7 +47,7 @@ index 8fce879..5475585 100644
 @@ -37,31 +21,11 @@ android {
      }
  }
-
+ 
 -buildscript {
 -    if (project == rootProject) {
 -        repositories {
@@ -70,7 +70,7 @@ index 8fce879..5475585 100644
 +    mavenCentral()
 +    google()
  }
-
+ 
 -def supportVersion = rootProject.hasProperty('supportLibVersion') ? rootProject.supportLibVersion : DEFAULT_SUPPORT_LIB_VERSION
 -
  dependencies {
@@ -90,12 +90,12 @@ index fd9dad8..cc73b16 100644
 +// Default NO: Apple recognition is never enabled merely by importing this module.
 +@property (nonatomic) BOOL cloudRecognitionAllowed;
 +@property (nonatomic) NSUInteger permissionGeneration;
-
+ 
  @property (nonatomic) NSString *sessionId;
  /** Previous category the user was on prior to starting speech recognition */
 @@ -343,6 +346,7 @@ RCT_EXPORT_METHOD(destroySpeech:(RCTResponseSenderBlock)callback) {
  }
-
+ 
  RCT_EXPORT_METHOD(isSpeechAvailable:(RCTResponseSenderBlock)callback) {
 +    NSUInteger generation = self.permissionGeneration;
      [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
@@ -104,7 +104,7 @@ index fd9dad8..cc73b16 100644
 @@ -368,12 +372,28 @@ RCT_EXPORT_METHOD(isRecognizing:(RCTResponseSenderBlock)callback) {
      }
  }
-
+ 
 +RCT_EXPORT_METHOD(setCloudRecognitionAllowed:(BOOL)allowed
 +                  resolver:(RCTPromiseResolveBlock)resolve
 +                  rejecter:(RCTPromiseRejectBlock)reject) {
@@ -125,7 +125,7 @@ index fd9dad8..cc73b16 100644
          [self sendResult:RCTMakeError(@"Speech recognition already started!", nil, nil) :nil :nil :nil];
          return;
      }
-
+     
 +    NSUInteger generation = self.permissionGeneration;
      [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
          switch (status) {
