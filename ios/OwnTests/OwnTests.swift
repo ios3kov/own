@@ -69,6 +69,26 @@ final class PDFExtractorModuleTests: XCTestCase {
     }
   }
 
+  func testDocumentBudgetKeepsInstructionsAndHigherRankedExcerpts() async throws {
+    let header = "<knowledge_base>\nThe following excerpts are from the user's project knowledge base. Use them to inform your response when relevant.\n\n"
+    let original = "Instructions\n" + header + "first\n\n---\n\nsecond\n</knowledge_base>\nSuffix"
+    let fitted = try await OwnFoundationModels.fittingDocumentInstructions(original) { !$0.contains("second") }
+    XCTAssertTrue(fitted.contains("first"))
+    XCTAssertFalse(fitted.contains("second"))
+    XCTAssertTrue(fitted.hasPrefix("Instructions\n"))
+    XCTAssertTrue(fitted.hasSuffix("\nSuffix"))
+    XCTAssertTrue(original.contains("second"))
+    let none = try await OwnFoundationModels.fittingDocumentInstructions(original) { _ in false }
+    XCTAssertEqual(none, "Instructions\n\nSuffix")
+    let all = try await OwnFoundationModels.fittingDocumentInstructions(original) { _ in true }
+    XCTAssertEqual(all, original)
+    let plain = try await OwnFoundationModels.fittingDocumentInstructions("Plain instructions") { _ in
+      XCTFail("No document excerpts should require no additional tokenization")
+      return false
+    }
+    XCTAssertEqual(plain, "Plain instructions")
+  }
+
   func testProcessMemorySnapshotUsesPositiveKernelFootprint() {
     let memory = OwnHardwareInfo.memorySnapshot()
     XCTAssertGreaterThan(memory["currentBytes"] ?? 0, 0)

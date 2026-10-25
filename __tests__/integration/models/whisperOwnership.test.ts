@@ -113,3 +113,19 @@ it('does not idle-release an active file transcription',async()=>{
  (initWhisper as jest.Mock).mockResolvedValueOnce(context);await whisperService.loadModel('/speech.bin');const work=whisperService.transcribeFile('/new.wav');while(!finish) await Promise.resolve();
  expect(await whisperService.releaseIfIdle()).toBe(false);expect(context.release).not.toHaveBeenCalled();finish({result:'complete'});await work;
 });
+
+it('uses native language support for a renamed imported English-only model',async()=>{
+ const context={multilingual:false,release:jest.fn().mockResolvedValue(undefined),transcribe:jest.fn()};
+ (initWhisper as jest.Mock).mockResolvedValueOnce(context);
+ await whisperService.loadModel('/imported-name.bin');
+ await expect(whisperService.transcribeFile('/recording.wav',{language:'es'})).rejects.toThrow('English only');
+ expect(context.transcribe).not.toHaveBeenCalled();
+});
+
+it('allows multilingual models even when an imported filename ends in .en.bin',async()=>{
+ const context={multilingual:true,release:jest.fn().mockResolvedValue(undefined),transcribe:jest.fn().mockReturnValue({promise:Promise.resolve({result:'hola'}),stop:jest.fn()})};
+ (initWhisper as jest.Mock).mockResolvedValueOnce(context);
+ await whisperService.loadModel('/renamed.en.bin');
+ await expect(whisperService.transcribeFile('/recording.wav',{language:'es'})).resolves.toBe('hola');
+ expect(context.transcribe).toHaveBeenCalledWith('/recording.wav',expect.objectContaining({language:'es'}));
+});

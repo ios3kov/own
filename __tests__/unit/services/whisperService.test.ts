@@ -750,3 +750,11 @@ describe('WhisperService', () => {
     expect(() => whisperLanguage('/ggml-tiny.en.bin','es')).toThrow('multilingual');
   });
 });
+
+
+it('uses actual model metadata ahead of imported filenames for speech language',()=>{
+ expect(whisperLanguage('/renamed.bin',undefined,false)).toBe('en');
+ expect(()=>whisperLanguage('/renamed.bin','ru',false)).toThrow('English only');
+ expect(whisperLanguage('/renamed.en.bin','ru',true)).toBe('ru');
+ expect(whisperLanguage('/renamed.en.bin',undefined,true)).toBe('auto');
+});

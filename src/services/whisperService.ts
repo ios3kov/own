@@ -20,9 +20,10 @@ export const WHISPER_MODELS = [
   { id: 'small.en', name: 'Whisper Small (English)', size: 466, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin', description: 'High accuracy, English only, needs more RAM' },
 ];
 
-export function whisperLanguage(modelPath: string | null, requested?: string): string {
+export function whisperLanguage(modelPath: string | null, requested?: string, multilingual?: boolean): string {
   const language = requested?.trim().toLowerCase() || 'auto';
-  if (!/\.en\.bin$/i.test(modelPath ?? '')) return language;
+  const englishOnly = multilingual === false || (multilingual !== true && /\.en\.bin$/i.test(modelPath ?? ''));
+  if (!englishOnly) return language;
   if (language === 'auto' || language === 'en' || language.startsWith('en-')) return 'en';
   throw new Error('This speech model supports English only. Choose a multilingual Whisper model for this language.');
 }
@@ -280,7 +281,7 @@ class WhisperService {
       logger.log('[WhisperService] Calling transcribeRealtime...');
       // Use the transcribeRealtime API
       const { stop, subscribe } = await this.context.transcribeRealtime({
-        language: whisperLanguage(this.currentModelPath, options?.language),
+        language: whisperLanguage(this.currentModelPath, options?.language, this.context.multilingual),
         maxLen: options?.maxLen || 0, // 0 = no limit
         realtimeAudioSec: 30, // Process in 30-second chunks
         realtimeAudioSliceSec: 3, // Slice every 3 seconds for faster intermediate results
@@ -407,7 +408,7 @@ class WhisperService {
     this.isTranscribing = true;
     try {
       const { promise, stop } = this.context.transcribe(filePath, {
-        language: whisperLanguage(this.currentModelPath, options?.language), onProgress: options?.onProgress,
+        language: whisperLanguage(this.currentModelPath, options?.language, this.context.multilingual), onProgress: options?.onProgress,
       });
       this.stopFn = stop;
       this.transcriptionFullyStopped = promise.then(() => {}, () => {});

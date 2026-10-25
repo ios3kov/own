@@ -36,6 +36,8 @@ declare module 'whisper.rn' {
   }
 
   export interface WhisperContext {
+    /** Native model capability; independent of imported file name. */
+    multilingual?: boolean;
     transcribe(
       filePath: string | number,
       options?: TranscribeOptions
