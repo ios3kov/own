@@ -1,5 +1,6 @@
 import logger from '../utils/logger';
 import DeviceInfo from 'react-native-device-info';
+import { NativeModules } from 'react-native';
 // Access NativeModules.CoreMLDiffusionModule dynamically (not destructured)
 // so it can be mocked in tests after module import.
 
@@ -114,8 +115,7 @@ class HardwareService {
     }
     return this.cachedDeviceInfo.availableMemory / (1024 * 1024 * 1024);
   }
-  getModelRecommendation(): ModelRecommendation {
-    const totalRamGB = this.getTotalMemoryGB();
+  getModelRecommendation(totalRamGB = this.getTotalMemoryGB()): ModelRecommendation {
     // Find the appropriate recommendation tier
     const tier =
       MODEL_RECOMMENDATIONS.memoryToParams.find(
@@ -188,17 +188,17 @@ class HardwareService {
     const match = /iPhone(\d+)/.exec(deviceId);
     if (!match) return undefined;
     const major = Number.parseInt(match[1], 10);
-    if (major >= 17) return 'A18';
-    if (major >= 16) return 'A17Pro';
-    if (major >= 15) return 'A16';
-    if (major >= 14) return 'A15';
-    if (major >= 13) return 'A14';
+    if (major === 17) return 'A18';
+    if (major === 16) return 'A17Pro';
+    if (major === 15) return 'A16';
+    if (major === 14) return 'A15';
+    if (major === 13) return 'A14';
     return undefined;
   }
   async getSoCInfo(): Promise<SoCInfo> {
     if (this.cachedSoCInfo) return this.cachedSoCInfo;
-    const ramGB = this.getTotalMemoryGB();
-    const appleChip = this.detectAppleChip(DeviceInfo.getDeviceId()) ?? (ramGB >= 6 ? 'A15' : 'A14');
+    await this.getDeviceInfo();
+    const appleChip = this.detectAppleChip(DeviceInfo.getDeviceId());
     this.cachedSoCInfo = {vendor:'apple', hasNPU:true, appleChip};
     return this.cachedSoCInfo;
   }
@@ -207,7 +207,7 @@ class HardwareService {
   private getIosImageRec(chip: SoCInfo['appleChip'], ramGB: number): ImageModelRecommendation {
     const coreml = 'coreml';
     if ((chip === 'A17Pro' || chip === 'A18') && ramGB >= 6)
-      return { recommendedBackend: coreml, recommendedModels: ['sdxl', 'xl-base'], bannerText: 'All models supported \u2014 SDXL for best quality', compatibleBackends: [coreml] };
+      return { recommendedBackend: coreml, recommendedModels: ['sdxl', 'xl-base'], bannerText: 'SDXL is an option for this device, but uses more memory. Start with a smaller model for lower memory use.', compatibleBackends: [coreml] };
     if ((chip === 'A15' || chip === 'A16') && ramGB >= 6)
       return { recommendedBackend: coreml, recommendedModels: ['v1-5-palettized', '2-1-base-palettized'], bannerText: 'SD 1.5 or SD 2.1 Palettized recommended', compatibleBackends: [coreml] };
     if (ramGB < 4)
@@ -236,10 +236,24 @@ class HardwareService {
     if (ramGB < 8) return 'high';
     return 'flagship';
   }
-  async getCpuCoreCount(): Promise<number> { return 4; }
-  async getRecommendedThreadCount(): Promise<number> {
-    const cores = await this.getCpuCoreCount();
-    return cores <= 4 ? cores : Math.floor(cores * 0.8);
+  async getRuntimeProfile(): Promise<{activeProcessors:number; thermalState:string; lowPowerMode:boolean; source:'native'|'fallback'}> {
+    try {
+      const facts = await NativeModules.OwnHardwareInfo?.status();
+      if (Number.isInteger(facts?.activeProcessors) && facts.activeProcessors > 0 && facts.activeProcessors <= 256) {
+        return {activeProcessors:facts.activeProcessors,thermalState:String(facts.thermalState ?? 'unknown'),lowPowerMode:facts.lowPowerMode === true,source:'native'};
+      }
+    } catch { /* Older installed builds may not expose the local capability bridge. */ }
+    return {activeProcessors:4,thermalState:'unknown',lowPowerMode:false,source:'fallback'};
+  }
+  async getCpuCoreCount(): Promise<number> { return (await this.getRuntimeProfile()).activeProcessors; }
+  async getRecommendedThreadCount(modelBytes = 0): Promise<number> {
+    const profile = await this.getRuntimeProfile();
+    const cores = profile.activeProcessors;
+    let threads = Math.max(1,Math.min(8,cores <= 4 ? cores : cores - 2));
+    const memoryGB = this.getTotalMemoryGB();
+    if (profile.lowPowerMode || profile.thermalState === 'serious' || profile.thermalState === 'critical'
+      || (memoryGB <= 6 && modelBytes > memoryGB * 1024 ** 3 * 0.35)) threads = Math.max(1,Math.floor(threads / 2));
+    return threads;
   }
 
 }

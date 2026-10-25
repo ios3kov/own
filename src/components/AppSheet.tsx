@@ -27,6 +27,7 @@ export interface AppSheetProps {
   showHeader?: boolean;
   showHandle?: boolean;
   elevation?: 'level3' | 'level4';
+  opaque?: boolean;
   children: React.ReactNode;
 }
 
@@ -97,9 +98,10 @@ export const AppSheet: React.FC<AppSheetProps> = ({
   showHeader = true,
   showHandle = true,
   elevation = 'level3',
+  opaque = false,
   children,
 }) => {
-  const { elevation: elevationTokens } = useTheme();
+  const { colors, elevation: elevationTokens } = useTheme();
   const styles = useThemedStyles(createStyles);
   const { bottom: bottomInset } = useSafeAreaInsets();
 
@@ -275,13 +277,14 @@ export const AppSheet: React.FC<AppSheetProps> = ({
 
         {/* Sheet */}
         <Animated.View
+          testID="app-sheet-surface"
           style={[
             styles.sheet,
             {
               ...(enableDynamicSizing
                 ? { maxHeight: SCREEN_HEIGHT * 0.85 - keyboardHeight }
                 : { height: sheetMaxHeight - keyboardHeight }),
-              backgroundColor: levelTokens.backgroundColor,
+              backgroundColor: opaque ? colors.surface : levelTokens.backgroundColor,
               borderTopLeftRadius: levelTokens.borderRadius,
               borderTopRightRadius: levelTokens.borderRadius,
               borderTopWidth: levelTokens.borderTopWidth,
@@ -311,14 +314,14 @@ export const AppSheet: React.FC<AppSheetProps> = ({
           {/* Header */}
           {showHeader && title ? (
             <View style={styles.header}>
-              <Text style={styles.headerTitle} numberOfLines={1}>
+              <Text maxFontSizeMultiplier={1.5} style={styles.headerTitle} numberOfLines={2}>
                 {title}
               </Text>
               <TouchableOpacity accessibilityRole="button" accessibilityLabel={closeLabel}
                 onPress={onHeaderClosePress || dismiss}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={styles.headerClose}>{closeLabel}</Text>
+                <Text maxFontSizeMultiplier={1.5} style={styles.headerClose}>{closeLabel}</Text>
               </TouchableOpacity>
             </View>
           ) : null}

@@ -10,7 +10,7 @@ import logger from '../utils/logger';
 export const SYSTEM_PROMPT_RESERVE = 256;
 export const RESPONSE_RESERVE = 512;
 export const CONTEXT_SAFETY_MARGIN = 0.85;
-const DEFAULT_THREADS = 4; // targets performance cores only; over-threading onto efficiency cores (A520) hurts
+const DEFAULT_THREADS = 4; // Conservative fallback when device facts are unavailable.
 const DEFAULT_BATCH = 512;
 export const DEFAULT_GPU_LAYERS = (99);
 export function getOptimalThreadCount(): number { return DEFAULT_THREADS; }
@@ -49,10 +49,13 @@ export interface ModelLoadParams {
 
 export function buildModelParams(
   modelPath: string,
-  settings: { nThreads?: number; nBatch?: number; contextLength?: number; flashAttn?: boolean; enableGpu?: boolean; gpuLayers?: number; cacheType?: string; inferenceBackend?: string },
+  settings: { nThreads?: number; nBatch?: number; nUbatch?: number; contextLength?: number; flashAttn?: boolean; enableGpu?: boolean; gpuLayers?: number; cacheType?: string; inferenceBackend?: string },
 ): ModelLoadParams {
   const nThreads = settings.nThreads || getOptimalThreadCount();
   const nBatch = settings.nBatch || getOptimalBatchSize();
+  const requestedMicroBatch = settings.nUbatch;
+  const nUbatch = typeof requestedMicroBatch === 'number' && Number.isFinite(requestedMicroBatch) && requestedMicroBatch > 0
+    ? Math.min(nBatch,Math.max(1,Math.floor(requestedMicroBatch))) : Math.min(nBatch,128);
   const ctxLen = settings.contextLength || APP_CONFIG.maxContextLength;
   // inferenceBackend takes precedence; fall back to legacy enableGpu flag
   const backend = settings.inferenceBackend;
@@ -62,7 +65,7 @@ export function buildModelParams(
   const cacheType = settings.cacheType || (flash_attn_type === 'off' ? 'f16' : 'q8_0');
   return {
     baseParams: {
-      model: modelPath, use_mlock: false, n_batch: nBatch, n_ubatch: nBatch, n_threads: nThreads,
+      model: modelPath, use_mlock: false, n_batch: nBatch, n_ubatch: nUbatch, n_threads: nThreads,
       use_mmap: !shouldDisableMmap(modelPath), vocab_only: false, flash_attn_type,
       kv_unified: true, no_extra_bufts: false,
       cache_type_k: cacheType, cache_type_v: cacheType,
@@ -74,65 +77,73 @@ export interface ContextInitResult {
   context: LlamaContext;
   gpuAttemptFailed: boolean;
   actualLength: number;
+  actualGpuLayers?: number;
+  fallbackReason?: string;
 }
-/** Try the requested device, then CPU; a final retry never increases context memory. */
+export type ModelLoadFailureKind = 'memory' | 'architecture' | 'file' | 'transient';
+export function classifyModelLoadFailure(error: unknown): ModelLoadFailureKind {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/unsupported.*(?:arch|model|format)|unknown.*arch|architecture.*(?:unsupported|not supported)/i.test(message)) return 'architecture';
+  if (/invalid.*(?:magic|gguf|header)|corrupt|truncated|file.*not found|failed to read|tensor.*(?:missing|not found)/i.test(message)) return 'file';
+  if (/out of memory|\boom\b|alloc|insufficient.*memory|not enough.*memory|memory.*(?:exhaust|limit)/i.test(message)) return 'memory';
+  return 'transient';
+}
+export class ModelLoadFailure extends Error {
+  constructor(public readonly kind: ModelLoadFailureKind, message: string) {
+    super(message); this.name = 'ModelLoadFailure';
+  }
+}
+/** Bounded, distinct configurations. Permanent file/architecture failures never retry. */
 export async function initContextWithFallback(
   params: object,
   contextLength: number,
-  nGpuLayers: number,
+  configuration: number | {nGpuLayers: number; signal?: AbortSignal},
 ): Promise<ContextInitResult> {
-  const ticket=useModelLoadStore.getState().ticket;
-  const onProgress=(progress:number)=>reportModelLoad(ticket, progress>=100?'Preparing runtime':'Loading model file',progress>=100?null:progress);
-  const modelPath = (params as any).model || 'unknown';
-  logger.log(`[LLM] initContextWithFallback: model=${modelPath}, ctx=${contextLength}, gpuLayers=${nGpuLayers}`);
+  const nGpuLayers = typeof configuration === 'number' ? configuration : configuration.nGpuLayers;
+  const signal = typeof configuration === 'number' ? undefined : configuration.signal;
+  const ticket = useModelLoadStore.getState().ticket;
+  const onProgress = (progress: number) => reportModelLoad(ticket, progress >= 100 ? 'Preparing runtime' : 'Loading model file', progress >= 100 ? null : progress);
   const fallbackLength = Math.min(contextLength, 2048);
-  let gpuAttemptFailed = false;
-  try {
-    logger.log(`[LLM] Attempt 1/3: GPU init (ctx=${contextLength}, gpu_layers=${nGpuLayers})`);
-    const gpuInitPromise = initLlama({ ...params, n_ctx: contextLength, n_gpu_layers: nGpuLayers } as any, onProgress);
-    const context = await gpuInitPromise;
-    logger.log('[LLM] GPU init succeeded');
-    return { context, gpuAttemptFailed, actualLength: contextLength };
-  } catch (gpuError: any) {
-    const gpuMsg = gpuError?.message || String(gpuError);
-    if (nGpuLayers > 0) {
-      logger.warn(`[LLM] Attempt 1/3 failed (GPU): ${gpuMsg}`);
-      gpuAttemptFailed = true;
-    } else {
-      logger.warn(`[LLM] Attempt 1/3 failed (no GPU requested): ${gpuMsg}`);
-    }
+  const candidates = [{length: contextLength, layers: nGpuLayers}];
+  const attempted = new Set<string>();
+  let lastError: unknown;
+  let reason: string | undefined;
+  while (candidates.length) {
+    if (signal?.aborted) throw new Error('Model loading cancelled.');
+    const candidate = candidates.shift()!;
+    const key = `${candidate.length}:${candidate.layers}`;
+    if (attempted.has(key)) continue;
+    attempted.add(key);
+    const config = {...params} as Record<string, unknown>;
+    if (candidate.layers === 0) delete config.devices;
     try {
-      logger.log(`[LLM] Attempt 2/3: CPU init (ctx=${contextLength}, gpu_layers=0)`);
-      // A CPU retry must not request accelerator devices.
-      const cpuParams = { ...(params as Record<string, unknown>) };
-      delete cpuParams.devices;
-      const context = await initLlama({ ...cpuParams, n_ctx: contextLength, n_gpu_layers: 0 } as any, onProgress);
-      logger.log('[LLM] CPU init succeeded');
-      return { context, gpuAttemptFailed, actualLength: contextLength };
-    } catch (cpuError: any) {
-      const cpuMsg = cpuError?.message || String(cpuError);
-      logger.warn(`[LLM] Attempt 2/3 failed (CPU, ctx=${contextLength}): ${cpuMsg}`);
-      try {
-        logger.log(`[LLM] Attempt 3/3: CPU init (ctx=${fallbackLength}, gpu_layers=0)`);
-        const cpuMinParams = { ...(params as Record<string, unknown>) };
-        delete cpuMinParams.devices;
-        const context = await initLlama({ ...cpuMinParams, n_ctx: fallbackLength, n_gpu_layers: 0 } as any, onProgress);
-        logger.log(`[LLM] CPU init with ctx=${fallbackLength} succeeded`);
-        return { context, gpuAttemptFailed, actualLength: fallbackLength };
-      } catch (finalError: any) {
-        const finalMsg = finalError?.message || String(finalError);
-        logger.error(`[LLM] Attempt 3/3 failed (CPU, ctx=${fallbackLength}): ${finalMsg}`);
-        logger.error(`[LLM] All 3 init attempts failed for model: ${modelPath}`);
-        logger.error(`[LLM] Error chain — GPU: "${gpuMsg}" | CPU: "${cpuMsg}" | min-ctx: "${finalMsg}"`);
-        const errorParts = [
-          gpuMsg && gpuMsg !== finalMsg ? `GPU: ${gpuMsg}` : null,
-          cpuMsg && cpuMsg !== finalMsg ? `CPU: ${cpuMsg}` : null,
-          `min-ctx: ${finalMsg}`,
-        ].filter(Boolean).join(' | ');
-        throw new Error(`Failed to load model after CPU retries (context ${fallbackLength}). This may indicate insufficient memory, a corrupted model file, or an unsupported model format.\n\nError chain: ${errorParts}`);
+      const context = await initLlama({...config, n_ctx: candidate.length, n_gpu_layers: candidate.layers} as any, onProgress);
+      if (signal?.aborted) {
+        await context.release();
+        throw new Error('Model loading cancelled.');
+      }
+      return {context, actualLength: candidate.length, gpuAttemptFailed: nGpuLayers > 0 && candidate.layers === 0,
+        actualGpuLayers: candidate.layers, fallbackReason: reason};
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      lastError = error;
+      const kind = classifyModelLoadFailure(error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (kind === 'architecture' || kind === 'file') throw new ModelLoadFailure(kind, message);
+      reason = `${kind}: ${message}`;
+      if (attempted.size === 1) {
+        if (kind === 'memory' && nGpuLayers > 1) {
+          const reducedLayers = Math.max(1, Math.floor(nGpuLayers / 2));
+          candidates.push({length: contextLength, layers: reducedLayers});
+          if (fallbackLength < contextLength) candidates.push({length: fallbackLength, layers: reducedLayers});
+        }
+        candidates.push({length: contextLength, layers: 0});
+        candidates.push({length: fallbackLength, layers: 0});
       }
     }
   }
+  const kind = classifyModelLoadFailure(lastError);
+  throw new ModelLoadFailure(kind, `Failed to load model after ${attempted.size} distinct configurations. ${reason}`);
 }
 export interface GpuInfo {
   gpuEnabled: boolean;
@@ -149,7 +160,7 @@ export function captureGpuInfo(
   const nativeGpuAvailable = context.gpu ?? false;
   const gpuReason = (context as any).reasonNoGPU ?? '';
   const gpuDevices = (context as any).devices ?? [];
-  const activeGpuLayers = gpuAttemptFailed ? 0 : nGpuLayers;
+  const activeGpuLayers = nativeGpuAvailable && !gpuAttemptFailed ? nGpuLayers : 0;
   const gpuEnabled = nativeGpuAvailable && activeGpuLayers > 0;
   return { gpuEnabled, gpuReason, gpuDevices, activeGpuLayers };
 }
@@ -297,26 +308,33 @@ export function buildCompletionParams(settings: {
     top_k: 40,
     top_p: settings.topP ?? 0.95,
     penalty_repeat: settings.repeatPenalty ?? 1.1,
-    stop: STOP_TOKENS,
+    stop: [...STOP_TOKENS],
     ctx_shift: options?.disableCtxShift ? false : true,
   };
 }
 export function recordGenerationStats(
   startTime: number,
   firstTokenMs: number,
-  tokenCount: number,
+  tokens: number | {events:number; timings?:{predicted_n?:number;predicted_ms?:number;prompt_n?:number;cache_n?:number}},
 ): LLMPerformanceStats {
-  const elapsed = (Date.now() - startTime) / 1000;
+  const elapsed = Math.max(0,(Date.now() - startTime) / 1000);
+  const events = typeof tokens === 'number' ? tokens : tokens.events;
+  const timings = typeof tokens === 'number' ? undefined : tokens.timings;
+  const nativeCount = timings?.predicted_n;
+  const native = typeof nativeCount === 'number' && Number.isSafeInteger(nativeCount) && nativeCount >= 0;
+  const tokenCount = native ? nativeCount : events;
   const tokensPerSec = elapsed > 0 ? tokenCount / elapsed : 0;
   const ttft = firstTokenMs / 1000;
   const decodeTime = elapsed - ttft;
-  const decodeTokensPerSec = decodeTime > 0 && tokenCount > 1 ? (tokenCount - 1) / decodeTime : 0;
-  logger.log(`[LLM] Generated ${tokenCount} tokens in ${elapsed.toFixed(1)}s (${tokensPerSec.toFixed(1)} tok/s, TTFT ${ttft.toFixed(2)}s)`);
+  const nativeDecodeMs = timings?.predicted_ms;
+  const nativeDecode = native && typeof nativeDecodeMs === 'number' && Number.isFinite(nativeDecodeMs) && nativeDecodeMs > 0;
+  const decodeTokensPerSec = nativeDecode ? tokenCount * 1000 / nativeDecodeMs
+    : decodeTime > 0 && tokenCount > 1 ? (tokenCount - 1) / decodeTime : 0;
+  const count = (value:unknown):number|undefined => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
   return {
-    lastTokensPerSecond: tokensPerSec,
-    lastDecodeTokensPerSecond: decodeTokensPerSec,
-    lastTimeToFirstToken: ttft,
-    lastGenerationTime: elapsed,
-    lastTokenCount: tokenCount,
+    lastTokensPerSecond:tokensPerSec,lastDecodeTokensPerSecond:decodeTokensPerSec,
+    lastTimeToFirstToken:ttft,lastGenerationTime:elapsed,lastTokenCount:tokenCount,
+    lastTokenCountSource:native ? 'native' : 'stream-events-estimate',
+    lastPromptTokenCount:count(timings?.prompt_n),lastCachedTokenCount:count(timings?.cache_n),
   };
 }

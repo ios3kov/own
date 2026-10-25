@@ -53,6 +53,38 @@ final class PDFExtractorModuleTests: XCTestCase {
     try makeTempPDF(pages: [(text, CGRect(x: 72, y: 72, width: 468, height: 648))])
   }
 
+  func testContextHistoryKeepsTheLargestRecentSuffix() async throws {
+    let start = try await OwnFoundationModels.fittingHistoryStart(groupCount: 20) { index in
+      (20 - index) * 100 <= 550
+    }
+    XCTAssertEqual(start, 15)
+    let complete = try await OwnFoundationModels.fittingHistoryStart(groupCount: 4) { _ in true }
+    XCTAssertEqual(complete, 0)
+    do {
+      _ = try await OwnFoundationModels.fittingHistoryStart(groupCount: 4) { _ in false }
+      XCTFail("An oversized latest request must fail clearly")
+    } catch {
+      if #available(iOS 26.0, *) { XCTAssertTrue(OwnFoundationModels.isContextLimitError(error)) }
+    }
+  }
+
+  func testProcessMemorySnapshotUsesPositiveKernelFootprint() {
+    let memory = OwnHardwareInfo.memorySnapshot()
+    XCTAssertGreaterThan(memory["currentBytes"] ?? 0, 0)
+    if let peak = memory["peakBytes"] {
+      XCTAssertGreaterThanOrEqual(peak, memory["currentBytes"] ?? 0)
+    }
+  }
+  func testLocalHardwareStatusUsesSystemFacts() {
+    var profile: [String: Any]?
+    OwnHardwareInfo().status({ value in profile = value as? [String: Any] }, rejecter: { _, _, _ in
+      XCTFail("Local hardware status must not require an external service")
+    })
+    XCTAssertGreaterThan(profile?["activeProcessors"] as? Int ?? 0, 0)
+    XCTAssertNotNil(profile?["lowPowerMode"] as? Bool)
+    XCTAssertTrue(["nominal", "fair", "serious", "critical", "unknown"].contains(profile?["thermalState"] as? String ?? ""))
+  }
+
   func testPrivatePDFDiagnosticPayloadIsNotEvaluatedInRelease() {
     var evaluated = false
     func privateMessage() -> String {
@@ -246,6 +278,40 @@ final class PDFExtractorModuleTests: XCTestCase {
 
 final class CoreMLDiffusionModuleTests: XCTestCase {
 
+  func testLocalRecognizerSeparatesEnglishFromOtherScriptsAndLatinLanguages() {
+    XCTAssertEqual(OwnFoundationModels.detectedLanguage("Draw a small puppy playing on green grass in a sunny garden"), "en")
+    let requests = [
+      "Dibuja un cachorro pequeño jugando en la hierba de un jardín soleado",
+      "Dessine un petit chiot qui joue dans un jardin ensoleillé sur l'herbe verte",
+      "Zeichne einen kleinen Welpen auf einer grünen Wiese in einem sonnigen Garten",
+      "Disegna un piccolo cucciolo che gioca sull'erba verde in un giardino soleggiato",
+      "Desenhe um pequeno cachorro brincando na grama verde de um jardim ensolarado",
+      "Narysuj małego szczeniaka bawiącego się na zielonej trawie w słonecznym ogrodzie",
+      "Güneşli bir bahçede yeşil çimenlerde oynayan küçük bir köpek yavrusu çiz",
+      "Нарисуй маленького щенка на зелёной траве в солнечном саду",
+      "画一只在阳光明媚的花园绿色草地上玩耍的小狗",
+      "日当たりの良い庭の緑の芝生で遊ぶ小さな子犬を描いてください",
+      "햇볕이 잘 드는 정원의 푸른 잔디에서 노는 작은 강아지를 그려 주세요",
+      "ارسم جروًا صغيرًا يلعب على العشب الأخضر في حديقة مشمسة",
+      "धूप वाले बगीचे में हरी घास पर खेलते हुए एक छोटे पिल्ले का चित्र बनाएं",
+      "วาดลูกสุนัขตัวเล็กเล่นบนหญ้าสีเขียวในสวนที่มีแสงแดด"
+    ]
+    for request in requests {
+      let language = OwnFoundationModels.detectedLanguage(request)
+      XCTAssertNotNil(language)
+      XCTAssertNotEqual(language, "en")
+    }
+  }
+
+  func testPipelineUsesTheModelFamilyVAEScale() {
+    let xl = CoreMLDiffusionModule.generationConfiguration(prompt: "A puppy", isXL: true)
+    XCTAssertEqual(xl.encoderScaleFactor, 0.13025, accuracy: 0.000001)
+    XCTAssertEqual(xl.decoderScaleFactor, 0.13025, accuracy: 0.000001)
+    let standard = CoreMLDiffusionModule.generationConfiguration(prompt: "A puppy", isXL: false)
+    XCTAssertEqual(standard.encoderScaleFactor, 0.18215, accuracy: 0.000001)
+    XCTAssertEqual(standard.decoderScaleFactor, 0.18215, accuracy: 0.000001)
+  }
+
   private var module: CoreMLDiffusionModule!
 
   override func setUp() {
@@ -269,6 +335,22 @@ final class CoreMLDiffusionModuleTests: XCTestCase {
   func testRequiresMainQueueSetupReturnsFalse() {
     XCTAssertFalse(CoreMLDiffusionModule.requiresMainQueueSetup())
   }
+
+  func testMemoryWarningAndResidencyReadsUsePipelineQueue() {
+    let loaded = expectation(description: "queued loaded state")
+    let path = expectation(description: "queued model path")
+    NotificationCenter.default.post(name: UIApplication.didReceiveMemoryWarningNotification, object: nil)
+    module.isModelLoaded({ value in
+      XCTAssertEqual(value as? Bool, false)
+      loaded.fulfill()
+    }, rejecter: { _, _, _ in XCTFail("Residency read failed") })
+    module.getLoadedModelPath({ value in
+      XCTAssertNil(value as? String)
+      path.fulfill()
+    }, rejecter: { _, _, _ in XCTFail("Path read failed") })
+    wait(for: [loaded, path], timeout: 5)
+  }
+
 
   // MARK: supportedEvents
 
@@ -960,10 +1042,15 @@ final class OwnReplySpeechPolicyTests: XCTestCase {
     }, rejecter: { _, _, _ in XCTFail("Cannot begin cancellation check") })
     wait(for: [cancelled], timeout: 5)
   }
-  func testOnlyBasicQualityCanBeSelected() {
+  func testVoiceListExcludesThirdPartyProviderIdentifiers() {
+    XCTAssertTrue(OwnReplySpeech.isSystemVoiceIdentifier("com.apple.voice.en-US.Ava"))
+    XCTAssertFalse(OwnReplySpeech.isSystemVoiceIdentifier("com.example.networkvoice"))
+    XCTAssertFalse(OwnReplySpeech.isSystemVoiceIdentifier("com.appleevil.voice"))
+  }
+  func testInstalledVoiceQualitiesCanBeSelected() {
     XCTAssertTrue(OwnReplySpeech.basicVoiceMatches(quality: .default, locale: "en-US", language: "en"))
-    XCTAssertFalse(OwnReplySpeech.basicVoiceMatches(quality: .enhanced, locale: "en-US", language: "en"))
-    XCTAssertFalse(OwnReplySpeech.basicVoiceMatches(quality: .premium, locale: "en-US", language: "en"))
+    XCTAssertTrue(OwnReplySpeech.basicVoiceMatches(quality: .enhanced, locale: "en-US", language: "en"))
+    XCTAssertTrue(OwnReplySpeech.basicVoiceMatches(quality: .premium, locale: "en-US", language: "en"))
   }
   func testLanguageMatchingDoesNotSilentlyFallback() {
     XCTAssertTrue(OwnReplySpeech.basicVoiceMatches(quality: .default, locale: "ru-RU", language: "ru"))
@@ -1083,4 +1170,20 @@ final class OwnLocalImportAndURLTests: XCTestCase {
     }, rejecter: { _, message, _ in XCTFail(message ?? "PDF OCR failed"); pdfDone.fulfill() })
     wait(for: [photoDone, pdfDone], timeout: 30)
   }
+  func testImageExportPreservesAspectRatioAndRequestedCanvas() throws {
+    let rect = CoreMLDiffusionModule.fittedImageRect(
+      source: CGSize(width: 1024, height: 1024), target: CGSize(width: 512, height: 256))
+    XCTAssertEqual(rect, CGRect(x: 128, y: 0, width: 256, height: 256))
+    let tall = CoreMLDiffusionModule.fittedImageRect(
+      source: CGSize(width: 1024, height: 512), target: CGSize(width: 256, height: 512))
+    XCTAssertEqual(tall, CGRect(x: 0, y: 192, width: 256, height: 128))
+    let input = UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { context in
+      UIColor.red.setFill()
+      context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+    }
+    let image = CoreMLDiffusionModule.exportImage(try XCTUnwrap(input.cgImage), size: CGSize(width: 32, height: 16))
+    let decoded = try XCTUnwrap(UIImage(data: try XCTUnwrap(image.pngData())))
+    XCTAssertEqual(decoded.size, CGSize(width: 32, height: 16))
+  }
+
 }

@@ -1509,12 +1509,14 @@ describe('generationService', () => {
       (generationService as any).abortRequested = false;
     });
 
-    it('accumulates reasoning content in reasoningBuffer via onStream', () => {
+    it('publishes the first reasoning chunk without the batching wait', () => {
       (generationService as any).abortRequested = false;
       (generationService as any).reasoningBuffer = '';
+      (generationService as any).hasFlushedContent=false;
+      useChatStore.setState({streamingReasoningContent:''});
       const handlers = (generationService as any).buildToolLoopHandlers();
       handlers.onStream({ reasoningContent: 'thinking...' });
-      expect((generationService as any).reasoningBuffer).toBe('thinking...');
+      expect(useChatStore.getState().streamingReasoningContent).toBe('thinking...');
     });
   });
 

@@ -101,7 +101,7 @@ const AutoDetectMethodToggle: React.FC = () => {
         <Text style={styles.modeToggleLabel}>Detection Method</Text>
         <Text style={styles.modeToggleDesc}>
           {settings.autoDetectMethod === 'pattern'
-            ? 'Fast keyword matching ("draw", "create image", etc.)'
+            ? 'Fast keywords, with on-device AI for other languages'
             : 'Uses current text model for uncertain cases (slower)'}
         </Text>
       </View>

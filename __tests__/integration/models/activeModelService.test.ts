@@ -78,7 +78,8 @@ describe('ActiveModelService Integration', () => {
       // Verify llmService was called correctly
       expect(mockLlmService.loadModel).toHaveBeenCalledWith(
         model.filePath,
-        (model as any).mmProjPath
+        (model as any).mmProjPath,
+        expect.objectContaining({aborted:false})
       );
 
       // Verify store was updated
@@ -176,7 +177,8 @@ describe('ActiveModelService Integration', () => {
       // Should have loaded second model
       expect(mockLlmService.loadModel).toHaveBeenLastCalledWith(
         model2.filePath,
-        (model2 as any).mmProjPath
+        (model2 as any).mmProjPath,
+        expect.objectContaining({aborted:false})
       );
     });
 
@@ -296,7 +298,7 @@ describe('ActiveModelService Integration', () => {
       expect(mockLocalDreamService.loadModel).toHaveBeenCalledWith(
         imageModel.modelPath,
         4,
-        { cpuOnly: false, attentionVariant: undefined },
+        expect.objectContaining({ cpuOnly: false, attentionVariant: undefined, signal: expect.objectContaining({aborted:false}) }),
       );
 
       expect(getAppState().activeImageModelId).toBe('img-model-1');
@@ -322,7 +324,7 @@ describe('ActiveModelService Integration', () => {
       expect(mockLocalDreamService.loadModel).toHaveBeenLastCalledWith(
         imgModel2.modelPath,
         4,
-        { cpuOnly: false, attentionVariant: undefined },
+        expect.objectContaining({ cpuOnly: false, attentionVariant: undefined, signal: expect.objectContaining({aborted:false}) }),
       );
     });
   });
@@ -801,6 +803,7 @@ describe('ActiveModelService Integration', () => {
       await expect(
         activeModelService.loadTextModel('slow-model', 50) // 50ms timeout
       ).rejects.toThrow('timed out');
+      expect(mockLlmService.loadModel.mock.calls.at(-1)?.[2]?.aborted).toBe(true);
     });
   });
 
@@ -840,7 +843,8 @@ describe('ActiveModelService Integration', () => {
 
       expect(mockLlmService.loadModel).toHaveBeenCalledWith(
         model.filePath,
-        undefined // Unlinked projectors must not be inferred by filename
+        undefined, // Unlinked projectors must not be inferred by filename
+        expect.objectContaining({aborted:false})
       );
     });
   });
@@ -894,6 +898,22 @@ describe('ActiveModelService Integration', () => {
   });
 
   describe('getEstimatedModelMemory branches', () => {
+    it('clears residency after native release without clearing the selected image model', async () => {
+      const model = createONNXImageModel({id:'released',size:512*1024*1024});
+      useAppStore.setState({downloadedImageModels:[model]});
+      mockLocalDreamService.loadModel.mockResolvedValue(true);
+      mockLocalDreamService.isModelLoaded.mockResolvedValue(true);
+      await activeModelService.loadImageModel('released');
+      const listener = jest.fn();
+      const unsubscribe = activeModelService.subscribe(listener);
+      mockLocalDreamService.isModelLoaded.mockResolvedValue(false);
+      const usage = await activeModelService.getResourceUsage();
+      expect(usage.estimatedModelMemory).toBe(0);
+      expect(activeModelService.getActiveModels().image.isLoaded).toBe(false);
+      expect(getAppState().activeImageModelId).toBe('released');
+      expect(listener).toHaveBeenCalled();
+      unsubscribe();
+    });
     it('includes text model memory when active', async () => {
       const textModel = createDownloadedModel({
         id: 'text-est',
@@ -904,6 +924,8 @@ describe('ActiveModelService Integration', () => {
         activeModelId: 'text-est',
       });
 
+      mockLlmService.isModelLoaded.mockReturnValue(true);
+      mockLocalDreamService.isModelLoaded.mockResolvedValue(true);
       const usage = await activeModelService.getResourceUsage();
       // estimatedModelMemory should include text model memory
       expect(usage.estimatedModelMemory).toBeGreaterThan(0);
@@ -919,6 +941,8 @@ describe('ActiveModelService Integration', () => {
         activeImageModelId: 'img-est',
       });
 
+      mockLlmService.isModelLoaded.mockReturnValue(true);
+      mockLocalDreamService.isModelLoaded.mockResolvedValue(true);
       const usage = await activeModelService.getResourceUsage();
       expect(usage.estimatedModelMemory).toBeGreaterThan(0);
     });
@@ -939,6 +963,8 @@ describe('ActiveModelService Integration', () => {
         activeImageModelId: 'img-both',
       });
 
+      mockLlmService.isModelLoaded.mockReturnValue(true);
+      mockLocalDreamService.isModelLoaded.mockResolvedValue(true);
       const usage = await activeModelService.getResourceUsage();
       // Should be sum of both model memories
       const textOnly = textModel.fileSize * 1.2;
@@ -1195,7 +1221,8 @@ describe('ActiveModelService Integration', () => {
       // Should have called loadModel with undefined mmProjPath
       expect(mockLlmService.loadModel).toHaveBeenCalledWith(
         model.filePath,
-        undefined
+        undefined,
+        expect.objectContaining({aborted:false})
       );
     });
   });
@@ -1222,7 +1249,8 @@ describe('ActiveModelService Integration', () => {
 
       expect(mockLlmService.loadModel).toHaveBeenCalledWith(
         model.filePath,
-        undefined
+        undefined,
+        expect.objectContaining({aborted:false})
       );
     });
   });
@@ -1324,7 +1352,7 @@ describe('ActiveModelService Integration', () => {
   });
 
   describe('loadImageModel already loaded but needs thread reload', () => {
-    it('reloads when imageThreads changed', async () => {
+    it('does not reload Core ML for the unsupported legacy imageThreads setting', async () => {
       const imageModel = createONNXImageModel({ id: 'thread-img' });
       useAppStore.setState({
         downloadedImageModels: [imageModel],
@@ -1345,8 +1373,8 @@ describe('ActiveModelService Integration', () => {
 
       // Load same model again - should reload due to thread change
       await activeModelService.loadImageModel('thread-img');
-      expect(mockLocalDreamService.unloadModel).toHaveBeenCalled();
-      expect(mockLocalDreamService.loadModel).toHaveBeenCalledTimes(2);
+      expect(mockLocalDreamService.unloadModel).not.toHaveBeenCalled();
+      expect(mockLocalDreamService.loadModel).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1420,7 +1448,7 @@ describe('ActiveModelService Integration', () => {
       expect(mockLocalDreamService.loadModel).toHaveBeenCalledWith(
         coremlModel.modelPath,
         4,
-        { cpuOnly: false }, // coreml backend should map to 'auto'
+        expect.objectContaining({ cpuOnly: false, signal: expect.objectContaining({aborted:false}) }), // coreml backend should map to 'auto'
       );
     });
 
@@ -1443,7 +1471,7 @@ describe('ActiveModelService Integration', () => {
       expect(mockLocalDreamService.loadModel).toHaveBeenCalledWith(
         coremlModel.modelPath,
         4,
-        { cpuOnly: false, attentionVariant: 'split_einsum' },
+        expect.objectContaining({ cpuOnly: false, attentionVariant: 'split_einsum', signal: expect.objectContaining({aborted:false}) }),
       );
     });
   });
@@ -1688,7 +1716,7 @@ describe('ActiveModelService Integration', () => {
       expect(mockLocalDreamService.loadModel).toHaveBeenCalledWith(
         imageModel.modelPath,
         4,
-        { cpuOnly: false, attentionVariant: undefined },
+        expect.objectContaining({ cpuOnly: false, attentionVariant: undefined, signal: expect.objectContaining({aborted:false}) }),
       );
     });
 

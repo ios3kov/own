@@ -79,7 +79,7 @@ export const ImageQualityAdvancedSliders: React.FC = () => {
       <View style={styles.settingGroup}>
         <View style={styles.settingHeader}>
           <Text style={styles.settingLabel}>Guidance Scale</Text>
-          <Text style={styles.settingValue}>{(settings.imageGuidanceScale || 7.5).toFixed(1)}</Text>
+          <Text style={styles.settingValue}>{(settings.imageGuidanceScale ?? 7.5).toFixed(1)}</Text>
         </View>
         <Text style={styles.settingDescription}>
           Higher = follows prompt more strictly (5-15 range)
@@ -89,7 +89,7 @@ export const ImageQualityAdvancedSliders: React.FC = () => {
           minimumValue={1}
           maximumValue={20}
           step={0.5}
-          value={settings.imageGuidanceScale || 7.5}
+          value={settings.imageGuidanceScale ?? 7.5}
           onSlidingComplete={(value) => updateSettings({ imageGuidanceScale: value })}
           minimumTrackTintColor={colors.primary}
           maximumTrackTintColor={colors.surfaceLight}
@@ -98,31 +98,6 @@ export const ImageQualityAdvancedSliders: React.FC = () => {
         <View style={styles.sliderLabels}>
           <Text style={styles.sliderMinMax}>1</Text>
           <Text style={styles.sliderMinMax}>20</Text>
-        </View>
-      </View>
-
-      <View style={styles.settingGroup}>
-        <View style={styles.settingHeader}>
-          <Text style={styles.settingLabel}>Image Threads</Text>
-          <Text style={styles.settingValue}>{settings.imageThreads ?? 4}</Text>
-        </View>
-        <Text style={styles.settingDescription}>
-          CPU threads used for image generation. Takes effect next time the image model loads.
-        </Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1}
-          maximumValue={8}
-          step={1}
-          value={settings.imageThreads ?? 4}
-          onSlidingComplete={(value) => updateSettings({ imageThreads: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surfaceLight}
-          thumbTintColor={colors.primary}
-        />
-        <View style={styles.sliderLabels}>
-          <Text style={styles.sliderMinMax}>1</Text>
-          <Text style={styles.sliderMinMax}>8</Text>
         </View>
       </View>
 

@@ -24,10 +24,11 @@ function expectDeleteCascade() {
   const deleteCalls = mockExecuteSync.mock.calls.filter(
     (c: any[]) => typeof c[0] === 'string' && c[0].includes('DELETE')
   );
-  expect(deleteCalls).toHaveLength(3);
+  expect(deleteCalls).toHaveLength(4);
   expect(deleteCalls[0][0]).toContain('rag_embeddings');
   expect(deleteCalls[1][0]).toContain('rag_chunks');
-  expect(deleteCalls[2][0]).toContain('rag_documents');
+  expect(deleteCalls[2][0]).toContain('rag_embedding_versions');
+      expect(deleteCalls[3][0]).toContain('rag_documents');
 }
 
 describe('RagDatabase', () => {
@@ -42,11 +43,13 @@ describe('RagDatabase', () => {
     it('opens the database and creates tables', async () => {
       await ragDatabase.ensureReady();
       expect(open).toHaveBeenCalledWith({ name: 'rag.db' });
-      // rag_documents, rag_chunks, rag_embeddings = 3 tables
-      expect(mockExecuteSync).toHaveBeenCalledTimes(3);
+      // Four tables plus additive document lookup indexes.
+      expect(mockExecuteSync).toHaveBeenCalledTimes(6);
       expect(mockExecuteSync.mock.calls[0][0]).toContain('rag_documents');
       expect(mockExecuteSync.mock.calls[1][0]).toContain('rag_chunks');
       expect(mockExecuteSync.mock.calls[2][0]).toContain('rag_embeddings');
+      expect(mockExecuteSync.mock.calls[4][0]).toContain('rag_chunks(doc_id)');
+      expect(mockExecuteSync.mock.calls[5][0]).toContain('rag_embeddings(doc_id)');
     });
 
     it('does not re-initialize on second call', async () => {
@@ -107,6 +110,14 @@ describe('RagDatabase', () => {
   });
 
   describe('getEmbeddingsByProject', () => {
+    it('decodes only the bytes in a SQLite buffer view', async () => {
+      await ragDatabase.ensureReady();
+      const buffer = new Float32Array([99, 1, 2, 99]);
+      mockExecuteSync.mockReturnValue({rows:[{embedding:new Uint8Array(buffer.buffer,4,8)}]});
+      expect(ragDatabase.getEmbeddingsByProject('p')[0].embedding).toEqual([1,2]);
+      mockExecuteSync.mockReturnValue({rows:[{embedding:new Uint8Array(3)}]});
+      expect(ragDatabase.getEmbeddingsByProject('p')[0].embedding).toEqual([]);
+    });
     it('returns stored embeddings with chunk data', async () => {
       await ragDatabase.ensureReady();
       const embBuffer = new Float32Array([0.1, 0.2]).buffer;
@@ -274,3 +285,14 @@ describe('atomic document/chunk creation',()=>{
     expect(ragDatabase.insertDocumentWithChunks(document,[])).toEqual({docId:2,rowIds:[]});
   });
 });
+
+ it('replaces document vectors and provenance in one transaction and rolls both back on failure',async()=>{
+  (ragDatabase as any).db={executeSync:mockExecuteSync};mockExecuteSync.mockReturnValue({rows:[]});mockExecuteSync.mockClear();
+  ragDatabase.insertEmbeddingsBatch([{chunkRowid:1,docId:7,embedding:[1,0]}],'weights-v2');
+  const sql=mockExecuteSync.mock.calls.map(c=>c[0]);
+  expect(sql[0]).toBe('BEGIN');expect(sql[sql.length-1]).toBe('COMMIT');
+  expect(mockExecuteSync).toHaveBeenCalledWith('INSERT INTO rag_embedding_versions (doc_id, model_id) VALUES (?, ?)',[7,'weights-v2']);
+  mockExecuteSync.mockImplementation((query:string)=>{if(query.startsWith('INSERT INTO rag_embeddings '))throw new Error('disk full');return {rows:[]};});
+  expect(()=>ragDatabase.insertEmbeddingsBatch([{chunkRowid:1,docId:7,embedding:[1,0]}],'weights-v3')).toThrow('disk full');
+  expect(mockExecuteSync.mock.calls.at(-1)?.[0]).toBe('ROLLBACK');
+ });

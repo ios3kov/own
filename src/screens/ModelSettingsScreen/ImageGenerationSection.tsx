@@ -84,7 +84,7 @@ const ImageAdvancedSection: React.FC = () => {
       <View style={styles.sliderSection}>
         <View style={styles.sliderHeader}>
           <Text style={styles.sliderLabel}>Guidance Scale</Text>
-          <Text style={styles.sliderValue}>{(settings?.imageGuidanceScale || 7.5).toFixed(1)}</Text>
+          <Text style={styles.sliderValue}>{(settings?.imageGuidanceScale ?? 7.5).toFixed(1)}</Text>
         </View>
         <Text style={styles.sliderDesc}>Higher = follows prompt more strictly</Text>
         <Slider
@@ -92,29 +92,8 @@ const ImageAdvancedSection: React.FC = () => {
           minimumValue={1}
           maximumValue={20}
           step={0.5}
-          value={settings?.imageGuidanceScale || 7.5}
+          value={settings?.imageGuidanceScale ?? 7.5}
           onSlidingComplete={(value) => updateSettings({ imageGuidanceScale: value })}
-          minimumTrackTintColor={colors.primary}
-          maximumTrackTintColor={colors.surface}
-          thumbTintColor={colors.primary}
-        />
-      </View>
-
-      <View style={styles.sliderSection}>
-        <View style={styles.sliderHeader}>
-          <Text style={styles.sliderLabel}>Image Threads</Text>
-          <Text style={styles.sliderValue}>{settings?.imageThreads ?? 4}</Text>
-        </View>
-        <Text style={styles.sliderDesc}>
-          CPU threads used for image generation (applies on next image model load)
-        </Text>
-        <Slider
-          style={styles.slider}
-          minimumValue={1}
-          maximumValue={8}
-          step={1}
-          value={settings?.imageThreads ?? 4}
-          onSlidingComplete={(value) => updateSettings({ imageThreads: value })}
           minimumTrackTintColor={colors.primary}
           maximumTrackTintColor={colors.surface}
           thumbTintColor={colors.primary}

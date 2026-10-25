@@ -497,6 +497,7 @@ describe('ChatScreen', () => {
     (llmService.supportsToolCalling as jest.Mock).mockReturnValue(false);
     (llmService.getLoadedModelPath as jest.Mock).mockReturnValue(null);
     (llmService.getMultimodalSupport as jest.Mock).mockReturnValue(null);
+    (llmService.supportsVision as jest.Mock).mockReturnValue(false);
     (llmService.getPerformanceStats as jest.Mock).mockReturnValue({
       tokensPerSecond: 0,
       totalTokens: 0,
@@ -1709,6 +1710,7 @@ describe('ChatScreen', () => {
 
       (llmService.isModelLoaded as jest.Mock).mockReturnValue(true);
       (llmService.getMultimodalSupport as jest.Mock).mockReturnValue({ vision: true });
+      (llmService.supportsVision as jest.Mock).mockReturnValue(true);
 
       const { getByTestId } = renderChatScreen();
       const input = getByTestId('chat-text-input');
@@ -3974,6 +3976,7 @@ describe('ChatScreen', () => {
       (llmService.getLoadedModelPath as jest.Mock).mockReturnValue(model.filePath);
       (llmService.isModelLoaded as jest.Mock).mockReturnValue(true);
       (llmService.getMultimodalSupport as jest.Mock).mockReturnValue({ vision: true });
+      (llmService.supportsVision as jest.Mock).mockReturnValue(true);
 
       renderChatScreen();
       await act(async () => { await new Promise<void>(r => setTimeout(() => r(), 100)); });
@@ -4065,6 +4068,7 @@ describe('ChatScreen', () => {
       (llmService.isModelLoaded as jest.Mock).mockReturnValue(true);
       (llmService.getLoadedModelPath as jest.Mock).mockReturnValue(visionModel.filePath);
       (llmService.getMultimodalSupport as jest.Mock).mockReturnValue({ vision: true });
+      (llmService.supportsVision as jest.Mock).mockReturnValue(true);
 
       const { getByTestId } = renderChatScreen();
       await act(async () => {});
@@ -4182,6 +4186,7 @@ describe('ChatScreen', () => {
     it('does not show warning when settings match loaded settings', async () => {
       const model = createDownloadedModel({ id: 'test-model' });
       const settings = {
+        inferenceBackend: 'metal' as const,
         nThreads: 4,
         enableGpu: true,
         gpuLayers: 99,

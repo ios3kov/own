@@ -142,7 +142,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
       }
 
       const requestBody = this.buildRequestBody(openaiMessages, options, thinkingEnabled);
-      logger.log(`[Provider][DEBUG] OpenAI request — hasTools=${!!requestBody.tools}, toolChoice=${typeof requestBody.tool_choice === 'string' ? requestBody.tool_choice : JSON.stringify(requestBody.tool_choice) || 'none'}`);
+      if (__DEV__) logger.log(`[Provider][DEBUG] OpenAI request — hasTools=${!!requestBody.tools}, toolChoice=${typeof requestBody.tool_choice === 'string' ? requestBody.tool_choice : JSON.stringify(requestBody.tool_choice) || 'none'}`);
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
@@ -168,7 +168,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
         if (!message) return;
 
         if (message.error) {
-          logger.error(`[Provider][DEBUG] Stream error: ${JSON.stringify(message.error)}`);
+          if (__DEV__) logger.error(`[Provider][DEBUG] Stream error: ${JSON.stringify(message.error)}`);
           state.streamErrorOccurred = true;
           callbacks.onError(new Error(message.error.message || 'API error'));
           this.abortController?.abort();

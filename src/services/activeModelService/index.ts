@@ -1,3 +1,4 @@
+import { residentAuxiliaryMemory } from '../residentAuxiliaryMemory';
 // ActiveModelService — THE ONLY PLACE models should be loaded/unloaded from.
 import { llmService } from '../llm';
 import { coreMLImageGeneratorService } from '../coreMLImageGenerator';
@@ -88,6 +89,8 @@ class ActiveModelService {
     // Fast path — model already loaded
     if (this.loadedTextModelId === modelId && llmService.isModelLoaded()) {
       const store = useAppStore.getState();
+      const paired = store.downloadedModels.find(model => model.id === modelId);
+      if (paired?.mmProjPath && llmService.getVisionComponentPath?.() !== paired.mmProjPath) await llmService.loadModel(paired.filePath, paired.mmProjPath);
       if (store.activeModelId !== modelId) {
         store.setActiveModelId(modelId);
       }
@@ -100,6 +103,8 @@ class ActiveModelService {
       // Re-check after acquiring — a concurrent call may have loaded it
       if (this.loadedTextModelId === modelId && llmService.isModelLoaded()) {
         const store = useAppStore.getState();
+        const paired = store.downloadedModels.find(model => model.id === modelId);
+        if (paired?.mmProjPath && llmService.getVisionComponentPath?.() !== paired.mmProjPath) await llmService.loadModel(paired.filePath, paired.mmProjPath);
         if (store.activeModelId !== modelId) {
           store.setActiveModelId(modelId);
         }
@@ -179,10 +184,9 @@ class ActiveModelService {
     timeoutMs: number = 180000,
   ): Promise<void> {
     const store = useAppStore.getState();
-    const imageThreads = store.settings?.imageThreads ?? 4;
-    const needsThreadReload =
-      this.loadedImageModelId === modelId &&
-      this.loadedImageModelThreads !== imageThreads;
+    // Core ML owns scheduling; legacy thread settings must not reload the pipeline.
+    const imageThreads = 4;
+    const needsThreadReload = false;
     if (this.loadedImageModelId === modelId) {
       const isLoaded = await coreMLImageGeneratorService.isModelLoaded();
       if (isLoaded && !needsThreadReload) {
@@ -291,6 +295,7 @@ class ActiveModelService {
     return results;
   }
   async getResourceUsage(): Promise<ResourceUsage> {
+    await this.syncWithNativeState();
     return _getResourceUsage();
   }
   private getIds() {
@@ -304,7 +309,8 @@ class ActiveModelService {
     return _getCurrentlyLoadedMemoryGB(this.getIds(), this.getLists());
   }
   async checkMemoryForModel(modelId: string, modelType: ModelType): Promise<MemoryCheckResult> {
-    return _checkMemoryForModel({ modelId, modelType, ids: this.getIds(), lists: this.getLists() });
+    const auxiliary = await residentAuxiliaryMemory(modelType !== 'text');
+    return _checkMemoryForModel({ modelId, modelType, ids: this.getIds(), lists: this.getLists(), auxiliaryMemoryGB:auxiliary.estimatedBytes / 1024 ** 3 });
   }
   async checkMemoryForDualModel(textModelId: string | null, imageModelId: string | null): Promise<MemoryCheckResult> {
     return _checkMemoryForDualModel({ textModelId, imageModelId, lists: this.getLists() });
@@ -315,6 +321,7 @@ class ActiveModelService {
     }
   }
   async syncWithNativeState(): Promise<void> {
+    const before = this.getIds();
     await _syncWithNativeState({
       loadedTextModelId: this.loadedTextModelId,
       loadedImageModelId: this.loadedImageModelId,
@@ -328,11 +335,13 @@ class ActiveModelService {
         this.loadedImageModelThreads = n;
       },
     });
+    if (before.loadedTextModelId !== this.loadedTextModelId || before.loadedImageModelId !== this.loadedImageModelId) this.notifyListeners();
   }
   subscribe(listener: ModelChangeListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
   }
+  notifyAuxiliaryChange():void {this.notifyListeners();}
   private notifyListeners(): void {
     const info = this.getActiveModels();
     this.listeners.forEach(listener => listener(info));

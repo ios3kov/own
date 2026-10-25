@@ -35,6 +35,8 @@ jest.mock('../../../src/services/documentService', () => ({
 
 jest.mock('../../../src/services/rag/embedding', () => ({
   embeddingService: {
+    getModelIdentity: jest.fn(() => "test-model"),
+    clearDocumentCache: jest.fn().mockResolvedValue(undefined),
     load: jest.fn(() => Promise.resolve()),
     embed: jest.fn((text: string) => Promise.resolve(
       new Array(384).fill(0).map((_, i) => Math.sin(i + text.length * 0.1))
@@ -55,6 +57,19 @@ import { documentService } from '../../../src/services/documentService';
 const mockDocService = documentService as jest.Mocked<typeof documentService>;
 
 describe('RAG Flow Integration', () => {
+  it('decodes and ranks SQLite vectors from later pages without dropping the best match', async () => {
+    await ragDatabase.ensureReady();
+    const rows = Array.from({length:257}, (_,i) => ({embedding_rowid:i+1,chunk_rowid:i+1,doc_id:1,name:'paged',content:String(i),position:i,model_id:"test-model",embedding:new Float32Array(i === 256 ? [1,0] : [0,1]).buffer}));
+    mockExecuteSync.mockImplementation((sql:string, args:any[]) => ({rows:sql.includes('SELECT e.id AS embedding_rowid') ? rows.filter(row => row.embedding_rowid > args[1]).slice(0,args[2]) : []}));
+    const {embeddingService} = require('../../../src/services/rag/embedding');
+    embeddingService.embed.mockResolvedValueOnce([1,0]);
+    const result = await retrievalService.search('project','query',1);
+    expect(result.chunks[0].content).toBe('256');
+    const reads=mockExecuteSync.mock.calls.filter(call => call[0].includes('SELECT e.id AS embedding_rowid'));
+    expect(reads.map(call => call[1])).toEqual([['project',0,256],['project',256,256]]);
+    expect(reads[0][0]).toContain('e.id > ? ORDER BY e.id LIMIT ?');
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     (ragDatabase as any).ready = false;
@@ -159,15 +174,18 @@ describe('RAG Flow Integration', () => {
   // ============================================================================
   // Search with budget
   // ============================================================================
-  describe('search with budget truncation', () => {
-    it('respects character budget and truncates lower-ranked results', async () => {
+  describe('search availability with context budgets', () => {
+    it('limits ranked excerpts to a small context budget', async () => {
       const longContent = 'x'.repeat(2000);
       const shortContent = 'Short relevant chunk.';
 
-      // No embeddings → falls back to getChunksByProject
+      // Use indexed vectors through the actual SQLite decoding path.
       mockExecuteSync.mockImplementation((sql: string) => {
         if (typeof sql === 'string' && sql.includes('rag_embeddings') && sql.includes('SELECT')) {
-          return { rows: [] };
+          return { rows: [
+            {chunk_rowid:1,doc_id:1,name:'big.txt',content:longContent,position:0,model_id:"test-model",embedding:new Float32Array(384).fill(1).buffer},
+            {chunk_rowid:2,doc_id:2,name:'small.txt',content:shortContent,position:0,model_id:"test-model",embedding:new Float32Array(384).fill(1).buffer},
+          ] };
         }
         if (typeof sql === 'string' && sql.includes('rag_chunks') && sql.includes('SELECT')) {
           return { rows: [
@@ -188,13 +206,17 @@ describe('RAG Flow Integration', () => {
       });
 
       expect(result.truncated).toBe(true);
-      expect(result.chunks.length).toBe(0); // First chunk exceeds budget
+      expect(result.chunks).toEqual([]);
+      expect(result.unavailable).toBeUndefined();
     });
 
-    it('includes all results when within budget', async () => {
+    it('includes ranked excerpts when the formatted result fits', async () => {
       mockExecuteSync.mockImplementation((sql: string) => {
         if (typeof sql === 'string' && sql.includes('rag_embeddings') && sql.includes('SELECT')) {
-          return { rows: [] };
+          return { rows: [
+            {chunk_rowid:1,doc_id:1,name:'a.txt',content:'short chunk one',position:0,model_id:"test-model",embedding:new Float32Array(384).fill(1).buffer},
+            {chunk_rowid:2,doc_id:2,name:'b.txt',content:'short chunk two',position:0,model_id:"test-model",embedding:new Float32Array(384).fill(1).buffer},
+          ] };
         }
         if (typeof sql === 'string' && sql.includes('rag_chunks') && sql.includes('SELECT')) {
           return { rows: [
@@ -213,7 +235,8 @@ describe('RAG Flow Integration', () => {
       });
 
       expect(result.truncated).toBe(false);
-      expect(result.chunks.length).toBe(2);
+      expect(result.chunks).toHaveLength(2);
+      expect(result.unavailable).toBeUndefined();
     });
   });
 
@@ -259,10 +282,11 @@ describe('RAG Flow Integration', () => {
       const deleteCalls = mockExecuteSync.mock.calls.filter(
         (c: any[]) => typeof c[0] === 'string' && c[0].includes('DELETE')
       );
-      expect(deleteCalls.length).toBe(3);
+      expect(deleteCalls.length).toBe(4);
       expect(deleteCalls[0][0]).toContain('rag_embeddings');
       expect(deleteCalls[1][0]).toContain('rag_chunks');
-      expect(deleteCalls[2][0]).toContain('rag_documents');
+      expect(deleteCalls[2][0]).toContain('rag_embedding_versions');
+      expect(deleteCalls[3][0]).toContain('rag_documents');
     });
 
     it('deleteProjectDocuments cleans up all docs for a project', async () => {
@@ -272,10 +296,11 @@ describe('RAG Flow Integration', () => {
         (c: any[]) => typeof c[0] === 'string' && c[0].includes('DELETE')
       );
       // 1 embeddings delete + 1 chunks delete + 1 docs delete
-      expect(deleteCalls.length).toBe(3);
+      expect(deleteCalls.length).toBe(4);
       expect(deleteCalls[0][0]).toContain('rag_embeddings');
       expect(deleteCalls[1][0]).toContain('rag_chunks');
-      expect(deleteCalls[2][0]).toContain('rag_documents');
+      expect(deleteCalls[2][0]).toContain('rag_embedding_versions');
+      expect(deleteCalls[3][0]).toContain('rag_documents');
     });
   });
 
@@ -283,10 +308,10 @@ describe('RAG Flow Integration', () => {
   // KB tool integration
   // ============================================================================
   describe('search_knowledge_base tool integration', () => {
-    it('tool handler searches project KB and returns formatted results', async () => {
+    it('tool handler exposes unavailable search without fabricated sources', async () => {
       const { executeToolCall } = require('../../../src/services/tools/handlers');
 
-      // No embeddings → fallback to chunks
+      // Documents exist, but semantic indexing is unavailable.
       mockExecuteSync.mockImplementation((sql: string) => {
         if (typeof sql === 'string' && sql.includes('rag_embeddings') && sql.includes('SELECT')) {
           return { rows: [] };
@@ -309,8 +334,9 @@ describe('RAG Flow Integration', () => {
       });
 
       expect(result.error).toBeUndefined();
-      expect(result.content).toContain('guide.pdf');
-      expect(result.content).toContain('Solar panel installation guide');
+      expect(result.content).toContain('Document search is unavailable');
+      expect(result.content).not.toContain('Solar panel installation guide');
+      expect(result.documentSources).toBeUndefined();
     });
 
     it('tool handler returns no results for unmatched query', async () => {

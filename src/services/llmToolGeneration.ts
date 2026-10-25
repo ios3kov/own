@@ -1,4 +1,4 @@
-import { measureLocalContext } from './contextUsage';
+import { contextForMeasuredCompletion } from './contextUsage';
 /**
  * Tool-aware LLM generation helper.
  * Extracted to keep llm.ts under the max-lines limit.
@@ -134,10 +134,10 @@ export async function generateWithToolsImpl(
       ...buildThinkingCompletionParams(deps.isThinkingEnabled, deps.isGemma4Model),
     };
     logger.log('[LLM-Tools] === INPUT ===');
-    logger.log(JSON.stringify(completionParams, null, 2));
-    await measureLocalContext(deps.context, completionParams, deps.contextLength);
+    if (__DEV__) logger.log(JSON.stringify(completionParams, null, 2));
+    const completionContext=await contextForMeasuredCompletion(deps.context, completionParams, deps.contextLength);
     if (deps.isActive?.() === false) return {fullResponse:'',toolCalls:[]};
-    const completionResult: any = await safeCompletion(deps.context, () => deps.context.completion(completionParams as any, (data: any) => {
+    const completionResult: any = await safeCompletion(deps.context, () => completionContext.completion(completionParams as any, (data: any) => {
       if (!generating) return;
       if (data.tool_calls) {
         for (const tc of data.tool_calls) {
@@ -152,7 +152,7 @@ export async function generateWithToolsImpl(
       if (visibleToken) options.onStream?.({ content: visibleToken });
     }), 'generateWithTools');
     logger.log('[LLM-Tools] === OUTPUT ===');
-    logger.log(JSON.stringify(completionResult, null, 2));
+    if (__DEV__) logger.log(JSON.stringify(completionResult, null, 2));
 
     const cr = completionResult;
     logger.log(`[LLM-Tools] Completion done: streamed=${tokenCount} tokens, response="${fullResponse.substring(0, 100)}"`);
@@ -178,7 +178,7 @@ export async function generateWithToolsImpl(
       logger.log(`[LLM-Tools] Using ${collectedToolCalls.length} tool call(s) from completionResult`);
     }
 
-    deps.setPerformanceStats(recordGenerationStats(startTime, firstTokenMs, tokenCount));
+    deps.setPerformanceStats(recordGenerationStats(startTime, firstTokenMs, {events:tokenCount,timings:cr?.timings}));
     generating = false;
     deps.setIsGenerating(false);
     if (cr?.context_full) {

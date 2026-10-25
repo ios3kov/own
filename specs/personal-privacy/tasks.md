@@ -68,3 +68,20 @@ Exact 17-item mapping: [iPhone follow-up acceptance](../../docs/iphone-followup-
 Do not mark phone acceptance or release readiness complete from the host checks above. Preserve existing chats/models/images and do not enroll credentials during automated checks.
 
 Final address-boundary correction was rechecked by all 62 native tests after the complete UI run. Build 5 preserves the original two chats/eight messages, all saved model records and all pre-existing document file paths/sizes after installation. Live phone launch remains blocked by the lock; no post-launch retention or runtime semantic claim is made.
+
+## Live phone QA continuation
+
+Build 7 installed and launched in place. Original two chats/eight messages remain exactly unchanged, all 34 prior Documents files retain their paths/sizes (29 SDXL files), text/Whisper records retained, image-model paths only relocated to the current sandbox. Gallery now displays the older images. Physical Info/Done/Close, visible delete confirmation and Cancel passed; no phone image was deleted. Apple changed-turn ORCHID → TULIP passed on build 5; saved tool history remains open. Security header visually clears the Dynamic Island.
+
+F14 now covers multilingual prompts, including Latin-script languages. Live test found and cancelled an English refusal being treated as an image description. New acceptance: detect language locally; classify non-English intent with the selected local text model; explicit quoted translation task; reject refusals/untranslated output; show actionable error for unsupported language; never auto-download a text model/language pack or use cloud translation. Regression matrix covers 14 non-English languages; real phone model-language quality remains separate. Build 8 is being prepared. Full QA/release acceptance remains incomplete.
+
+### 2026-10-25 expanded user scope
+
+Track the full numbered 0, 00, 1–88 request in [performance-plan.md](performance-plan.md). This is additional required work, not covered by earlier release checks. Batch 1 fixes history persistence, late embedding load disposal, and mathematical comparisons in speech. Hardware recommendations, loading policies and the remaining measured work stay open.
+
+
+### Batch7 Mac-only continuation — 2026-10-25
+
+Supersedes earlier software-open summaries. Implemented and tested request-scoped prompt reuse20, partial recovery38, first-event stream flush39, safe auxiliary idle release45, actual visible-layout timing50, native footprint/launch diagnostics52, model-versioned persisted document cache and refresh74, incremental speech85, plus final image guidance/thread/pressure and Knowledge Base accessibility fixes. Final code review and per-item decisions are in [software review](../../docs/software-review-2026-10-25.md); all90 IDs remain in performance-plan.md.
+
+Host functional checks and scoped simulator visuals are recorded in the latest follow-up report. Physical model quality, Metal/heat/energy, session/prewarm/pipeline experiments and actual phone installation remain NOT_RUN in this batch. No phone accessed; preserve installed Build13, chats/models/images. No source commit/push was performed.

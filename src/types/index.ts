@@ -161,7 +161,19 @@ export interface DocumentSource {
   excerpt: string;
 }
 
+export interface LaunchConfiguration {
+  engineVersion:string;contextLength:number;threads:number;batch:number;microBatch:number;
+  cacheType:string;gpuLayers:number;backend:string;fallbackReason?:string;
+}
 export interface GenerationMeta {
+  launchConfiguration?:LaunchConfiguration;
+  sendToVisibleMs?:number;queueWaitMs?:number;generationPreparationMs?:number;
+  /** OS process footprint; peak covers this app process since launch, not one request. */
+  processMemoryBytes?:number;
+  processPeakMemoryBytes?:number;
+  tokenCountSource?: 'native' | 'stream-events-estimate';
+  promptTokenCount?: number;
+  cachedTokenCount?: number;
   documentSources?: DocumentSource[];
   /** Whether GPU was used for inference */
   gpu: boolean;
@@ -194,6 +206,9 @@ export interface GenerationMeta {
 
 // Chat-related types
 export interface Message {
+  replyTraceId?:string;
+  /** Recovered partial reply; never presented as a completed answer. */
+  interrupted?: boolean;
   /** Trusted retrieval references on transient system prompts. */
   documentSources?: DocumentSource[];
   id: string;

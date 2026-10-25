@@ -117,7 +117,26 @@ export const KnowledgeBaseScreen: React.FC = () => {
     }
   };
 
+  const handleRefreshSearch = async () => {
+    if (isPickingRef.current) return;
+    isPickingRef.current = true;
+    setIsPicking(true);
+    setIndexingFile('document search');
+    try {
+      await ragService.backfillEmbeddings(projectId);
+      await loadKbDocs();
+      Alert.alert('Document search ready', 'Your documents are ready for the current search model.');
+    } catch (err: any) {
+      Alert.alert('Could not refresh document search', err?.message || 'Try again. Your documents are still saved.');
+    } finally {
+      isPickingRef.current = false;
+      setIsPicking(false);
+      setIndexingFile(null);
+    }
+  };
+
   const handleToggleDocument = async (docId: number, enabled: boolean) => {
+    if (isPickingRef.current) return;
     try {
       await ragService.toggleDocument(docId, enabled);
       await loadKbDocs();
@@ -127,6 +146,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
   };
 
   const handleDeleteDocument = (doc: RagDocument) => {
+    if (isPickingRef.current) return;
     Alert.alert(
       'Remove Document',
       `Remove "${doc.name}" from the knowledge base?`,
@@ -136,6 +156,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
           text: 'Remove',
           style: 'destructive',
           onPress: async () => {
+            if (isPickingRef.current) return;
             try {
               await ragService.deleteDocument(doc.id);
               await loadKbDocs();
@@ -155,15 +176,16 @@ export const KnowledgeBaseScreen: React.FC = () => {
       activeOpacity={0.7}
     >
       <View style={styles.docInfo}>
-        <Text style={styles.docName} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.docName} numberOfLines={2}>{item.name}</Text>
         <Text style={styles.docSize}>{formatFileSize(item.size)}</Text>
       </View>
       <Switch
+        disabled={isPicking}
         value={item.enabled === 1}
         onValueChange={(val) => handleToggleDocument(item.id, val)}
         trackColor={{ false: colors.border, true: colors.primary }}
       />
-      <TouchableOpacity style={styles.docDelete} onPress={() => handleDeleteDocument(item)}>
+      <TouchableOpacity style={styles.docDelete} disabled={isPicking} onPress={() => handleDeleteDocument(item)}>
         <Icon name="trash-2" size={16} color={colors.error} />
       </TouchableOpacity>
     </TouchableOpacity>
@@ -176,7 +198,7 @@ export const KnowledgeBaseScreen: React.FC = () => {
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>
+          <Text style={styles.headerTitle} numberOfLines={1} maxFontSizeMultiplier={1.5}>
             {project?.name || 'Knowledge Base'}
           </Text>
         </View>
@@ -188,6 +210,12 @@ export const KnowledgeBaseScreen: React.FC = () => {
           )}
         </TouchableOpacity>
       </View>
+
+      {kbDocs.length > 0 && (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh document search" onPress={handleRefreshSearch} disabled={isPicking} style={styles.refreshButton}>
+          <Text style={styles.refreshButtonText} maxFontSizeMultiplier={1.5}>Refresh document search</Text>
+        </TouchableOpacity>
+      )}
 
       {indexingFile && (
         <View style={styles.indexingBanner}>

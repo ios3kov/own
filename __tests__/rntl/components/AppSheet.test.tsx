@@ -16,7 +16,7 @@
  */
 
 import React from 'react';
-import { Text, Keyboard, Modal, TouchableWithoutFeedback, View } from 'react-native';
+import { Text, Keyboard, Modal, TouchableWithoutFeedback, View, StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { AppSheet } from '../../../src/components/AppSheet';
 
@@ -34,6 +34,12 @@ describe('AppSheet', () => {
   // ============================================================================
   // Visibility
   // ============================================================================
+  it('offers an opaque surface for text-heavy selection lists',()=>{
+    const view=render(<AppSheet {...defaultProps} visible opaque />);
+    const style=StyleSheet.flatten(view.getByTestId('app-sheet-surface').props.style);
+    expect(style.backgroundColor).toMatch(/^#[0-9a-f]{6}$/i);
+  });
+
   describe('visibility', () => {
     it('returns null when not visible and modalVisible is false', () => {
       const { toJSON } = render(

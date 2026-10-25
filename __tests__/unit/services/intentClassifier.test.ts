@@ -35,6 +35,15 @@ describe('IntentClassifier', () => {
   // IMAGE PATTERN TESTS
   // ============================================================================
   describe('Image Intent Patterns', () => {
+    it.each(['Crea una imagen de un cachorro dorado','Dibuja un cachorro','Dessine un chiot','Zeichne einen Welpen','Disegna un cucciolo','Desenhe um cachorro','Narysuj szczeniaka','Bir köpek yavrusu çiz','画一只小狗','子犬を描いて','강아지를 그려줘','ارسم جروًا','एक पिल्ला बनाओ','วาดลูกสุนัข'])('recognizes a direct multilingual command without needing a text model: %s', async message => {
+      expect(await intentClassifier.classifyIntent(message,false)).toBe('image');
+    });
+    it.each(['Нарисуй собачку', 'Пожалуйста, нарисуйте щенка', 'Можешь нарисовать собаку?', 'Создай изображение щенка'])('recognizes a direct Russian drawing request: %s', async message => {
+      expect(await intentClassifier.classifyIntent(message, false)).toBe('image');
+    });
+    it.each(['Как нарисовать собачку?', 'Переведи: нарисуй собачку', 'Не рисуй собачку', 'Объясни, как создать изображение'])('keeps Russian text requests out of generation: %s', async message => {
+      expect(await intentClassifier.classifyIntent(message, false)).toBe('text');
+    });
     describe('Direct generation requests', () => {
       const imageGenerationPhrases = [
         // draw/paint/sketch + image keywords
@@ -857,7 +866,7 @@ describe('IntentClassifier', () => {
     test('should not call LLM when useLLM is false', async () => {
       await intentClassifier.classifyIntent('ambiguous message', { useLLM: false });
 
-      expect(mockLlmService.generateResponse).not.toHaveBeenCalled();
+      expect(mockLlmService.generateWithMaxTokens).not.toHaveBeenCalled();
     });
 
     test('should return text default when pattern is uncertain and LLM disabled', async () => {
@@ -877,13 +886,7 @@ describe('IntentClassifier', () => {
 
     test('should use LLM classification when pattern is uncertain and LLM enabled', async () => {
       mockLlmService.isModelLoaded.mockReturnValue(true);
-      mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, onComplete) => {
-          onStream?.({ content: 'YES' });
-          onComplete?.({ content: 'YES', reasoningContent: '' });
-          return 'YES';
-        }
-      );
+      mockLlmService.generateWithMaxTokens.mockResolvedValue('YES');
 
       const result = await intentClassifier.classifyIntent(
         'something uncertain without clear patterns',
@@ -891,18 +894,12 @@ describe('IntentClassifier', () => {
       );
 
       expect(result).toBe('image');
-      expect(mockLlmService.generateResponse).toHaveBeenCalled();
+      expect(mockLlmService.generateWithMaxTokens).toHaveBeenCalledWith(expect.any(Array), 8);
     });
 
     test('should return text when LLM responds NO', async () => {
       mockLlmService.isModelLoaded.mockReturnValue(true);
-      mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream, onComplete) => {
-          onStream?.({ content: 'NO' });
-          onComplete?.({ content: 'NO', reasoningContent: '' });
-          return 'NO';
-        }
-      );
+      mockLlmService.generateWithMaxTokens.mockResolvedValue('NO');
 
       const result = await intentClassifier.classifyIntent(
         'something uncertain without clear patterns',
@@ -914,7 +911,7 @@ describe('IntentClassifier', () => {
 
     test('should handle LLM errors gracefully', async () => {
       mockLlmService.isModelLoaded.mockReturnValue(true);
-      mockLlmService.generateResponse.mockRejectedValue(new Error('LLM error'));
+      mockLlmService.generateWithMaxTokens.mockRejectedValue(new Error('LLM error'));
 
       const result = await intentClassifier.classifyIntent(
         'something uncertain',
@@ -961,12 +958,7 @@ describe('IntentClassifier', () => {
 
       mockLlmService.getLoadedModelPath.mockReturnValue('/path/to/different.gguf');
       mockLlmService.isModelLoaded.mockReturnValue(true);
-      mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream) => {
-          onStream?.({ content: 'YES' });
-          return 'YES';
-        }
-      );
+      mockLlmService.generateWithMaxTokens.mockResolvedValue('YES');
       mockActiveModelService.getActiveModels.mockReturnValue({
         text: { model: { id: 'original-model' } as any, isLoaded: true, isLoading: false },
         image: { model: null, isLoaded: false, isLoading: false },
@@ -1010,12 +1002,7 @@ describe('IntentClassifier', () => {
 
       mockLlmService.getLoadedModelPath.mockReturnValue('/path/to/different.gguf');
       mockLlmService.isModelLoaded.mockReturnValue(true);
-      mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream) => {
-          onStream?.({ content: 'NO' });
-          return 'NO';
-        }
-      );
+      mockLlmService.generateWithMaxTokens.mockResolvedValue('NO');
       mockActiveModelService.getActiveModels.mockReturnValue({
         text: { model: { id: 'original-model' } as any, isLoaded: true, isLoading: false },
         image: { model: null, isLoaded: false, isLoading: false },
@@ -1053,12 +1040,7 @@ describe('IntentClassifier', () => {
 
       mockLlmService.getLoadedModelPath.mockReturnValue('/path/to/same.gguf');
       mockLlmService.isModelLoaded.mockReturnValue(true);
-      mockLlmService.generateResponse.mockImplementation(
-        async (_messages, onStream) => {
-          onStream?.({ content: 'NO' });
-          return 'NO';
-        }
-      );
+      mockLlmService.generateWithMaxTokens.mockResolvedValue('NO');
 
       const result = await intentClassifier.classifyIntent(
         'something uncertain without clear patterns',

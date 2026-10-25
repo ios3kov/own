@@ -7,6 +7,13 @@ describe('local reply speech', () => {
     Platform.OS = 'ios'; AppState.currentState = 'active';
     NativeModules.OwnReplySpeech = { begin: jest.fn().mockResolvedValue(null), stop: jest.fn().mockResolvedValue(null), speak: jest.fn().mockResolvedValue(null) };
   });
+  it('does not start playback after cancellation while voice setup is pending', async () => {
+    let finish!: () => void;
+    NativeModules.OwnReplySpeech.setVoice = jest.fn(() => new Promise<void>(resolve => {finish=resolve;}));
+    const speech = new ReplySpeech(); speech.begin(true);
+    await speech.stop(); finish(); await tick();
+    expect(NativeModules.OwnReplySpeech.begin).not.toHaveBeenCalled();
+  });
   it('removes reasoning, code, links and Markdown while keeping readable text', () => {
     expect(speechText('<think>Private.</think>## Answer\n**Read** [this](https://example.com) [1].\n```js\nsecret();\n```\nDone.', true)).toBe('Answer\nRead this .\n\nDone.');
     expect(speechText('<|channel>thought\nPrivate.<channel|>Answer.', true)).toBe('Answer.');
@@ -14,6 +21,12 @@ describe('local reply speech', () => {
   });
   it.each(['<think>Private.', '```js\nsecret();', '[link](https://example.com', '<tool_call>secret.', '<|tool_call>secret.', '`secret', '``secret. ', '<thi'])('holds incomplete protected text: %s', value => {
     expect(speechText(value)).toBe('');
+  });
+  it('preserves mathematical comparisons in final and streaming speech', () => {
+    for (const text of ['Value < 100 and > 10.', 'Значение < 100.', 'Value <100 remains valid.']) {
+      expect(speechText(text, true)).toBe(text);
+      expect(speechText(text)).toBe(text);
+    }
   });
   it('is silent while off and stops late speech after cancellation', async () => {
     const speech = new ReplySpeech();

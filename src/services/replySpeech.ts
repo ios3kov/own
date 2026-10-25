@@ -1,5 +1,7 @@
+import {IncrementalSpeechText} from './incrementalSpeechText';
 import { AppState,NativeModules } from 'react-native';
 import { create } from 'zustand';
+import { useAppStore } from '../stores/appStore';
 
 function stripInlineCode(text: string): string {
   let result = '';
@@ -22,26 +24,26 @@ export function speechText(raw: string, final = false): string {
   let text = raw.replace(/<\|channel>thought\n[\s\S]*?<channel\|>/gi, '').replace(/<\|channel>thought\n[\s\S]*$/gi, '')
     .replace(/<\|channel\|>analysis<\|message\|>[\s\S]*?<\|channel\|>final<\|message\|>/gi, '')
     .replace(/<\|channel\|>analysis<\|message\|>[\s\S]*$/gi, '')
-    .replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '').replace(/<tool_call>[\s\S]*$/g, '')
-    .replace(/<\|tool_call>[\s\S]*?<tool_call\|>/g, '').replace(/<\|tool_call>[\s\S]*$/g, '').replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*$/gi, '');
+    .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').replace(/<tool_call>[\s\S]*$/gi, '')
+    .replace(/<\|tool_call>[\s\S]*?<tool_call\|>/gi, '').replace(/<\|tool_call>[\s\S]*$/gi, '').replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*$/gi, '');
   text = text.replace(/```[\s\S]*?```/g, '').replace(/```[\s\S]*$/g, '');
   text = text.replace(/~~~[\s\S]*?~~~/g, '').replace(/~~~[\s\S]*$/g, '');
   text = stripInlineCode(text);
   text = text.replace(/\[\d+\]/g, '');
   // Hold partial markup, tags and links until their closing token arrives.
-  for (const marker of ['`', '<', '[']) {
+  for (const marker of ['`', '[']) {
     const start = text.lastIndexOf(marker);
-    const end = marker === '<' ? '>' : marker === '[' ? ')' : '`';
+    const end = marker === '[' ? ')' : '`';
     if (start >= 0 && (marker === '`' || text.indexOf(end, start + 1) < 0)) text = text.slice(0, start).replace(/!$/, '');
   }
   text = text.replace(/!\[[^\]]*\]\([^)]*\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/\[\d+\]/g, '')
-    .replace(/<[^>]*>/g, '').replace(/https?:\/\/\S+/g, '')
+    .replace(/<\/?[a-z][\w:-]*(?:\s+[^<>]*)?\/?>/gi, '').replace(/https?:\/\/\S+/g, '')
     .replace(/^\s*(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/gm, '')
     .replace(/[*_~]/g, '').replace(/[ \t]+/g, ' ');
   if (!final) {
     // A trailing tag/backtick may be only the start of a protected block.
-    text = text.replace(/(?:<[^>]*|`{1,2}|~{1,2})$/, '');
+    text = text.replace(/(?:<\/?[a-z][^>]*|<\|[^>]*|`{1,2}|~{1,2})$/i, '');
   }
   return text;
 }
@@ -50,12 +52,14 @@ export const useReplySpeechState = create<{ error: string | null }>(() => ({ err
 const bridge = () => (NativeModules.OwnReplySpeech);
 
 export class ReplySpeech {
+  private parser=new IncrementalSpeechText(speechText);
   private session = 0;
   private active = false;
   private emitted = '';
   private raw = '';
   private queue: string[] = [];
   private draining = false;
+  private finished = false;
   private ready: Promise<unknown> = Promise.resolve();
 
   begin(enabled: boolean): void {
@@ -64,7 +68,10 @@ export class ReplySpeech {
     this.active = enabled && AppState.currentState === 'active' && !!bridge();
     if (!this.active) return;
     const id = this.session;
-    this.ready = Promise.resolve(bridge().begin(String(id))).catch(() => {
+    const native = bridge();
+    const start = () => id === this.session ? native.begin(String(id)) : undefined;
+    const preparation = native.setVoice ? Promise.resolve(native.setVoice(useAppStore.getState().settings.replyVoiceId || '')).then(start) : start();
+    this.ready = Promise.resolve(preparation).catch(() => {
       if (id === this.session) this.fail('Spoken replies are unavailable.');
     });
   }
@@ -75,10 +82,11 @@ export class ReplySpeech {
     this.collect(false);
   }
   resetText(): void { this.begin(this.active); }
-  finish(): void { if (this.active) this.collect(true); }
+  finish(): void { this.finished = true; if (this.active) this.collect(true); }
   stop(): Promise<void> {
     this.session += 1;
-    this.active = false; this.emitted = ''; this.raw = ''; this.queue = []; this.draining = false;
+    this.parser.reset();
+    this.active = false; this.emitted = ''; this.raw = ''; this.queue = []; this.draining = false; this.finished = false;
     return Promise.resolve(bridge()?.stop()).then(() => undefined, () => undefined);
   }
   private fail(message: string): void {
@@ -86,22 +94,24 @@ export class ReplySpeech {
     useReplySpeechState.setState({ error: message });
   }
   private collect(final: boolean): void {
-    const text = speechText(this.raw, final);
+    const text = this.parser.get(this.raw, final);
     if (!text.startsWith(this.emitted)) {
       this.fail('Spoken reply stopped because the response changed.'); return;
     }
     let rest = text.slice(this.emitted.length);
     while (rest.length) {
       const match = /[.!?。！？]\s|\n/.exec(rest);
-      const end = match ? match.index + match[0].length : final ? rest.length : 0;
+      if (this.queue.length >= 12) break;
+      let end = match ? match.index + match[0].length : final ? rest.length : 0;
+      if (end > 600 || (!end && rest.length > 600)) {
+        const boundary = rest.lastIndexOf(' ', 600);
+        end = boundary > 300 ? boundary + 1 : 600;
+      }
       if (!end) break;
       const part = rest.slice(0, end);
       this.emitted += part; rest = rest.slice(end);
       const trimmed = part.trim();
       if (!trimmed) continue;
-      if (trimmed.length > 800 || this.queue.length >= 12) {
-        this.fail('Spoken reply stopped because it was too long.'); return;
-      }
       this.queue.push(trimmed);
     }
     this.drain();
@@ -114,6 +124,7 @@ export class ReplySpeech {
       await this.ready;
       while (this.active && id === this.session && this.queue.length) {
         await bridge().speak(this.queue.shift(), String(id));
+        if (this.active && id === this.session) this.collect(this.finished);
       }
     } catch {
       if (id === this.session) this.fail('No suitable local voice is available, or playback was interrupted.');

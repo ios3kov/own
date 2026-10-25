@@ -20,6 +20,10 @@ setupWithConversation,
 } from '../../utils/testHelpers';
 import { createONNXImageModel,createGeneratedImage,createMessage } from '../../utils/factories';
 import { Message } from '../../../src/types';
+import { shouldRouteToImageGenerationFn } from '../../../src/screens/ChatScreen/useChatGenerationActions';
+import { NativeModules } from 'react-native';
+import { APPLE_MODEL_ID } from '../../../src/services/foundationModels';
+import { intentClassifier } from '../../../src/services/intentClassifier';
 
 // Mock the services
 jest.mock('../../../src/services/coreMLImageGenerator');
@@ -135,6 +139,14 @@ describe('Image Generation Flow Integration', () => {
       await generatePromise;
 
       expect(imageGenerationService.getState().isGenerating).toBe(false);
+    });
+
+    it('keeps a user-selected zero guidance through generation settings', async () => {
+      const imageModel=setupImageModelState();
+      useAppStore.setState({settings:{...useAppStore.getState().settings,imageGuidanceScale:0}});
+      mockActiveModelService.getActiveModels.mockReturnValue({text:{model:null,isLoaded:false,isLoading:false},image:{model:imageModel,isLoaded:true,isLoading:false}});
+      await imageGenerationService.generateImage({prompt:'A puppy'});
+      expect(mockLocalDreamService.generateImage).toHaveBeenCalledWith(expect.objectContaining({guidanceScale:0}),expect.anything(),expect.anything());
     });
 
     it('should call coreMLImageGeneratorService with correct parameters', async () => {
@@ -460,7 +472,7 @@ describe('Image Generation Flow Integration', () => {
       expect(mockActiveModelService.loadImageModel).toHaveBeenCalledWith('img-model-1');
     });
 
-    it('should reload model if threads changed', async () => {
+    it('keeps a ready Core ML pipeline when only an unused legacy thread value differs', async () => {
       const imageModel = setupImageModelState();
 
       mockActiveModelService.getActiveModels.mockReturnValue({
@@ -474,8 +486,8 @@ describe('Image Generation Flow Integration', () => {
 
       await imageGenerationService.generateImage({ prompt: 'Test' });
 
-      // Should have reloaded model
-      expect(mockActiveModelService.loadImageModel).toHaveBeenCalled();
+      // Core ML owns scheduling; old thread preferences do not change this resource.
+      expect(mockActiveModelService.loadImageModel).not.toHaveBeenCalled();
     });
   });
 
@@ -577,7 +589,7 @@ describe('Image Generation Flow Integration', () => {
       expect(enhancementMessages[2].content).toBe('Here is a cat image');
       expect(enhancementMessages[3].content).toBe('Make it darker');
       expect(enhancementMessages[4].role).toBe('user');
-      expect(enhancementMessages[4].content).toBe('User Request: Make it darker');
+      expect(enhancementMessages[4].content).toContain('"Make it darker"');
     });
 
     it('should not include conversation context when no conversationId', async () => {
@@ -596,7 +608,7 @@ describe('Image Generation Flow Integration', () => {
       expect(enhancementMessages[0].role).toBe('system');
       expect(enhancementMessages[0].content).not.toContain('conversation history');
       expect(enhancementMessages[1].role).toBe('user');
-      expect(enhancementMessages[1].content).toBe('User Request: A sunset');
+      expect(enhancementMessages[1].content).toContain('"A sunset"');
     });
 
     it('should truncate long messages in conversation context', async () => {
@@ -1428,11 +1440,68 @@ describe('Image Generation Flow Integration', () => {
     });
   });
   describe('automatic local image prompt translation', () => {
+    const previousApple = NativeModules.OwnFoundationModels;
+    afterEach(() => { NativeModules.OwnFoundationModels = previousApple; });
+    const appleLanguageSetup = (language:string, response='A small puppy on green grass') => {
+      setupImageModelState();
+      getAppState().updateSettings({enhanceImagePrompts:false,maxTokens:512,temperature:0.7,enabledTools:[]});
+      useAppStore.setState({activeModelId:APPLE_MODEL_ID});
+      intentClassifier.clearCache();
+      NativeModules.OwnFoundationModels = {
+        availability:jest.fn().mockResolvedValue({available:true,reason:'available'}),
+        inspectLanguage:jest.fn(async (text:string)=>({language:text==='A small puppy on green grass'?'en':language})),
+        generate:jest.fn(async ({messages}:any)=>({content:messages.at(-1).content.startsWith('Classify')?'IMAGE':response})),
+      };
+    };
+    it.each([
+      ['es','Dibuja un cachorro'],['fr','Dessine un chiot'],['de','Zeichne einen Welpen'],
+      ['it','Disegna un cucciolo'],['pt','Desenhe um cachorro'],['pl','Narysuj szczeniaka'],
+      ['tr','Bir köpek yavrusu çiz'],['ru','Нарисуй собачку'],['zh-Hans','画一只小狗'],
+      ['ja','子犬を描いて'],['ko','강아지를 그려줘'],['ar','ارسم جروًا'],['hi','एक पिल्ला बनाओ'],['th','วาดลูกสุนัข'],
+    ])('routes and translates %s through the selected local Apple model before image generation', async (language,prompt) => {
+      appleLanguageSetup(language);
+      const route = await shouldRouteToImageGenerationFn({
+        isGeneratingImage:false,imageModelLoaded:true,hasTextModel:true,downloadedModels:[],
+        settings:{showGenerationDetails:false,imageGenerationMode:'auto',autoDetectMethod:'pattern',modelLoadingStrategy:'performance'},
+        setIsClassifying:jest.fn(),setAppImageGenerationStatus:jest.fn(),setAppIsGeneratingImage:jest.fn(),
+      },prompt);
+      expect(route).toBe(true);
+      await imageGenerationService.generateImage({prompt});
+      expect(NativeModules.OwnFoundationModels.generate).toHaveBeenCalledWith(expect.objectContaining({messages:expect.arrayContaining([
+        expect.objectContaining({role:'user',content:expect.stringContaining('Translate this JSON-quoted text into English')}),
+      ]),tools:[]}));
+      expect(mockLocalDreamService.generateImage).toHaveBeenCalledWith(expect.objectContaining({prompt:'A small puppy on green grass'}),expect.any(Function),expect.any(Function));
+    });
+    it('never sends an English refusal to SDXL as the translation', async () => {
+      appleLanguageSetup('ru',"I'm unable to draw.");
+      expect(await imageGenerationService.generateImage({prompt:'Нарисуй собачку'})).toBeNull();
+      expect(mockLocalDreamService.generateImage).not.toHaveBeenCalled();
+      expect(getAppState().generatedImages).toHaveLength(0);
+      expect(imageGenerationService.getState().isGenerating).toBe(false);
+      expect(imageGenerationService.getState().error).toContain('translation could not finish');
+    });
+    it.each(['Comment apprendre à peindre un chiot ?', 'Traduis en français : "draw a picture of a puppy"'])('requests structured intent and keeps non-image requests in chat: %s', async prompt => {
+      appleLanguageSetup('fr');
+      NativeModules.OwnFoundationModels.generate.mockResolvedValue({content:'TEXT'});
+      const route=await shouldRouteToImageGenerationFn({
+        isGeneratingImage:false,imageModelLoaded:true,hasTextModel:true,downloadedModels:[],
+        settings:{showGenerationDetails:false,imageGenerationMode:'auto',autoDetectMethod:'pattern',modelLoadingStrategy:'performance'},
+        setIsClassifying:jest.fn(),setAppImageGenerationStatus:jest.fn(),setAppIsGeneratingImage:jest.fn(),
+      },prompt);
+      expect(route).toBe(false);
+      expect(NativeModules.OwnFoundationModels.generate).toHaveBeenCalledWith(expect.objectContaining({task:'imageIntent',maxTokens:64,temperature:0,tools:[]}));
+      expect(mockLocalDreamService.generateImage).not.toHaveBeenCalled();
+    });
     it('translates a Russian puppy request even with optional improvement off', async () => {
       setupImageModelState();
       getAppState().updateSettings({enhanceImagePrompts:false});
       mockLlmService.isModelLoaded.mockReturnValue(true);
       mockLlmService.generateResponse.mockResolvedValue('A small puppy');
+      expect(await shouldRouteToImageGenerationFn({
+        isGeneratingImage:false, imageModelLoaded:true, hasTextModel:true, downloadedModels:[],
+        settings:{showGenerationDetails:false,imageGenerationMode:'auto',autoDetectMethod:'pattern',modelLoadingStrategy:'performance'},
+        setIsClassifying:jest.fn(), setAppImageGenerationStatus:jest.fn(), setAppIsGeneratingImage:jest.fn(),
+      }, 'Нарисуй собачку')).toBe(true);
       await imageGenerationService.generateImage({prompt:'Нарисуй собачку'});
       expect(mockLlmService.generateResponse).toHaveBeenCalledWith(
         expect.arrayContaining([expect.objectContaining({role:'system', content:expect.stringContaining('Do not add artistic details')})]), expect.any(Function));

@@ -111,7 +111,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
   const repairingVisionIds = useDownloadStore(s => s.repairingVisionIds);
   const setRepairingVision = useDownloadStore(s => s.setRepairingVision);
 
-  const { downloadedModels, setDownloadedModels, addDownloadedModel, removeDownloadedModel, activeModelId } = useAppStore();
+  const { downloadedModels, setDownloadedModels, addDownloadedModel, removeDownloadedModel, activeModelId, deviceInfo } = useAppStore();
 
   const loadDownloadedModels = async () => {
     const models = await modelManager.getDownloadedModels();
@@ -306,8 +306,9 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     setFilterState(prev => ({ ...prev, sort, expandedDimension: null })), []);
 
   // Computed
-  const ramGB = hardwareService.getTotalMemoryGB();
-  const deviceRecommendation = useMemo(() => hardwareService.getModelRecommendation(), []);
+  const ramGB = deviceInfo?.totalMemory ? deviceInfo.totalMemory / 1024 ** 3 : hardwareService.getTotalMemoryGB();
+  const deviceRecommendation = useMemo(() => hardwareService.getModelRecommendation(ramGB), [ramGB]);
+  const deviceName = deviceInfo?.deviceModel || 'This iPhone';
   const hasActiveFilters = filterState.orgs.length > 0 || filterState.type !== 'all' ||
     filterState.source !== 'all' || filterState.size !== 'all' || filterState.quant !== 'all' ||
     filterState.sort !== 'recommended';
@@ -355,7 +356,7 @@ export function useTextModels(setAlertState: (s: AlertState) => void) {
     filterState, setFilterState,
     textFiltersVisible, setTextFiltersVisible,
     downloadedModels,
-    hasActiveFilters, ramGB, deviceRecommendation,
+    hasActiveFilters, ramGB, deviceName, deviceRecommendation,
     filteredResults, recommendedAsModelInfo, trendingAsModelInfo,
     handleSearch, handleSelectModel, handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel, loadDownloadedModels,
     clearFilters, toggleFilterDimension, toggleOrg,

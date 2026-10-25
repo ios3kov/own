@@ -8,7 +8,6 @@ import { DownloadedModel,LlamaDownloadedModel,ONNXImageModel } from '../../types
 import { llmService } from '../llm';
 
 import { coreMLImageGeneratorService } from '../coreMLImageGenerator';
-import { modelManager } from '../modelManager';
 import logger from '../../utils/logger';
 import RNFS from 'react-native-fs';
 
@@ -60,38 +59,31 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
 
     const mmProjPath = await resolveMmProjPath(ctx.model, ctx.modelId);
 
+    const cancellation = new AbortController();
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutId = setTimeout(
-        () =>
+        () => {
+          cancellation.abort();
           reject(
             new Error(
               `Text model loading timed out after ${ctx.timeoutMs / 1000}s. ` +
                 'Try a smaller model or reduce context length in settings.',
             ),
-          ),
+          );
+        },
         ctx.timeoutMs,
       );
     });
 
     try {
       await Promise.race([
-        llmService.loadModel(ctx.model.filePath, mmProjPath),
+        llmService.loadModel(ctx.model.filePath, mmProjPath, cancellation.signal),
         timeoutPromise,
       ]);
     } finally {
       if (timeoutId !== null) clearTimeout(timeoutId);
     }
-    const multimodalSupport = llmService.getMultimodalSupport();
-
-    // If the model had a pre-existing stored mmproj link but the native layer rejected it
-    // (incompatible file), clear it so the eye icon reappears for repair.
-    // Only applies when the link was already persisted before this load attempt — not
-    // when resolveMmProjPath just discovered the file via directory scan.
-    if (ctx.model.mmProjPath && !multimodalSupport?.vision) {
-      await modelManager.clearMmProjLink(ctx.modelId);
-    }
-
     // Capture settings that require model reload
     const { settings } = ctx.store;
     const reloadSettings = {
@@ -100,6 +92,7 @@ export async function doLoadTextModel(ctx: TextLoadContext): Promise<void> {
       gpuLayers: settings.gpuLayers,
       nThreads: settings.nThreads,
       nBatch: settings.nBatch,
+      nUbatch: settings.nUbatch ?? 0,
       contextLength: settings.contextLength,
       flashAttn: settings.flashAttn,
       cacheType: settings.cacheType,
@@ -144,10 +137,11 @@ export async function doLoadImageModel(ctx: ImageLoadContext): Promise<void> {
       ctx.onError(); // resets loadedImageModelId/threads to null
     }
 
+    const cancellation = new AbortController();
     let imgTimeoutId: ReturnType<typeof setTimeout> | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {
       imgTimeoutId = setTimeout(
-        () => reject(new Error('Image model loading timed out')),
+        () => { cancellation.abort(); reject(new Error('Image model loading timed out')); },
         ctx.timeoutMs,
       );
     });
@@ -160,6 +154,7 @@ export async function doLoadImageModel(ctx: ImageLoadContext): Promise<void> {
           {
             cpuOnly: ctx.cpuOnly,
             attentionVariant: ctx.model.attentionVariant,
+            signal: cancellation.signal,
           },
         ),
         timeoutPromise,

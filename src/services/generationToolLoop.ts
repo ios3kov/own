@@ -103,7 +103,7 @@ function parseGemmaToolCallBody(raw: string, toolCalls: ToolCall[]): void {
     args = { ...args, query: Array.isArray(args.queries) ? args.queries[0] : args.queries };
   }
   toolCalls.push({ id: `gemma-tc-${Date.now()}-${toolCalls.length}`, name, arguments: args });
-  logger.log(`[ToolLoop] Parsed Gemma native tool call: ${name}(${JSON.stringify(args).substring(0, 100)})`);
+  if (__DEV__) logger.log(`[ToolLoop] Parsed Gemma native tool call: ${name}(${JSON.stringify(args).substring(0, 100)})`);
 }
 
 /** Parse Gemma 4's native tool call format: <|tool_call>call:NAME{...}<tool_call|> and <tool_call:NAME{...}<tool_call|> */
@@ -190,7 +190,7 @@ async function executeToolCalls(ctx: ToolLoopContext, toolCalls: import('./tools
   const chatStore = useChatStore.getState();
   for (const tc of toolCalls) {
     if (ctx.isAborted()) break;
-    logger.log(`[ToolLoop][DEBUG] Executing tool: ${tc.name}, args: ${JSON.stringify(tc.arguments).substring(0, 200)}`);
+    if (__DEV__) logger.log(`[ToolLoop][DEBUG] Executing tool: ${tc.name}, args: ${JSON.stringify(tc.arguments).substring(0, 200)}`);
     if (ctx.projectId) tc.context = { projectId: ctx.projectId };
     ctx.callbacks?.onToolCallStart?.(tc.name, tc.arguments);
     const allowed = ctx.enabledToolIds.includes(tc.name)

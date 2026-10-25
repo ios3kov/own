@@ -1,4 +1,4 @@
-import { beginContextUsage,measureLocalContext,useContextUsage,contextUsageLabel } from '../../../src/services/contextUsage';
+import { beginContextUsage,measureLocalContext,useContextUsage,contextUsageLabel,reportAppleContextUsage } from '../../../src/services/contextUsage';
 import { useChatStore } from '../../../src/stores/chatStore';
 describe('context use at the actual local inference boundary',()=>{
   beforeEach(()=>{useContextUsage.setState({latest:null});useChatStore.setState({streamingForConversationId:'c'});});
@@ -59,4 +59,15 @@ describe('unknown context limits and cancelled requests',()=>{
     await measureLocalContext({getFormattedChat:async()=>({prompt:'prompt'}),tokenize:async()=>({tokens:null})} as any,{n_predict:6},20);
     expect(useContextUsage.getState().latest?.promptTokens).toBeNull();
   });
+});
+
+it('accepts valid Apple counts only for the current streaming conversation',()=>{
+  useChatStore.setState({streamingForConversationId:'c'});beginContextUsage('c');
+  reportAppleContextUsage({promptTokens:512,replyReserve:1024,capacity:4096});
+  expect(useContextUsage.getState().latest?.promptTokens).toBe(512);
+  reportAppleContextUsage({promptTokens:Number.NaN,replyReserve:0,capacity:4096});
+  expect(useContextUsage.getState().latest?.promptTokens).toBe(512);
+  useChatStore.setState({streamingForConversationId:'other'});
+  reportAppleContextUsage({promptTokens:999,replyReserve:1,capacity:4096});
+  expect(useContextUsage.getState().latest?.promptTokens).toBe(512);
 });

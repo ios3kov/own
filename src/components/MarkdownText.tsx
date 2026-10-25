@@ -35,9 +35,10 @@ function createLinkRule(onPress: (url: string) => void) {
 interface MarkdownTextProps {
   children: string;
   dimmed?: boolean;
+  streaming?: boolean;
 }
 
-export function MarkdownText({ children, dimmed }: MarkdownTextProps) {
+export const MarkdownText = React.memo(function MarkdownText({ children, dimmed, streaming }: MarkdownTextProps) {
   const { colors } = useTheme();
   const markdownStyles = useMemo(
     () => createMarkdownStyles(colors, dimmed),
@@ -49,15 +50,19 @@ export function MarkdownText({ children, dimmed }: MarkdownTextProps) {
     return false;
   }, []);
 
-  const processed = useMemo(() => preprocessMarkdown(children), [children]);
+  const processed = useMemo(() => streaming ? children : preprocessMarkdown(children), [children, streaming]);
   const rules = useMemo(() => ({ link: createLinkRule(handleLinkPress) }), [handleLinkPress]);
+
+  // Stream plain text; apply full formatting once the answer is stable.
+  const hasMarkup=/[`*_~[\]]|(?:^|\n)\s*(?:#{1,6}\s|[-+>]\s|\d+[.)]\s|\|)|<\/?[a-z]/i.test(children);
+  if (streaming || !hasMarkup) return <Text selectable style={markdownStyles.body}>{children}</Text>;
 
   return (
     <Markdown style={markdownStyles} onLinkPress={handleLinkPress} rules={rules}>
       {processed}
     </Markdown>
   );
-}
+});
 
 function createMarkdownStyles(colors: ThemeColors, dimmed?: boolean) {
   const textColor = dimmed ? colors.textSecondary : colors.text;

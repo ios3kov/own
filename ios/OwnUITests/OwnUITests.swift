@@ -1,6 +1,81 @@
 import XCTest
 
 final class OwnUITests: XCTestCase {
+  func testRecoveredReplyIsClearlyMarked() throws { try inspectRecoveredReply(largeText: false) }
+  func testRecoveredReplyWithLargeText() throws { try inspectRecoveredReply(largeText: true) }
+  private func inspectRecoveredReply(largeText: Bool) throws {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    if largeText { app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
+    app.launch()
+    let chats = app.descendants(matching: .any)["chats-tab"].firstMatch
+    XCTAssertTrue(chats.waitForExistence(timeout: 20))
+    chats.tap()
+    let fixture = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Own QA interrupted reply b7")).firstMatch
+    guard fixture.waitForExistence(timeout: 10) else { throw XCTSkip("Requires the owned simulator recovery fixture") }
+    fixture.tap()
+    let notice = app.descendants(matching: .any)["Recovered unfinished reply"].firstMatch
+    XCTAssertTrue(notice.waitForExistence(timeout: 10))
+    let header = app.otherElements["chat-header"].firstMatch
+    for _ in 0..<8 {
+      if notice.isHittable && notice.frame.minY >= header.frame.maxY { break }
+      if notice.frame.minY < header.frame.maxY { app.swipeDown(velocity: .slow) }
+      else { app.swipeUp(velocity: .slow) }
+    }
+    XCTAssertTrue(notice.isHittable)
+    XCTAssertGreaterThanOrEqual(notice.frame.minY, header.frame.maxY)
+    XCTAssertTrue(app.descendants(matching: .any)["This answer was saved before the app closed."].firstMatch.exists)
+    let shot = XCTAttachment(screenshot: app.screenshot())
+    shot.name = largeText ? "Recovered reply large text" : "Recovered reply"
+    shot.lifetime = .keepAlways
+    add(shot)
+  }
+  func testModelAdviceAndInstalledVoiceListWithoutChangingData() throws {
+    try inspectModelAdviceAndVoices(largeText: false)
+  }
+  func testModelAdviceAndInstalledVoiceListWithLargeText() throws {
+    try inspectModelAdviceAndVoices(largeText: true)
+  }
+  private func inspectModelAdviceAndVoices(largeText: Bool) throws {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    if largeText { app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
+    app.launch()
+    let models = app.descendants(matching: .any)["models-tab"].firstMatch
+    guard models.waitForExistence(timeout: 20) else {
+      throw XCTSkip("Requires an unlocked, onboarded QA simulator; no app data is reset")
+    }
+    models.tap()
+    XCTAssertLessThan(models.frame.height, app.frame.height * 0.2)
+    XCTAssertTrue(app.descendants(matching: .any)["import-local-model"].firstMatch.isHittable)
+    let advice = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Fit is an estimate")).firstMatch
+    XCTAssertTrue(advice.waitForExistence(timeout: 15))
+    let modelShot = XCTAttachment(screenshot: app.screenshot())
+    modelShot.name = largeText ? "Own device model advice large text" : "Own device model advice"
+    modelShot.lifetime = .keepAlways
+    add(modelShot)
+    app.descendants(matching: .any)["settings-tab"].firstMatch.tap()
+    let voice = app.descendants(matching: .any)["settings-VoiceSettings"].firstMatch
+    if !voice.isHittable { app.swipeUp() }
+    XCTAssertTrue(voice.waitForExistence(timeout: 10))
+    voice.tap()
+    let picker = app.buttons["Choose reply voice"]
+    XCTAssertTrue(picker.waitForExistence(timeout: 10))
+    picker.tap()
+    XCTAssertTrue(app.textFields["Search installed voices"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Automatic by language")).firstMatch.exists)
+    XCTAssertTrue(app.textFields["Search installed voices"].isHittable)
+    let done = app.buttons["Done"].firstMatch
+    XCTAssertTrue(done.isHittable)
+    let installedVoice = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", ", en-")).firstMatch
+    if !installedVoice.isHittable { app.swipeUp() }
+    XCTAssertTrue(installedVoice.isHittable)
+    let voicesShot = XCTAttachment(screenshot: app.screenshot())
+    voicesShot.name = largeText ? "Own installed voice picker large text" : "Own installed voice picker"
+    voicesShot.lifetime = .keepAlways
+    add(voicesShot)
+  }
+
   func testAppleDefaultSurvivesOnboardingAndRelaunch() {
     continueAfterFailure = false
     let app = XCUIApplication()
@@ -401,4 +476,39 @@ final class OwnUITests: XCTestCase {
     }
   }
 
+}
+
+final class OwnSearchUITests: XCTestCase {
+  func testRefreshDocumentSearchControl() throws { try inspectRefresh(largeText: false) }
+  func testRefreshDocumentSearchControlWithLargeText() throws { try inspectRefresh(largeText: true) }
+
+  private func inspectRefresh(largeText: Bool) throws {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    if largeText { app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
+    app.launch()
+    let projects = app.descendants(matching: .any)["projects-tab"].firstMatch
+    guard projects.waitForExistence(timeout: 15) else { throw XCTSkip("Requires an unlocked, onboarded QA simulator") }
+    projects.tap()
+    let project = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "General Assistant")).firstMatch
+    guard project.waitForExistence(timeout: 10) else { throw XCTSkip("Requires the General Assistant test project") }
+    project.tap()
+    if app.staticTexts["No documents added"].waitForExistence(timeout: 2) {
+      throw XCTSkip("Requires an existing document or the owned search fixture; no data is created by this test")
+    }
+    let knowledge = app.buttons["knowledge-base-open"]
+    for _ in 0..<6 where !knowledge.isHittable { app.swipeUp() }
+    XCTAssertTrue(knowledge.isHittable)
+    knowledge.tap()
+    let refresh = app.buttons["Refresh document search"]
+    XCTAssertTrue(refresh.waitForExistence(timeout: 10), "Requires owned search fixture in dedicated QA simulator")
+    XCTAssertTrue(refresh.isHittable)
+    // XCTest returns fractional screen coordinates; allow subpixel rounding.
+    XCTAssertGreaterThanOrEqual(refresh.frame.height, 44 - 0.01)
+    XCTAssertGreaterThan(refresh.frame.minY, app.frame.minY + 40)
+    let shot = XCTAttachment(screenshot: app.screenshot())
+    shot.name = largeText ? "Document search refresh large text" : "Document search refresh"
+    shot.lifetime = .keepAlways
+    add(shot)
+  }
 }

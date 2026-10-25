@@ -1,3 +1,4 @@
+import {ReplyTextLayout} from './ReplyTextLayout';
 import React from 'react';
 import { View, Text } from 'react-native';
 import { ThinkingIndicator } from '../../ThinkingIndicator';
@@ -7,6 +8,7 @@ import { ThinkingBlock } from './ThinkingBlock';
 import type { ParsedContent } from '../types';
 
 interface MessageContentProps {
+  replyTraceId?:string;
   isUser: boolean;
   isThinking?: boolean;
   content: string;
@@ -19,6 +21,7 @@ interface MessageContentProps {
 
 export function MessageContent({
   isUser,
+  replyTraceId,
   isThinking,
   content,
   isStreaming,
@@ -41,6 +44,7 @@ export function MessageContent({
     return (
       <View>
         <ThinkingBlock
+          replyTraceId={replyTraceId}
           parsedContent={parsedContent}
           showThinking={showThinking}
           onToggle={onToggleThinking}
@@ -68,6 +72,7 @@ export function MessageContent({
     <View>
       {!!parsedContent.thinking && (
         <ThinkingBlock
+          replyTraceId={replyTraceId}
           parsedContent={parsedContent}
           showThinking={showThinking}
           onToggle={onToggleThinking}
@@ -89,10 +94,10 @@ export function MessageContent({
             );
           }
           return (
-            <View testID="message-text">
-              <MarkdownText>{parsedContent.response}</MarkdownText>
+            <ReplyTextLayout traceId={parsedContent.response.trim() ? replyTraceId : undefined}>
+              <MarkdownText streaming={isStreaming}>{parsedContent.response}</MarkdownText>
               {isStreaming && <BlinkingCursor />}
-            </View>
+            </ReplyTextLayout>
           );
         }
         if (isStreaming && !parsedContent.isThinkingComplete) {

@@ -1,4 +1,5 @@
 import { ModelLoadProgress } from '../../components/ModelLoadProgress';
+import { useModelLoadStore } from '../../stores/modelLoadStore';
 import { FoundationModelCard } from '../../components/FoundationModelCard';
 import React from 'react';
 import {
@@ -39,7 +40,7 @@ export const NoModelScreen: React.FC<{
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>New Chat</Text>
+          <Text maxFontSizeMultiplier={1.5} style={styles.headerTitle}>New Chat</Text>
         </View>
         <View style={styles.headerActions} />
       </View>
@@ -87,7 +88,7 @@ export const LoadingScreen: React.FC<{
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
         <View style={styles.headerLeft}>
-          <Text style={styles.headerTitle}>Loading Model</Text>
+          <Text maxFontSizeMultiplier={1.5} style={styles.headerTitle}>Loading Model</Text>
         </View>
         <View style={styles.headerActions} />
       </View>
@@ -119,13 +120,13 @@ export const ChatHeader: React.FC<{
   setShowProjectSelector: (v: boolean) => void;
   isRemote?: boolean;
 }> = ({ styles, colors, activeConversation, activeModel, activeModelName, activeImageModel, activeProject, navigation, setShowModelSelector, setShowSettingsPanel, setShowProjectSelector, isRemote }) => (
-  <View style={styles.header}>
+  <View testID="chat-header" style={styles.header}>
     <View style={styles.headerRow}>
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
         <Icon name="arrow-left" size={20} color={colors.text} />
       </TouchableOpacity>
       <View style={styles.headerLeft}>
-        <Text style={styles.headerTitle} numberOfLines={1}>
+        <Text maxFontSizeMultiplier={1.5} style={styles.headerTitle} numberOfLines={1}>
           {activeConversation?.title || 'New Chat'}
         </Text>
         <View style={styles.headerSubtitleRow}>
@@ -133,7 +134,7 @@ export const ChatHeader: React.FC<{
             {isRemote && (
               <Icon name="cloud" size={12} color={colors.primary} style={styles.remoteIcon} />
             )}
-            <Text style={styles.headerSubtitle} numberOfLines={1} testID="model-loaded-indicator">
+            <Text maxFontSizeMultiplier={1.5} style={styles.headerSubtitle} numberOfLines={1} testID="model-loaded-indicator">
               {activeModelName || activeModel?.name || 'Unknown'}
             </Text>
             {activeImageModel && (
@@ -141,12 +142,12 @@ export const ChatHeader: React.FC<{
                 <Icon name="image" size={10} color={colors.primary} />
               </View>
             )}
-            <Text style={styles.modelSelectorArrow}>▼</Text>
+            <Text maxFontSizeMultiplier={1.5} style={styles.modelSelectorArrow}>▼</Text>
           </TouchableOpacity>
-          <Text style={styles.headerSubtitleDivider}>·</Text>
+          <Text maxFontSizeMultiplier={1.5} style={styles.headerSubtitleDivider}>·</Text>
           <TouchableOpacity style={styles.headerProjectRow} onPress={() => setShowProjectSelector(true)}>
             <Icon name="folder" size={11} color={activeProject ? colors.primary : colors.textMuted} />
-            <Text style={[styles.headerSubtitle, { color: activeProject ? colors.primary : colors.textMuted }]} numberOfLines={1}>
+            <Text maxFontSizeMultiplier={1.5} style={[styles.headerSubtitle, { color: activeProject ? colors.primary : colors.textMuted }]} numberOfLines={1}>
               {activeProject ? activeProject.name : 'Default'}
             </Text>
           </TouchableOpacity>
@@ -215,7 +216,9 @@ export const ImageProgressIndicator: React.FC<{
   imageGenerationStatus: string | null | undefined;
   imageGenerationProgress: { step: number; totalSteps: number } | null | undefined;
   onStop: () => void;
-}> = ({ styles, colors, imagePreviewPath, imageGenerationStatus, imageGenerationProgress, onStop }) => (
+}> = ({ styles, colors, imagePreviewPath, imageGenerationStatus, imageGenerationProgress, onStop }) => {
+  const loadingImage = useModelLoadStore(state => state.active && state.type === 'image');
+  return (
   <View style={styles.imageProgressContainer}>
     <View style={styles.imageProgressCard}>
       <View style={styles.imageProgressRow}>
@@ -235,7 +238,7 @@ export const ImageProgressIndicator: React.FC<{
                 <Text style={styles.imageProgressStatus}>{imageGenerationStatus}</Text>
               )}
             </View>
-            {imageGenerationProgress && (
+            {imageGenerationProgress && !loadingImage && (
               <Text style={styles.imageProgressSteps}>
                 {imageGenerationProgress.step}/{imageGenerationProgress.totalSteps}
               </Text>
@@ -244,7 +247,8 @@ export const ImageProgressIndicator: React.FC<{
               <Icon name="x" size={16} color={colors.error} />
             </TouchableOpacity>
           </View>
-          {imageGenerationProgress && (
+          {loadingImage && <ModelLoadProgress />}
+          {imageGenerationProgress && !loadingImage && (
             <View style={styles.imageProgressBarContainer}>
               <View style={styles.imageProgressBar}>
                 <View
@@ -260,7 +264,8 @@ export const ImageProgressIndicator: React.FC<{
       </View>
     </View>
   </View>
-);
+  );
+};
 
 export const ImageViewerModal: React.FC<{
   styles: StylesType;

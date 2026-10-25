@@ -242,6 +242,11 @@ describe('shouldDisableMmap', () => {
 });
 
 describe('buildModelParams', () => {
+  it('sets independent batch and micro-batch limits', () => {
+    expect(buildModelParams('/m', {nBatch:512}).baseParams).toEqual(expect.objectContaining({n_batch:512,n_ubatch:128}));
+    expect(buildModelParams('/m', {nBatch:64,nUbatch:256}).baseParams).toEqual(expect.objectContaining({n_batch:64,n_ubatch:64}));
+    expect(buildModelParams('/m', {nBatch:512,nUbatch:32}).baseParams).toEqual(expect.objectContaining({n_batch:512,n_ubatch:32}));
+  });
   it('uses provided nThreads and nBatch over defaults', () => {
     const params = buildModelParams('/model.gguf', { nThreads: 8, nBatch: 256 });
     expect(params.nThreads).toBe(8);
@@ -410,8 +415,41 @@ describe('bounded CPU retry context', () => {
     init.mockRejectedValueOnce(new Error('GPU unavailable'))
       .mockRejectedValueOnce(new Error('CPU retry'))
       .mockResolvedValueOnce({gpu:false});
-    const result = await initContextWithFallback({model:'/small.gguf'},512,0);
-    expect(result.actualLength).toBe(512);
+    await expect(initContextWithFallback({model:'/small.gguf'},512,0)).rejects.toThrow('1 distinct configurations');
+    expect(init).toHaveBeenCalledTimes(1);
     expect(init.mock.calls.every(([params]:any[]) => params.n_ctx <= 512)).toBe(true);
   });
+});
+
+
+describe('safe loading policy regressions', () => {
+  const init = require('llama.rn').initLlama as jest.Mock;
+  beforeEach(() => init.mockReset());
+  it.each(['unknown model architecture: new-arch', 'invalid GGUF header'])('does not retry permanent failure: %s', async message => {
+    init.mockRejectedValue(new Error(message));
+    await expect(initContextWithFallback({model:'/model.gguf'},4096,40)).rejects.toThrow(message);
+    expect(init).toHaveBeenCalledTimes(1);
+  });
+  it('tries fewer GPU layers before CPU on a memory failure', async () => {
+    init.mockRejectedValueOnce(new Error('out of memory')).mockResolvedValueOnce({gpu:true});
+    const result = await initContextWithFallback({model:'/model.gguf'},4096,40);
+    expect(init.mock.calls.map(([params]:any[]) => params.n_gpu_layers)).toEqual([40,20]);
+    expect(result.actualGpuLayers).toBe(20);
+    expect(result.fallbackReason).toContain('memory');
+  });
+  it('releases a native result that arrives after cancellation and never retries it', async () => {
+    const abort = new AbortController();
+    const release = jest.fn().mockResolvedValue(undefined);
+    init.mockImplementationOnce(async () => {abort.abort(); return {release};});
+    await expect(initContextWithFallback({model:'/model.gguf'},4096,{nGpuLayers:40,signal:abort.signal})).rejects.toThrow('cancelled');
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(init).toHaveBeenCalledTimes(1);
+  });
+});
+
+it('does not share mutable stop arrays between requests',()=>{
+  const first=buildCompletionParams({});const second=buildCompletionParams({});
+  first.stop.push('model-specific-stop');
+  expect(second.stop).not.toContain('model-specific-stop');
+  expect(buildCompletionParams({}).stop).not.toContain('model-specific-stop');
 });

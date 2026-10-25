@@ -333,11 +333,18 @@ describe('ModelsScreen', () => {
       });
     });
 
+    it('updates device advice when the detected hardware profile arrives', async () => {
+      const { getByText } = renderModelsScreen();
+      await act(async () => { useAppStore.setState({deviceInfo:createDeviceInfo({deviceModel:'iPhone 15 Pro Max',totalMemory:6*1024**3})}); });
+      await waitFor(() => expect(getByText(/iPhone 15 Pro Max · 6 GB memory/)).toBeTruthy());
+      expect(getByText(/Fit is an estimate; speed varies/)).toBeTruthy();
+    });
+
     it('shows RAM info banner', async () => {
       const { getByText } = renderModelsScreen();
 
       await waitFor(() => {
-        // The banner shows "XGB RAM — models up to YB recommended (Q4_K_M)"
+        // The banner uses the actual detected device profile.
         expect(getByText(/\d+ GB memory/)).toBeTruthy(); // NOSONAR — regex matches short rendered UI strings, not user input; ReDoS not applicable
       });
     });

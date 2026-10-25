@@ -537,6 +537,13 @@ describe('ProjectDetailScreen', () => {
   // Knowledge Base
   // ============================================================================
   describe('knowledge base', () => {
+    it('opens document management through its own accessible button', async () => {
+      const screen=render(<ProjectDetailScreen />);
+      fireEvent.press(screen.getByRole('button',{name:'Manage knowledge base'}));
+      expect(mockNavigate).toHaveBeenCalledWith('KnowledgeBase',{projectId:'proj1'});
+      await act(async()=>{});
+    });
+
     it('shows Knowledge Base section title', () => {
       const { getByText } = render(<ProjectDetailScreen />);
       expect(getByText('Knowledge Base')).toBeTruthy();

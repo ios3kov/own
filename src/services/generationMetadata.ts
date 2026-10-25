@@ -36,11 +36,15 @@ function buildBaseGenerationMeta(svc: any): GenerationMeta {
   const perf = llmService.getPerformanceStats();
   return {
     gpu, gpuBackend, gpuLayers,
+    ...(llmService.getLaunchConfiguration?.() ? {launchConfiguration:llmService.getLaunchConfiguration()} : {}),
     modelName,
     tokensPerSecond: perf.lastTokensPerSecond,
     decodeTokensPerSecond: perf.lastDecodeTokensPerSecond,
     timeToFirstToken: perf.lastTimeToFirstToken,
     tokenCount: perf.lastTokenCount,
+    tokenCountSource:perf.lastTokenCountSource,
+    promptTokenCount:perf.lastPromptTokenCount,
+    cachedTokenCount:perf.lastCachedTokenCount,
     cacheType: settings.cacheType,
   };
 }

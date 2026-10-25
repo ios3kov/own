@@ -1,3 +1,5 @@
+import {registerReplySend,replyTimingNow} from '../../services/replyTiming';
+import {useContextUsage} from '../../services/contextUsage';
 import { sourcesFromChunks } from '../../services/documentSources';
 import { foundationModelService,isAppleModelSelected } from '../../services/foundationModels';
 import { Dispatch,MutableRefObject,SetStateAction } from 'react';
@@ -20,7 +22,6 @@ ragService,
 retrievalService,
 } from '../../services';
 
-import { embeddingService } from '../../services/rag/embedding';
 import { useChatStore,useProjectStore,useRemoteServerStore } from '../../stores';
 import { Message,MediaAttachment,Project,DownloadedModel,RemoteModel,ModelLoadingStrategy,CacheType } from '../../types';
 import logger from '../../utils/logger';
@@ -51,6 +52,7 @@ export type GenerationDeps = {
     imageGuidanceScale?: number;
     enabledTools?: string[];
     cacheType?: CacheType;
+    contextLength?: number;
     thinkingEnabled?: boolean;
   };
   downloadedModels: DownloadedModel[];
@@ -58,7 +60,7 @@ export type GenerationDeps = {
   setIsClassifying: SetState<boolean>;
   setAppImageGenerationStatus: (v: string | null) => void;
   setAppIsGeneratingImage: (v: boolean) => void;
-  addMessage: (convId: string, msg: any) => void;
+  addMessage: (convId: string, msg: any) => Message|void;
   clearStreamingMessage: () => void;
   deleteConversation: (convId: string) => void;
   setActiveConversation: (convId: string | null) => void;
@@ -102,23 +104,21 @@ export async function shouldRouteToImageGenerationFn(
   if (deps.settings.imageGenerationMode === 'manual') return forceImageMode === true;
   if (forceImageMode) return true;
   if (!deps.imageModelLoaded) return false;
-  // In image-only mode (no text model loaded), always route to image generation
-  if (deps.hasTextModel === false) return true;
   try {
     const useLLM = deps.settings.autoDetectMethod === 'llm';
     const classifierModel = deps.settings.classifierModelId
       ? deps.downloadedModels.find(m => m.id === deps.settings.classifierModelId)
       : null;
-    if (useLLM) deps.setIsClassifying(true);
+    deps.setIsClassifying(true);
     const intent = await intentClassifier.classifyIntent(text, {
       useLLM,
       classifierModel,
       currentModelPath: llmService.getLoadedModelPath(),
-      onStatusChange: useLLM ? deps.setAppImageGenerationStatus : undefined,
+      onStatusChange: deps.setAppImageGenerationStatus,
       modelLoadingStrategy: deps.settings.modelLoadingStrategy,
     });
     deps.setIsClassifying(false);
-    if (intent !== 'image' && useLLM) {
+    if (intent !== 'image') {
       deps.setAppImageGenerationStatus(null);
       deps.setAppIsGeneratingImage(false);
     }
@@ -146,11 +146,12 @@ export async function handleImageGenerationFn(
   const result = await imageGenerationService.generateImage({
     prompt, conversationId,
     steps: deps.settings.imageSteps || 8,
-    guidanceScale: deps.settings.imageGuidanceScale || 2,
+    guidanceScale: deps.settings.imageGuidanceScale ?? 2,
     previewInterval: 2,
   });
-  if (!result && deps.imageGenState.error && !deps.imageGenState.error.includes('cancelled')) {
-    deps.setAlertState(showAlert('Error', `Image generation failed: ${deps.imageGenState.error}`));
+  const error = imageGenerationService.getState().error;
+  if (!result && error && !error.toLowerCase().includes('cancelled')) {
+    deps.setAlertState(showAlert('Image could not be generated', error));
   }
 }
 export type StartGenerationCall = { setDebugInfo: SetState<any>; targetConversationId: string; messageText: string };
@@ -163,15 +164,13 @@ async function ensureModelReady(deps: GenerationDeps): Promise<boolean> {
   await deps.ensureModelLoaded();
   return llmService.isModelLoaded() && llmService.getLoadedModelPath() === deps.activeModel!.filePath;
 }
-async function prepareContext(setDebugInfo: SetState<any>, systemPrompt: string, messages: Message[]): Promise<void> {
-  try {
-    const contextDebug = await llmService.getContextDebugInfo(messages);
-    setDebugInfo({ systemPrompt, ...contextDebug });
-    logger.log(`[ChatGen] Context prepared: ${contextDebug.contextUsagePercent}% used, ${contextDebug.truncatedCount} truncated`);
-    if (contextDebug.truncatedCount > 0 || contextDebug.contextUsagePercent > 70) {
-      await llmService.clearKVCache(false).catch(() => { });
-    }
-  } catch (e) { logger.log('Debug info error:', e); }
+function prepareContext(setDebugInfo:SetState<any>, systemPrompt:string, request:{messages:Message[];conversationId:string}):void {
+  const {messages,conversationId}=request;
+  const measured=useContextUsage.getState().latest;
+  if (!measured || measured.conversationId!==conversationId || measured.promptTokens===null || !measured.capacity || !measured.formattedPrompt) {setDebugInfo(null);return;}
+  setDebugInfo({systemPrompt,originalMessageCount:messages.length,managedMessageCount:measured.messageCount ?? messages.length,
+    truncatedCount:0,formattedPrompt:measured.formattedPrompt,estimatedTokens:measured.promptTokens,
+    maxContextLength:measured.capacity,contextUsagePercent:measured.promptTokens/measured.capacity*100});
 }
 /** Run generation; if context is full, compact old messages and retry once. */
 async function generateWithCompactionRetry(
@@ -199,25 +198,24 @@ async function generateWithCompactionRetry(
     await gen(compacted);
   }
 }
-async function injectRagContext(projectId: string | undefined, query: string, options: {prompt:string; canSearchTool:boolean}): Promise<{prompt:string; sources:import('../../types').DocumentSource[]}> {
+async function injectRagContext(projectId: string | undefined, query: string, options: {prompt:string; canSearchTool:boolean; contextLength?:number}): Promise<{prompt:string; sources:import('../../types').DocumentSource[]; warning?:string}> {
   const {prompt,canSearchTool}=options;
   if (!projectId) return {prompt,sources:[]};
   try {
     const docs = await ragService.getDocumentsByProject(projectId);
     const enabledDocs = docs.filter((d: import('../../services/rag').RagDocument) => d.enabled);
     if (enabledDocs.length === 0) return {prompt,sources:[]};
-    // Warm up embedding model in background (non-blocking)
-    if (!embeddingService.isLoaded()) {
-      embeddingService.load().catch(err => logger.error('[RAG] Embedding warmup failed', err));
-    }
-    const docList = enabledDocs.map((d: import('../../services/rag').RagDocument) => `- ${d.name}`).join('\n');
+    const docList = enabledDocs.slice(0,20).map((d: import('../../services/rag').RagDocument) => `- ${JSON.stringify(d.name.slice(0,160))}`).join('\n')
+      + (enabledDocs.length > 20 ? `\nAnd ${enabledDocs.length - 20} more documents.` : '');
     let kbPrompt = `\n\nYou have a knowledge base with these documents:\n${docList}`;
     if (canSearchTool) kbPrompt += '\nUse the search_knowledge_base tool to look up specific information from these documents.';
-    const r = await ragService.searchProject(projectId, query);
-    if (r.chunks.length > 0) {
+    const loaded = await llmService.getModelInfo?.();
+    const contextLength = Math.min(options.contextLength ?? 2048, loaded?.contextLength ?? 2048);
+    const r = await ragService.searchProject(projectId, query, contextLength);
+    if (r.chunks.length > 0 || r.unavailable) {
       kbPrompt += `\n\n${retrievalService.formatForPrompt(r)}`;
     }
-    return {prompt:prompt + kbPrompt, sources:sourcesFromChunks(projectId,r.chunks)};
+    return {prompt:prompt + kbPrompt, sources:sourcesFromChunks(projectId,r.chunks), warning:r.unavailable};
   } catch (err) {
     logger.error('[RAG] Context injection failed', err);
   }
@@ -247,11 +245,9 @@ function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, _message
 export async function startGenerationFn(deps: GenerationDeps, call: StartGenerationCall): Promise<void> {
   const { setDebugInfo, targetConversationId, messageText } = call;
   if (!deps.hasActiveModel) return;
-  // In image-only mode (no text model), route directly to image generation
-  if (deps.imageModelLoaded && deps.hasTextModel === false) {
-    deps.generatingForConversationRef.current = targetConversationId;
-    await handleImageGenerationFn(deps, { prompt: messageText, conversationId: targetConversationId });
-    deps.generatingForConversationRef.current = null;
+  // Missing text weights must never turn an ordinary message into an image request.
+  if (deps.hasTextModel === false && !isAppleModelSelected()) {
+    deps.setAlertState(showAlert('Text model needed', 'Select Apple Intelligence or a downloaded text model to send this message.'));
     return;
   }
   deps.generatingForConversationRef.current = targetConversationId;
@@ -266,7 +262,11 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
   const conversation = useChatStore.getState().conversations.find(c => c.id === targetConversationId);
   const { enabledTools, rawPrompt } = resolveToolsAndPrompt(deps, conversation, messageText);
 
-  const ragContext = await injectRagContext(deps.settings.enabledTools?.includes('search_knowledge_base') ? conversation?.projectId : undefined, messageText, {prompt:rawPrompt,canSearchTool:enabledTools.includes('search_knowledge_base')});
+  const ragContext = await injectRagContext(deps.settings.enabledTools?.includes('search_knowledge_base') ? conversation?.projectId : undefined, messageText, {prompt:rawPrompt,canSearchTool:enabledTools.includes('search_knowledge_base'),contextLength:deps.settings.contextLength});
+  if (ragContext.warning) deps.addMessage(targetConversationId, {
+    id: `document-search-${Date.now()}`, role: 'system', content: ragContext.warning,
+    timestamp: Date.now(), isSystemInfo: true,
+  });
   const basePrompt = ragContext.prompt;
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
   const activeTools = enabledTools;
@@ -280,9 +280,9 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
   logger.log(`[ChatGen][PROMPT] systemPrompt (${systemPrompt.length}ch): "${systemPrompt.substring(0, 800)}"`);
   const messagesForContext = buildMessagesForContext(targetConversationId, messageText, systemPrompt);
   messagesForContext[0].documentSources = ragContext.sources;
-  if (!isAppleModelSelected()) await prepareContext(setDebugInfo, systemPrompt, messagesForContext);
   try {
     await generateWithCompactionRetry({ id: targetConversationId, prompt: systemPrompt, messages: messagesForContext }, activeTools, conversation?.projectId);
+    if (!isAppleModelSelected() && deps.settings.showGenerationDetails) prepareContext(setDebugInfo,systemPrompt,{messages:messagesForContext,conversationId:targetConversationId});
   } catch (error: any) {
     const msg = error?.message || error?.toString?.() || 'Failed to generate response';
     logger.error('[ChatGen] Generation failed:', msg, error);
@@ -295,6 +295,7 @@ export async function startGenerationFn(deps: GenerationDeps, call: StartGenerat
 let _msgIdSeq = 0; const nextMsgId = () => `${Date.now()}-${(++_msgIdSeq).toString(36)}`;
 export type SendCall = { text: string; attachments?: MediaAttachment[]; imageMode?: 'auto' | 'force' | 'disabled'; startGeneration: (convId: string, text: string) => Promise<void>; setDebugInfo: SetState<any> };
 export async function handleSendFn(deps: GenerationDeps, call: SendCall): Promise<void> {
+  const requestedAt=replyTimingNow();
   const { text, attachments, imageMode, startGeneration } = call;
   if (!deps.hasActiveModel) {
     deps.setAlertState(showAlert('No Model Selected', 'Please select a model first.'));
@@ -314,10 +315,11 @@ export async function handleSendFn(deps: GenerationDeps, call: SendCall): Promis
   }
   if (shouldGenerateImage && !deps.activeImageModel) messageText = `[User wanted an image but no image model is loaded] ${messageText}`;
   if (generationService.getState().isGenerating) {
-    generationService.enqueueMessage({ id: nextMsgId(), conversationId: targetConversationId, text, attachments, messageText });
+    generationService.enqueueMessage({ id: nextMsgId(), conversationId: targetConversationId, text, attachments, messageText,requestedAt,queuedAt:replyTimingNow() });
     return;
   }
-  deps.addMessage(targetConversationId, { role: 'user', content: text, attachments });
+  const sent=deps.addMessage(targetConversationId, { role: 'user', content: text, attachments });
+  if(sent?.id) registerReplySend(sent.id,requestedAt);
   await startGeneration(targetConversationId, messageText);
 }
 export async function handleStopFn(deps: Pick<GenerationDeps, 'isGeneratingImage' | 'generatingForConversationRef'>): Promise<void> {
@@ -366,7 +368,11 @@ export async function regenerateResponseFn(deps: GenerationDeps, call: Regenerat
 
   const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
   const activeTools = enabledTools;
-  const ragContext = await injectRagContext(deps.settings.enabledTools?.includes('search_knowledge_base') ? conversation?.projectId : undefined, messageText, {prompt:rawPrompt,canSearchTool:enabledTools.includes('search_knowledge_base')});
+  const ragContext = await injectRagContext(deps.settings.enabledTools?.includes('search_knowledge_base') ? conversation?.projectId : undefined, messageText, {prompt:rawPrompt,canSearchTool:enabledTools.includes('search_knowledge_base'),contextLength:deps.settings.contextLength});
+  if (ragContext.warning) deps.addMessage(targetConversationId, {
+    id: `document-search-${Date.now()}`, role: 'system', content: ragContext.warning,
+    timestamp: Date.now(), isSystemInfo: true,
+  });
   const basePrompt = ragContext.prompt;
   const useTextHint = !isAppleModelSelected() && !isRemote && activeTools.length > 0 && !llmService.supportsToolCalling();
   const systemPrompt = applyGemma4ThinkToken(

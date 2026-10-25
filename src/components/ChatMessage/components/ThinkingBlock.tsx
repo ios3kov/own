@@ -1,9 +1,11 @@
+import {ReplyTextLayout} from './ReplyTextLayout';
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { MarkdownText } from '../../MarkdownText';
 import type { ParsedContent } from '../types';
 
 interface ThinkingBlockProps {
+  replyTraceId?:string;
   parsedContent: ParsedContent;
   showThinking: boolean;
   onToggle: () => void;
@@ -12,6 +14,7 @@ interface ThinkingBlockProps {
 
 export function ThinkingBlock({
   parsedContent,
+  replyTraceId,
   showThinking,
   onToggle,
   styles,
@@ -48,7 +51,9 @@ export function ThinkingBlock({
       </TouchableOpacity>
       {showThinking && parsedContent.thinking != null && (
         <View testID="thinking-block-content" style={styles.thinkingBlockContent}>
-          <MarkdownText dimmed>{parsedContent.thinking}</MarkdownText>
+          <ReplyTextLayout traceId={parsedContent.thinking.trim() ? replyTraceId : undefined} testID="reasoning-layout">
+            <MarkdownText dimmed streaming={!parsedContent.isThinkingComplete}>{parsedContent.thinking}</MarkdownText>
+          </ReplyTextLayout>
         </View>
       )}
     </View>

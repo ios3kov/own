@@ -328,9 +328,9 @@ describe('ModelSettingsScreen', () => {
       expect(getByText('7.5')).toBeTruthy();
     });
 
-    it('shows Image Threads slider label', () => {
+    it('hides unsupported Image Threads control', () => {
       const { getByText } = renderWithSections('image');
-      expect(getByText('Image Threads')).toBeTruthy();
+      expect(() => getByText('Image Threads')).toThrow();
     });
 
     it('shows Image Size slider label', () => {
@@ -748,7 +748,7 @@ describe('ModelSettingsScreen', () => {
       // Set settings to have minimal/undefined values to test || fallback branches
       useAppStore.setState({
         settings: {
-      allowAppleSpeech: false, readRepliesAloud: false, historyTurns:24,
+      allowAppleSpeech: false, readRepliesAloud: false, replyVoiceId: '', historyTurns:24,
           systemPrompt: undefined as any,
           temperature: undefined as any,
           maxTokens: undefined as any,

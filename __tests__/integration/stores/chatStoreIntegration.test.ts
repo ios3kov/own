@@ -5,6 +5,7 @@
  * and how it integrates with the generation flow.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useChatStore } from '../../../src/stores/chatStore';
 import {
   resetStores,
@@ -16,6 +17,20 @@ import { createGenerationMeta } from '../../utils/factories';
 describe('ChatStore Streaming Integration', () => {
   beforeEach(() => {
     resetStores();
+  });
+
+  it('does not write saved history for twenty transient response chunks', async () => {
+    const id = setupWithConversation();
+    const store = useChatStore.getState();
+    store.startStreaming(id);
+    await Promise.resolve();
+    const writes = (AsyncStorage.setItem as jest.Mock).mock.calls.length;
+    for (let i = 0; i < 20; i++) store.appendToStreamingMessage('word ');
+    await Promise.resolve();
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(writes);
+    store.finalizeStreamingMessage(id);
+    await Promise.resolve();
+    expect((AsyncStorage.setItem as jest.Mock).mock.calls.length).toBeGreaterThan(writes);
   });
 
   describe('Streaming Message Lifecycle', () => {

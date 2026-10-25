@@ -48,7 +48,7 @@ function formatToolCallAsText(tc: { name: string; arguments: string }): string {
   return `<tool_call>{"name":${escapedName},"arguments":${tc.arguments}}</tool_call>`;
 }
 
-export function buildOAIMessages(messages: Message[]): RNLlamaOAICompatibleMessage[] {
+export function buildOAIMessages(messages: Message[], includeImages = true): RNLlamaOAICompatibleMessage[] {
   const filtered = messages.filter(m => !m.isSystemInfo);
   return filtered.map((message) => {
     // Flatten tool result messages into user messages —
@@ -76,6 +76,7 @@ export function buildOAIMessages(messages: Message[]): RNLlamaOAICompatibleMessa
       return { role: message.role, content: message.content };
     }
 
+    if (!includeImages) return {role:message.role,content:`${message.content}\n[Earlier image attachment is unavailable to this text model.]`};
     const contentParts: RNLlamaMessagePart[] = [];
     for (const attachment of imageAttachments) {
       let imagePath = attachment.uri;

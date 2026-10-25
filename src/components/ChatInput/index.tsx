@@ -194,6 +194,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <TextInput
             ref={inputRef}
             testID="chat-input"
+            maxFontSizeMultiplier={1.5}
             style={styles.pillInput}
             value={message}
             onChangeText={setMessage}

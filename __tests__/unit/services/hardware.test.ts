@@ -14,10 +14,28 @@ const mockedDeviceInfo = DeviceInfo as jest.Mocked<typeof DeviceInfo>;
 describe('HardwareService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    delete NativeModules.OwnHardwareInfo;
     // Reset cached device info between tests
     (hardwareService as any).cachedDeviceInfo = null;
     (hardwareService as any).cachedSoCInfo = null;
     (hardwareService as any).cachedImageRecommendation = null;
+  });
+
+  describe('local runtime thread policy', () => {
+    it('uses actual active cores and reduces work for heat or Low Power Mode', async () => {
+      NativeModules.OwnHardwareInfo = {status:jest.fn().mockResolvedValue({activeProcessors:8,thermalState:'nominal',lowPowerMode:false})};
+      expect(await hardwareService.getCpuCoreCount()).toBe(8);
+      expect(await hardwareService.getRecommendedThreadCount()).toBe(6);
+      NativeModules.OwnHardwareInfo.status.mockResolvedValue({activeProcessors:8,thermalState:'serious',lowPowerMode:false});
+      expect(await hardwareService.getRecommendedThreadCount()).toBe(3);
+      NativeModules.OwnHardwareInfo.status.mockResolvedValue({activeProcessors:8,thermalState:'nominal',lowPowerMode:true});
+      expect(await hardwareService.getRecommendedThreadCount()).toBe(3);
+    });
+    it('labels unavailable facts as a fallback instead of claiming a measured core count', async () => {
+      expect((await hardwareService.getRuntimeProfile()).source).toBe('fallback');
+      NativeModules.OwnHardwareInfo = {status:jest.fn().mockResolvedValue({activeProcessors:-1})};
+      expect(await hardwareService.getCpuCoreCount()).toBe(4);
+    });
   });
 
   // ========================================================================
@@ -217,6 +235,12 @@ describe('HardwareService', () => {
       mockedDeviceInfo.isEmulator.mockResolvedValue(isEmulator);
       await hardwareService.getDeviceInfo();
     };
+
+    it('uses the supplied current memory profile instead of a stale cache', async () => {
+      await setupWithMemory(8);
+      expect(hardwareService.getModelRecommendation(4).maxParameters).toBe(3);
+      expect(hardwareService.getModelRecommendation(8).maxParameters).toBe(8);
+    });
 
     it('returns recommendation for 3GB device', async () => {
       await setupWithMemory(3);
@@ -699,17 +723,17 @@ describe('HardwareService', () => {
         });
         const soc = await hardwareService.getSoCInfo();
         expect(soc.vendor).toBe('apple');
-        expect(soc.appleChip).toBe('A15'); // 8GB >= 6 → A15 fallback
+        expect(soc.appleChip).toBeUndefined(); // Memory alone cannot identify a chip.
       });
 
-      it('falls back to A14 for low-RAM unknown device', async () => {
+      it('keeps the chip unknown for an unrecognized device', async () => {
         await setupDevice({
           totalGB: 3,
           platform: 'ios',
           deviceId: 'iPad10,1',
         });
         const soc = await hardwareService.getSoCInfo();
-        expect(soc.appleChip).toBe('A14'); // 3GB < 6 → A14 fallback
+        expect(soc.appleChip).toBeUndefined();
       });
     });
 

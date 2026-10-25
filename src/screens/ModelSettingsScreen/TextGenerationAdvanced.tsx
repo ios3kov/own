@@ -283,6 +283,17 @@ export const TextGenerationAdvanced: React.FC = () => {
         />
       </View>
 
+      <View style={styles.sliderSection}>
+        <View style={styles.sliderHeader}>
+          <Text style={styles.sliderLabel}>Micro-batch limit</Text>
+          <Text style={styles.sliderValue}>{settings?.nUbatch ? settings.nUbatch : 'Auto'}</Text>
+        </View>
+        <Text style={styles.sliderDesc}>Limits temporary prompt-processing memory. Auto uses up to 128 tokens; the runtime also caps this at the batch size. Speed depends on the model.</Text>
+        <Slider accessibilityLabel="Micro-batch limit" style={styles.slider} minimumValue={0} maximumValue={512} step={32}
+          value={settings?.nUbatch ?? 0} onSlidingComplete={value => updateSettings({nUbatch:value})}
+          minimumTrackTintColor={colors.primary} maximumTrackTintColor={colors.surface} thumbTintColor={colors.primary} />
+      </View>
+
       <BackendSelectorSection />
       <FlashAttentionSection trackColor={trackColor} />
       <KvCacheSection cacheDisabled={cacheDisabled} />

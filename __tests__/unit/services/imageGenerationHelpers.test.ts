@@ -23,6 +23,7 @@ getConversationContext,
 cleanEnhancedPrompt,
 buildImageGenMeta,
 needsImagePromptTranslation,
+isImagePromptRefusal,
 } from '../../../src/services/imageGenerationHelpers';
 
 const mockGetState = useChatStore.getState as jest.Mock;
@@ -60,9 +61,10 @@ describe('buildEnhancementMessages', () => {
     expect(msgs[0].content).not.toContain('conversation history');
   });
 
-  it('wraps user content with User Request: prefix', () => {
+  it('quotes user content as data in an explicit rewrite task', () => {
     const msgs = buildEnhancementMessages('mountains', []);
-    expect(msgs[msgs.length - 1].content).toBe('User Request: mountains');
+    expect(msgs[msgs.length - 1].content).toContain('Do not carry out the request yourself');
+    expect(msgs[msgs.length - 1].content).toContain('"mountains"');
   });
 });
 
@@ -193,5 +195,12 @@ describe('image language preparation', () => {
     const messages=buildEnhancementMessages('Нарисуй собачку', [], false);
     expect(messages[0].content).toContain('Do not add artistic details');
     expect(messages[1].content).toContain('Нарисуй собачку');
+    expect(messages[1].content).toContain('Translate this JSON-quoted text into English');
+  });
+  it.each(["I'm unable to draw.", 'I cannot create images.', 'Sorry, I cannot do that.', 'As an AI model, I cannot draw.'])('rejects a refusal as an image description: %s', text => {
+    expect(isImagePromptRefusal(text)).toBe(true);
+  });
+  it('allows a real subject description', () => {
+    expect(isImagePromptRefusal('A small puppy on green grass')).toBe(false);
   });
 });

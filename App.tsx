@@ -1,3 +1,7 @@
+import {refreshVisibleReplyTiming} from './src/services/replyTiming';
+import {runtimeDiagnostics} from './src/services/runtimeDiagnostics';
+import {releaseIdleAuxiliaries} from './src/services/idleResources';
+import {replyRecovery} from './src/services/replyRecovery';
 import { replySpeech } from './src/services/replySpeech';
 import { useChatStore } from './src/stores/chatStore';
 import { foundationModelService } from './src/services/foundationModels';
@@ -8,7 +12,7 @@ import { foundationModelService } from './src/services/foundationModels';
 
 import 'react-native-gesture-handler';
 import React, { useEffect, useState, useCallback } from 'react';
-import { StatusBar, ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
+import { AppState, StatusBar, ActivityIndicator, View, StyleSheet, LogBox } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
@@ -35,6 +39,12 @@ const ensureRemoteServerStoreHydrated = async () => {
 
 function App() {
   useDownloadListeners();
+  useEffect(()=>{runtimeDiagnostics.start();return ()=>runtimeDiagnostics.stop();},[]);
+  useEffect(() => () => replyRecovery.stop(), []);
+  useEffect(() => {
+    const subscription=AppState.addEventListener('memoryWarning',()=>{releaseIdleAuxiliaries('memory-warning').catch(()=>{});});
+    return ()=>subscription.remove();
+  },[]);
   useEffect(() => {
     const stop = () => { replySpeech.stop(); };
     const app = useAppStore.subscribe((next, previous) => {
@@ -90,12 +100,14 @@ function App() {
   useAppState({
     onBackground: useCallback(() => {
       replySpeech.stop();
+      releaseIdleAuxiliaries('background').catch(()=>{});
       if (authEnabled) {
         setLastBackgroundTime(Date.now());
         setLocked(true);
       }
     }, [authEnabled, setLastBackgroundTime, setLocked]),
     onForeground: useCallback(() => {
+      refreshVisibleReplyTiming();
       foundationModelService.refreshAvailability(() => !!useRemoteServerStore.getState().activeServerId);
       // Rebuild the unified store before reattaching JS listeners so restored
       // progress events map onto current download entries instead of racing hydration.
@@ -123,6 +135,7 @@ function App() {
     try {
       // Ensure persisted download metadata is loaded before restore logic reads it.
       await ensureAppStoreHydrated();
+      await replyRecovery.start();
 
       // Hydrate download store from SQLite before any screen mounts.
       await hydrateDownloadStore().catch((error) => {

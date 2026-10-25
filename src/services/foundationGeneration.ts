@@ -1,3 +1,4 @@
+import {scheduleTokenFlush} from './streamFlush';
 import { mergeDocumentSources } from './documentSources';
 import { foundationModelService, APPLE_MODEL_NAME } from './foundationModels';
 import { useChatStore } from '../stores/chatStore';
@@ -22,6 +23,10 @@ export async function generateFoundationResponse(
   try {
     await foundationModelService.generate(request.messages, {
       ...request,
+      onContextNotice: notice => {
+        if (svc.abortRequested || sequence !== svc.generationSequence) return;
+        useChatStore.getState().addMessage(request.conversationId,{role:'system',content:notice,isSystemInfo:true});
+      },
       onToolCallComplete: (name, result) => {
         if (svc.abortRequested || sequence !== svc.generationSequence) return;
         svc.documentSources = mergeDocumentSources(svc.documentSources || [], result.documentSources || []);
@@ -36,8 +41,7 @@ export async function generateFoundationResponse(
         }
         svc.state.streamingContent += token;
         svc.tokenBuffer += token;
-        if (!svc.flushTimer)
-          svc.flushTimer = setTimeout(() => svc.flushTokenBuffer(), 50);
+        scheduleTokenFlush(svc);
       },
     });
     if (svc.abortRequested || sequence !== svc.generationSequence) return;

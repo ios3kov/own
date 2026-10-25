@@ -54,6 +54,7 @@ jest.mock('../../../src/services/imageGenerationService', () => ({
   imageGenerationService: {
     generateImage: jest.fn(),
     cancelGeneration: jest.fn(),
+    getState: jest.fn(() => ({error:null})),
   },
 }));
 jest.mock('../../../src/services/llm', () => ({
@@ -150,6 +151,7 @@ jest.mock('../../../src/constants', () => ({
 // ─────────────────────────────────────────────
 
 beforeEach(() => {
+  imageGenerationService.getState.mockReturnValue({error:null});
   // Reset remote server store to default (no active server)
   useRemoteServerStore.setState({ activeServerId: null, activeRemoteTextModelId: null });
   mockClassifyIntent.mockResolvedValue('text');
@@ -236,6 +238,12 @@ function makeGenerationDeps(overrides: Record<string, unknown> = {}): any {
 // ─────────────────────────────────────────────
 
 describe('shouldRouteToImageGenerationFn', () => {
+  it('keeps a normal follow-up as text even when only image weights are loaded', async () => {
+    mockClassifyIntent.mockResolvedValueOnce('text');
+    const deps = makeGenerationDeps({ imageModelLoaded: true, hasTextModel: false });
+    expect(await shouldRouteToImageGenerationFn(deps, 'Get device info')).toBe(false);
+    expect(mockClassifyIntent).toHaveBeenCalled();
+  });
   it('returns false when already generating image', async () => {
     const deps = makeGenerationDeps({ isGeneratingImage: true, imageModelLoaded: true });
     const result = await shouldRouteToImageGenerationFn(deps, 'draw a cat');
@@ -325,16 +333,18 @@ describe('handleImageGenerationFn', () => {
 
   it('shows alert when image generation returns null and there is a non-cancel error', async () => {
     mockGenerateImage.mockResolvedValueOnce(null);
+    imageGenerationService.getState.mockReturnValue({error:'out of memory'});
     const deps = makeGenerationDeps({
       activeImageModel: baseImageModel,
-      imageGenState: { isGenerating: false, error: 'out of memory' },
+      imageGenState: { isGenerating: false, error: null },
     });
     await handleImageGenerationFn(deps, { prompt: 'cat', conversationId: 'conv-1' });
-    expect(deps.setAlertState).toHaveBeenCalledWith(expect.objectContaining({ title: 'Error' }));
+    expect(deps.setAlertState).toHaveBeenCalledWith(expect.objectContaining({ title: 'Image could not be generated',message:'out of memory' }));
   });
 
   it('does not show alert when error is "cancelled"', async () => {
     mockGenerateImage.mockResolvedValueOnce(null);
+    imageGenerationService.getState.mockReturnValue({error:'cancelled by user'});
     const deps = makeGenerationDeps({
       activeImageModel: baseImageModel,
       imageGenState: { isGenerating: false, error: 'cancelled by user' },
@@ -514,12 +524,12 @@ describe('startGenerationFn', () => {
     expect(deps.generatingForConversationRef.current).toBeNull();
   });
 
-  it('clears cache when context usage is high', async () => {
+  it('retains native cache when context usage is high', async () => {
     mockGetContextDebugInfo.mockResolvedValueOnce({ truncatedCount: 0, contextUsagePercent: 75 });
     mockGetLoadedModelPath.mockReturnValue('/path/model.gguf');
     const deps = makeGenerationDeps();
     await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'test' });
-    expect(mockClearKVCache).toHaveBeenCalledWith(false);
+    expect(mockClearKVCache).not.toHaveBeenCalled();
   });
 
   it('shows alert when model is not loaded after ensureModelLoaded', async () => {
@@ -588,7 +598,7 @@ describe('RAG context injection in startGenerationFn', () => {
     await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hello' });
 
     expect(mockGetDocsByProject).toHaveBeenCalledWith('proj-1');
-    expect(mockSearchProject).toHaveBeenCalledWith('proj-1', 'hello');
+    expect(mockSearchProject).toHaveBeenCalledWith('proj-1', 'hello',2048);
     expect(mockFormatForPrompt).toHaveBeenCalled();
     expect(mockGenerateResponse).toHaveBeenCalled();
   });
@@ -676,7 +686,7 @@ describe('RAG context injection in regenerateResponseFn', () => {
     await regenerateResponseFn(deps, { setDebugInfo: jest.fn(), userMessage: userMsg });
 
     expect(mockGetDocsByProject).toHaveBeenCalledWith('proj-1');
-    expect(mockSearchProject).toHaveBeenCalledWith('proj-1', 'explain docs');
+    expect(mockSearchProject).toHaveBeenCalledWith('proj-1', 'explain docs',2048);
     expect(mockFormatForPrompt).toHaveBeenCalled();
   });
 
@@ -700,19 +710,20 @@ const { embeddingService } = require('../../../src/services/rag/embedding');
 const mockEmbeddingIsLoaded = embeddingService.isLoaded as jest.Mock;
 const mockEmbeddingLoad = embeddingService.load as jest.Mock;
 
-describe('embedding model warmup in injectRagContext', () => {
-  it('fires embeddingService.load() when project has enabled docs and model is not loaded', async () => {
+describe('document-search preparation', () => {
+  it('leaves embedding loading to the retrieval service', async () => {
     const conv = { id: 'conv-1', projectId: 'proj-1', messages: [{ id: 'm1', role: 'user', content: 'hello', timestamp: 0 }] };
     mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
     mockProjectStoreGetProject.mockReturnValue({ id: 'proj-1', systemPrompt: 'Be helpful', name: 'Test' });
     mockGetDocsByProject.mockResolvedValue([{ id: 1, name: 'doc.txt', enabled: 1 }]);
-    mockSearchProject.mockResolvedValue({ chunks: [], truncated: false });
+    mockSearchProject.mockResolvedValue({ chunks: [], truncated: false, unavailable: 'Document search is unavailable.' });
     mockEmbeddingIsLoaded.mockReturnValue(false);
 
     const deps = makeGenerationDeps();
     await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hello' });
 
-    expect(mockEmbeddingLoad).toHaveBeenCalled();
+    expect(mockEmbeddingLoad).not.toHaveBeenCalled();
+    expect(deps.addMessage).toHaveBeenCalledWith('conv-1', expect.objectContaining({isSystemInfo:true,content:'Document search is unavailable.'}));
   });
 
   it('does not call load() when embedding model is already loaded', async () => {
@@ -729,7 +740,7 @@ describe('embedding model warmup in injectRagContext', () => {
     expect(mockEmbeddingLoad).not.toHaveBeenCalled();
   });
 
-  it('does not block generation if embedding load fails', async () => {
+  it('does not run a separate speculative embedding warmup', async () => {
     const conv = { id: 'conv-1', projectId: 'proj-1', messages: [{ id: 'm1', role: 'user', content: 'hello', timestamp: 0 }] };
     mockChatStoreGetState.mockReturnValue({ conversations: [conv], updateCompactionState: jest.fn() });
     mockProjectStoreGetProject.mockReturnValue({ id: 'proj-1', systemPrompt: 'Be helpful', name: 'Test' });
@@ -744,7 +755,7 @@ describe('embedding model warmup in injectRagContext', () => {
     // Flush pending microtasks from fire-and-forget warmup
     await new Promise<void>(resolve => setImmediate(resolve));
 
-    expect(mockEmbeddingLoad).toHaveBeenCalled();
+    expect(mockEmbeddingLoad).not.toHaveBeenCalled();
   });
 
   it('does not fire warmup when no enabled docs exist', async () => {
@@ -1017,4 +1028,10 @@ describe('applyCompactionPrefix — compaction state', () => {
     await startGenerationFn(deps, { setDebugInfo: jest.fn(), targetConversationId: 'conv-1', messageText: 'hi' });
     expect(mockGenerateResponse).toHaveBeenCalled();
   });
+});
+
+it('skips the optional diagnostic tokenization pass when details are disabled',async()=>{
+  const deps=makeGenerationDeps({settings:{...makeGenerationDeps().settings,showGenerationDetails:false}});
+  await startGenerationFn(deps,{setDebugInfo:jest.fn(),targetConversationId:'conv-1',messageText:'hello'});
+  expect(mockGetContextDebugInfo).not.toHaveBeenCalled();
 });

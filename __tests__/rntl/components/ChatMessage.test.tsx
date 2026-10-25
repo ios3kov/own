@@ -32,6 +32,21 @@ jest.mock('../../../src/utils/messageContent', () => ({
 }));
 
 describe('ChatMessage', () => {
+  it('marks recovered partial replies as interrupted', () => {
+    const view=render(<ChatMessage message={{...createAssistantMessage('Partial'),interrupted:true}} />);
+    expect(view.getByText('Recovered unfinished reply')).toBeTruthy();
+    expect(view.getByText(/Partial/)).toBeTruthy();
+  });
+
+  it('switches the same answer from lightweight streaming text to final Markdown', () => {
+    const message = createAssistantMessage('**Answer**');
+    const view = render(<ChatMessage message={message} isStreaming />);
+    expect(view.getByText('**Answer**')).toBeTruthy();
+    view.rerender(<ChatMessage message={message} isStreaming={false} />);
+    expect(view.queryByText('**Answer**')).toBeNull();
+    expect(view.getByText(/Answer/)).toBeTruthy();
+  });
+
   const _defaultProps = {
     message: createUserMessage('Hello world'),
   };
@@ -1304,6 +1319,14 @@ describe('ChatMessage', () => {
   // FadeInImage onLoad (covers line 89)
   // ============================================================================
   describe('FadeInImage onLoad', () => {
+    it('shows a readable fallback when an earlier image file is unavailable', () => {
+      const attachment = createImageAttachment({uri:'file:///missing.png'});
+      const message = createAssistantMessage('Generated image', {attachments:[attachment]});
+      const {getByTestId,getByText} = render(<ChatMessage message={message} />);
+      fireEvent(getByTestId('generated-image-content'),'error');
+      expect(getByText('Image unavailable')).toBeTruthy();
+      expect(getByTestId('generated-image').props.accessibilityState?.disabled).toBe(true);
+    });
     it('triggers fade-in animation when image loads', () => {
       const attachment = createImageAttachment({
         uri: 'file:///test/image.jpg',

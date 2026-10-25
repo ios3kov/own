@@ -105,8 +105,8 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   // Pill container
   pill: {
     flex: 1,
-    flexDirection: 'column' as const,
-    alignItems: 'stretch' as const,
+    flexDirection: 'row' as const,
+    alignItems: 'flex-end' as const,
     backgroundColor: colors.surface,
     borderRadius: 24,
     borderWidth: 1,
@@ -118,6 +118,8 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     minHeight: 48,
   },
   pillInput: {
+    flex: 1,
+    minWidth: 0,
     alignSelf: 'stretch' as const,
     color: colors.text,
     fontSize: 15,
@@ -131,6 +133,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
   },
   // Icons row inside pill (right side)
   pillIcons: {
+    flexShrink: 0,
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
     gap: 0,

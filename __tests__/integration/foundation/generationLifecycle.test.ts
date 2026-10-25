@@ -34,6 +34,16 @@ describe('Apple generation lifecycle to persisted chat',()=>{
     expect(reply?.content).toBe('Hello world.');expect(reply?.generationMeta?.documentSources).toEqual([source]);
     expect(svc.resetState).toHaveBeenCalledWith(true);
   });
+  it('keeps saved history and adds a visible notice when the native request trims old turns',async()=>{
+    const svc=service();const original=useChatStore.getState().getConversationMessages(id);
+    (foundationModelService.generate as jest.Mock).mockImplementation(async(_messages,callbacks)=>{
+      callbacks.onContextNotice('Older turns were left out. Your saved chat is unchanged.');callbacks.onToken('Answer.');
+    });
+    await generateFoundationResponse(svc,{conversationId:id,messages:[]});
+    const saved=useChatStore.getState().getConversationMessages(id);
+    expect(saved.slice(0,original.length)).toEqual(original);
+    expect(saved.some(message=>message.isSystemInfo && message.content.includes('saved chat is unchanged'))).toBe(true);
+  });
   it('handles missing optional metadata and callbacks without invented sources or timing',async()=>{
     const svc=service();svc.state.startTime=null;svc.documentSources=undefined;
     (foundationModelService.generate as jest.Mock).mockImplementation(async(_messages,callbacks)=>{callbacks.onToolCallComplete('tool',{});callbacks.onToken('Answer.');});

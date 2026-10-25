@@ -6,7 +6,8 @@ import { llmService } from './llm';
 import { useAppStore,useChatStore } from '../stores';
 import { GeneratedImage } from '../types';
 import logger from '../utils/logger';
-import { buildEnhancementMessages,getConversationContext,cleanEnhancedPrompt,buildImageGenMeta,needsImagePromptTranslation } from './imageGenerationHelpers';
+import { buildEnhancementMessages,getConversationContext,cleanEnhancedPrompt,buildImageGenMeta,isImagePromptRefusal,imagePromptPreparationStatus } from './imageGenerationHelpers';
+import { needsEnglishTranslation } from './promptLanguage';
 
 
 export interface ImageGenerationState {
@@ -114,7 +115,7 @@ class ImageGenerationService {
     if (!conversationId || !tempMessageId) return;
     const chatStore = useChatStore.getState();
     if (enhancedPrompt && enhancedPrompt !== originalPrompt) {
-      chatStore.updateMessageContent(conversationId, tempMessageId, `<think>__LABEL:Enhanced prompt__\n${enhancedPrompt}</think>`);
+      chatStore.updateMessageContent(conversationId, tempMessageId, `<think>__LABEL:Image prompt__\n${enhancedPrompt}</think>`);
       chatStore.updateMessageThinking(conversationId, tempMessageId, false);
     } else {
       logger.warn('[ImageGen] Enhancement produced no change, deleting thinking message');
@@ -128,7 +129,9 @@ class ImageGenerationService {
 
   private async _enhancePrompt(params: GenerateImageParams, steps: number): Promise<string> {
     const { settings } = useAppStore.getState();
-    if (!settings.enhanceImagePrompts && !needsImagePromptTranslation(params.prompt)) {
+    const needsTranslation = await needsEnglishTranslation(params.prompt);
+    if (this.cancelRequested) return params.prompt;
+    if (!settings.enhanceImagePrompts && !needsTranslation) {
       logger.log('[ImageGen] Enhancement disabled, using original prompt');
       return params.prompt;
     }
@@ -142,14 +145,14 @@ class ImageGenerationService {
     }
     this.updateState({
       isGenerating: true, prompt: params.prompt, conversationId: params.conversationId || null,
-      status: needsImagePromptTranslation(params.prompt) ? 'Translating image prompt on your device...' : 'Improving image prompt on your device...', previewPath: null,
+      status: imagePromptPreparationStatus(needsTranslation), previewPath: null,
       progress: { step: 0, totalSteps: steps }, error: null, result: null,
     });
     const contextMessages = settings.enhanceImagePrompts && params.conversationId ? getConversationContext(params.conversationId) : [];
     let tempMessageId: string | null = null;
     if (params.conversationId) {
       const tempMessage = useChatStore.getState().addMessage(params.conversationId, {
-        role: 'assistant', content: 'Enhancing your prompt...', isThinking: true,
+        role: 'assistant', content: imagePromptPreparationStatus(needsTranslation), isThinking: true,
       });
       tempMessageId = tempMessage.id;
     }
@@ -160,11 +163,12 @@ class ImageGenerationService {
       logger.log('[ImageGen] 📤 Calling llmService.generateResponse for enhancement...');
       const messages = buildEnhancementMessages(params.prompt, contextMessages, settings.enhanceImagePrompts);
       let raw = useApple
-        ? await foundationModelService.generate(messages, {onToken: () => {}, enabledToolIds: [], signal: controller.signal})
+        ? await foundationModelService.generate(messages, {onToken: () => {}, enabledToolIds: [], signal: controller.signal,maxTokens:256,temperature:0})
         : await llmService.generateResponse(messages, (_data) => {});
       logger.log('[ImageGen] 📥 llmService.generateResponse returned');
       logger.log('[ImageGen] LLM state after enhancement - generating:', llmService.isCurrentlyGenerating());
       raw = cleanEnhancedPrompt(raw);
+      if (isImagePromptRefusal(raw)) throw new Error('The text model did not provide an image description.');
       logger.log('[ImageGen] ✅ Original prompt:', params.prompt);
       logger.log('[ImageGen] ✅ Enhanced prompt:', raw);
       if (!useApple) await this._resetLlmAfterEnhancement();
@@ -184,12 +188,10 @@ class ImageGenerationService {
     } finally { this.enhancing = false; this.enhancementController = null; }
   }
 
-  private async _ensureImageModelLoaded(activeImageModelId: string | null, activeImageModel: ActiveImageModel, desiredThreads: number): Promise<boolean> {
+  private async _ensureImageModelLoaded(activeImageModelId: string | null, activeImageModel: ActiveImageModel): Promise<boolean> {
     const isImageModelLoaded = await coreMLImageGeneratorService.isModelLoaded();
     const loadedPath = await coreMLImageGeneratorService.getLoadedModelPath();
-    const loadedThreads = coreMLImageGeneratorService.getLoadedThreads();
-    const needsThreadReload = loadedThreads == null || loadedThreads !== desiredThreads;
-    if (isImageModelLoaded && loadedPath === activeImageModel.modelPath && !needsThreadReload) return true;
+    if (isImageModelLoaded && loadedPath === activeImageModel.modelPath) return true;
     if (!activeImageModelId) {
       this.updateState({ error: 'No image model selected', isGenerating: false });
       return false;
@@ -265,6 +267,9 @@ class ImageGenerationService {
         this.updateState({ isGenerating: false, progress: null, status: null, previewPath: null, error: userMessage });
       }
       return null;
+    } finally {
+      try { await activeModelService.syncWithNativeState(); }
+      catch (error) { logger.warn('[ImageGenerationService] Could not refresh runtime state:', error); }
     }
   }
 
@@ -281,8 +286,8 @@ class ImageGenerationService {
     const activeImageModel = downloadedImageModels.find(m => m.id === activeImageModelId);
     if (!activeImageModel) { this.updateState({ error: 'No image model selected' }); return null; }
 
-    const steps = params.steps || settings.imageSteps || 8;
-    const guidanceScale = params.guidanceScale || settings.imageGuidanceScale || 2.0;
+    const steps = params.steps ?? settings.imageSteps ?? 8;
+    const guidanceScale = params.guidanceScale ?? settings.imageGuidanceScale ?? 2.0;
     const imageWidth = settings.imageWidth || 256;
     const imageHeight = settings.imageHeight || 256;
 
@@ -296,8 +301,10 @@ class ImageGenerationService {
     try { enhancedPrompt = await this._enhancePrompt(params, steps); }
     catch { this.updateState({isGenerating:false,error:'Could not prepare the image prompt. Please retry.'}); return null; }
     if (this.cancelRequested) { this.resetState(); return null; }
-    if (needsImagePromptTranslation(enhancedPrompt)) {
-      this.updateState({isGenerating:false,progress:null,status:null,error:'This image model needs an English prompt. On-device translation could not finish. Retry with Apple AI available, load a local text model, or enter the prompt in English.'});
+    const stillNeedsTranslation = await needsEnglishTranslation(enhancedPrompt);
+    if (this.cancelRequested) { this.resetState(); return null; }
+    if (isImagePromptRefusal(enhancedPrompt) || stillNeedsTranslation) {
+      this.updateState({isGenerating:false,progress:null,status:null,error:'On-device translation could not finish. The selected text model may not support this language. Choose a compatible local text model or enter the image description in English.'});
       return null;
     }
     logger.log('[ImageGen] enhanceImagePrompts setting:', settings.enhanceImagePrompts);
@@ -312,7 +319,7 @@ class ImageGenerationService {
       this.updateState({ status: 'Preparing image generation...' });
     }
 
-    const loaded = await this._ensureImageModelLoaded(activeImageModelId, activeImageModel, settings.imageThreads ?? 4);
+    const loaded = await this._ensureImageModelLoaded(activeImageModelId, activeImageModel);
     if (!loaded) return null;
     if (this.cancelRequested) { this.resetState(); return null; }
 

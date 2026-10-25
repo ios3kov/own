@@ -14,6 +14,14 @@ import { render } from '@testing-library/react-native';
 import { MarkdownText, preprocessMarkdown } from '../../../src/components/MarkdownText';
 
 describe('MarkdownText', () => {
+  it('keeps incoming markup literal and formats it when streaming finishes', () => {
+    const view = render(<MarkdownText streaming>{'**Hello**'}</MarkdownText>);
+    expect(view.getByText('**Hello**')).toBeTruthy();
+    view.rerender(<MarkdownText>{'**Hello**'}</MarkdownText>);
+    expect(view.queryByText('**Hello**')).toBeNull();
+    expect(view.getByText(/Hello/)).toBeTruthy();
+  });
+
   it('renders plain text', () => {
     const { getByText } = render(<MarkdownText>Hello world</MarkdownText>);
     expect(getByText(/Hello world/)).toBeTruthy();

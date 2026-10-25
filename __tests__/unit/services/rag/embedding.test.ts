@@ -34,6 +34,21 @@ describe('EmbeddingService', () => {
   });
 
   describe('load', () => {
+    it('releases a late native load after unload instead of resurrecting it', async () => {
+      let complete!: (value: any) => void;
+      mockInitLlama.mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }));
+      const loading = embeddingService.load();
+      const result = loading.catch(error => error);
+      while (!complete) await Promise.resolve();
+      const unloading = embeddingService.unload();
+      const release = jest.fn().mockResolvedValue(undefined);
+      complete({embedding: mockEmbedding, release});
+      expect(await result).toEqual(expect.objectContaining({message: 'Embedding load cancelled.'}));
+      await unloading;
+      expect(release).toHaveBeenCalledTimes(1);
+      expect(embeddingService.isLoaded()).toBe(false);
+    });
+
     it('initializes llama context with embedding params', async () => {
       await embeddingService.load();
 

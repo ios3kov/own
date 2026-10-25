@@ -1,8 +1,10 @@
+import {activeReplyTiming} from '../services/replyTiming';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Message, Conversation, GenerationMeta } from '../types';
 import { stripControlTokens, stripStreamingControlTokens } from '../utils/messageContent';
+import { skipUnchangedStorage } from '../utils/unchangedStorage';
 import { generateId } from '../utils/generateId';
 
 function nextUpdatedAt(previousUpdatedAt?: string): string {
@@ -84,6 +86,7 @@ interface ChatState {
   getActiveConversation: () => Conversation | null;
   setConversationProject: (conversationId: string, projectId: string | null) => void;
   addMessage: (conversationId: string, message: Omit<Message, 'id' | 'timestamp'>) => Message;
+  updateGenerationMeta:(conversationId:string,messageId:string,patch:Partial<GenerationMeta>)=>void;
   updateMessageContent: (conversationId: string, messageId: string, content: string) => void;
   updateMessageThinking: (conversationId: string, messageId: string, isThinking: boolean) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
@@ -182,6 +185,12 @@ export const useChatStore = create<ChatState>()(
         return message;
       },
 
+      updateGenerationMeta:(conversationId,messageId,patch)=>{
+        set(state=>({conversations:state.conversations.map(conversation=>{
+          if(conversation.id!==conversationId || !conversation.messages.some(message=>message.id===messageId && message.generationMeta)) return conversation;
+          return {...conversation,messages:conversation.messages.map(message=>message.id===messageId && message.generationMeta ? {...message,generationMeta:{...message.generationMeta,...patch}} : message)};
+        })}));
+      },
       updateMessageContent: (conversationId, messageId, content) => {
         set((state) => ({
           conversations: mapConversation(state.conversations, conversationId, (conv) =>
@@ -275,6 +284,7 @@ export const useChatStore = create<ChatState>()(
         if (streamingForConversationId === conversationId && (sanitizedMessage || reasoningContent)) {
           addMessage(conversationId, {
             role: 'assistant',
+            replyTraceId:activeReplyTiming(conversationId)?.id,
             content: sanitizedMessage,
             reasoningContent,
             generationTimeMs,
@@ -337,7 +347,10 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: 'local-llm-chat-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: skipUnchangedStorage(
+        createJSONStorage<Pick<ChatState, 'conversations' | 'activeConversationId'>>(() => AsyncStorage)!,
+        (a, b) => a.conversations === b.conversations && a.activeConversationId === b.activeConversationId,
+      ),
       partialize: (state) => ({
         conversations: state.conversations,
         activeConversationId: state.activeConversationId,

@@ -33,6 +33,20 @@ describe('Apple default and explicit alternative selection', () => {
     await foundationModelService.refreshAvailability();
     expect(useAppStore.getState().activeModelId).toBe('chosen-during-check');
   });
+  it('shares overlapping native checks while retaining each caller selection rule', async () => {
+    let finish!: (status: {available:boolean; reason:string}) => void;
+    NativeModules.OwnFoundationModels.availability.mockImplementation(() => new Promise(resolve => {finish = resolve;}));
+    const first = foundationModelService.refreshAvailability(true);
+    const second = foundationModelService.refreshAvailability(() => true);
+    expect(NativeModules.OwnFoundationModels.availability).toHaveBeenCalledTimes(1);
+    finish({available:true,reason:'available'});
+    await Promise.all([first,second]);
+    expect(useAppStore.getState().activeModelId).toBeNull();
+    NativeModules.OwnFoundationModels.availability.mockResolvedValue({available:false,reason:'modelNotReady'});
+    expect((await foundationModelService.refreshAvailability()).available).toBe(false);
+    expect(NativeModules.OwnFoundationModels.availability).toHaveBeenCalledTimes(2);
+    expect(useAppStore.getState().activeModelId).toBe(APPLE_MODEL_ID);
+  });
   it('fails closed when the native bridge fails', async () => {
     NativeModules.OwnFoundationModels.availability.mockRejectedValue(new Error('native failure'));
     await foundationModelService.refreshAvailability();

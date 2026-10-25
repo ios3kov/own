@@ -88,6 +88,9 @@ export class LocalProvider implements LLMProvider {
         decodeTokensPerSecond: perf.lastDecodeTokensPerSecond,
         timeToFirstToken: perf.lastTimeToFirstToken,
         tokenCount: perf.lastTokenCount,
+    tokenCountSource:perf.lastTokenCountSource,
+    promptTokenCount:perf.lastPromptTokenCount,
+    cachedTokenCount:perf.lastCachedTokenCount,
       };
     };
 

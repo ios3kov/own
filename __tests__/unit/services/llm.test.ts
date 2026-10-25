@@ -66,6 +66,7 @@ describe('LLMService', () => {
     (llmService as any).isGenerating = false;
     (llmService as any).multimodalSupport = null;
     (llmService as any).multimodalInitialized = false;
+    (llmService as any).pendingMmProjPath = undefined;
     (llmService as any).gpuEnabled = false;
     (llmService as any).gpuReason = '';
     (llmService as any).gpuDevices = [];
@@ -202,7 +203,7 @@ describe('LLMService', () => {
       consoleSpy.mockRestore();
     });
 
-    it('initializes multimodal when mmproj path provided and exists', async () => {
+    it('defers linked vision initialization until an image is needed', async () => {
       mockedRNFS.exists.mockResolvedValue(true);
       mockedRNFS.stat.mockResolvedValue({ size: 800 * 1024 * 1024 } as any);
 
@@ -214,9 +215,8 @@ describe('LLMService', () => {
 
       await llmService.loadModel('/models/test.gguf', '/models/mmproj.gguf');
 
-      expect(ctx.initMultimodal).toHaveBeenCalledWith(
-        expect.objectContaining({ path: '/models/mmproj.gguf' })
-      );
+      expect(ctx.initMultimodal).not.toHaveBeenCalled();
+      expect(llmService.getMultimodalSupport()?.vision).not.toBe(true);
       expect(llmService.supportsVision()).toBe(true);
     });
 
@@ -987,6 +987,7 @@ describe('LLMService', () => {
   // convertToOAIMessages (private, tested via generateResponse with vision)
   // ========================================================================
   describe('convertToOAIMessages', () => {
+    beforeEach(() => { (llmService as any).multimodalInitialized = true; });
     it('converts text-only message to simple format', () => {
       const messages = [createUserMessage('Hello')];
       const oaiMessages = (llmService as any).convertToOAIMessages(messages);
@@ -1292,6 +1293,7 @@ describe('LLMService', () => {
   });
 
   describe('convertToOAIMessages empty content branch', () => {
+    beforeEach(() => { (llmService as any).multimodalInitialized = true; });
     it('skips text part when message content is empty', () => {
       const messages = [{
         id: 'msg-1',
@@ -1587,6 +1589,7 @@ describe('LLMService', () => {
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
 
       await llmService.loadModel('/models/test.gguf', '/models/mmproj.gguf');
+      await llmService.initializeMultimodal('/models/mmproj.gguf');
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('seems too small')
@@ -1607,6 +1610,7 @@ describe('LLMService', () => {
       const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
 
       await llmService.loadModel('/models/test.gguf', '/models/mmproj.gguf');
+      await llmService.initializeMultimodal('/models/mmproj.gguf');
 
       const smallWarnings = consoleSpy.mock.calls.filter(
         call => typeof call[0] === 'string' && call[0].includes('seems too small')
@@ -1633,6 +1637,7 @@ describe('LLMService', () => {
 
       // Should not throw
       await llmService.loadModel('/models/test.gguf', '/models/mmproj.gguf');
+      await llmService.initializeMultimodal('/models/mmproj.gguf');
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('Failed to stat mmproj'),
@@ -1679,7 +1684,7 @@ describe('LLMService', () => {
       expect(callArgs).toHaveProperty('messages');
     });
 
-    it('logs warning when images attached but multimodal not initialized', async () => {
+    it('rejects new image input when no vision component is linked', async () => {
       mockedRNFS.exists.mockResolvedValue(true);
       const ctx = createMockLlamaContext({
         completion: jest.fn(async (_params: any, callback: any) => {
@@ -1701,11 +1706,8 @@ describe('LLMService', () => {
         attachments: [{ id: 'att-1', type: 'image' as const, uri: 'file:///photo.jpg' }],
       }];
 
-      await llmService.generateResponse(messages);
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Images attached but multimodal not initialized')
-      );
+      await expect(llmService.generateResponse(messages)).rejects.toThrow('no linked vision component');
+      expect(ctx.completion).not.toHaveBeenCalled();
       consoleSpy.mockRestore();
     });
   });
@@ -1957,7 +1959,7 @@ describe('LLMService', () => {
       });
 
       await expect(llmService.loadModel('/models/test.gguf'))
-        .rejects.toThrow('Failed to load model after CPU retries');
+        .rejects.toThrow('Failed to load model after');
     });
   });
 
@@ -2138,6 +2140,34 @@ describe('LLMService', () => {
   // Auto context scaling
   // ========================================================================
   describe('auto context scaling', () => {
+    it('caps the first initialization at 2048 on a 6GB device', async () => {
+      const {hardwareService} = require('../../../src/services/hardware');
+      const original = await hardwareService.getDeviceInfo();
+      const spy = jest.spyOn(hardwareService, 'getDeviceInfo').mockResolvedValue({...original,totalMemory:6*1024**3});
+      setupScalingTest({modelContextLength:'8192',userContextLength:4096});
+      try {
+        await llmService.loadModel('/models/test.gguf');
+        expect(initLlama).toHaveBeenCalledTimes(1);
+        expect(initLlama).toHaveBeenCalledWith(expect.objectContaining({n_ctx:2048}),expect.any(Function));
+      } finally {spy.mockRestore();}
+    });
+    it('keeps a successful reduced-context result without reinitializing', async () => {
+      setupScalingTest({modelContextLength:'8192',userContextLength:4096});
+      const {hardwareService} = require('../../../src/services/hardware');
+      const original = await hardwareService.getDeviceInfo();
+      const spy = jest.spyOn(hardwareService, 'getDeviceInfo').mockResolvedValue({...original,totalMemory:8*1024**3});
+      useAppStore.setState({settings:{...useAppStore.getState().settings,inferenceBackend:'metal'}});
+      const context = createMockLlamaContext({model:{metadata:{'llama.context_length':'8192'}}});
+      mockedInitLlama.mockReset();
+      mockedInitLlama.mockRejectedValueOnce(new Error('GPU unavailable'))
+        .mockRejectedValueOnce(new Error('CPU allocation failed'))
+        .mockResolvedValueOnce(context as any);
+      await llmService.loadModel('/models/test.gguf');
+      expect(initLlama).toHaveBeenCalledTimes(3);
+      expect(context.release).not.toHaveBeenCalled();
+      spy.mockRestore();
+    });
+
     it('loads at 4096 default context without a second init when model supports ≥4096', async () => {
       setupScalingTest({
         modelContextLength: '8192',

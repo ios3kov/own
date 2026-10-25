@@ -57,41 +57,13 @@ export const useWhisperTranscription = (): UseWhisperTranscriptionResult => {
     return () => { cancelled = true; };
   }, [downloadedModelId, isModelLoaded, loadModel]);
 
-  // Minimum time to show transcribing state (ms)
-  const MIN_TRANSCRIBING_TIME = 600;
-
-  // Helper to finalize transcription with minimum display time
-  // NOTE: This does NOT clear isTranscribing - that's done by clearResult()
-  // which is called from ChatInput after the text is added to the input box.
-  // This keeps the loader visible until text actually appears.
+  // Publish a ready transcript immediately; clearResult owns the UI handoff.
   const finalizeTranscription = useCallback((text: string) => {
-    if (!mountedRef.current) return;
-    const startTime = transcribingStartTime.current;
-    const elapsed = startTime ? Date.now() - startTime : MIN_TRANSCRIBING_TIME;
-    const remaining = Math.max(0, MIN_TRANSCRIBING_TIME - elapsed);
-
-    if (remaining > 0) {
-      // Store result and wait for minimum time
-      pendingResult.current = text;
-      setTimeout(() => {
-        if (!mountedRef.current) return;
-        if (!isCancelled.current && pendingResult.current !== null) {
-          setFinalResult(pendingResult.current);
-          pendingResult.current = null;
-        } else {
-          // If cancelled, clear the transcribing state
-          setIsTranscribing(false);
-        }
-        setPartialResult('');
-        transcribingStartTime.current = null;
-      }, remaining);
-    } else {
-      // Minimum time already passed - set result, let clearResult() clear isTranscribing
-      setFinalResult(text);
-      setPartialResult('');
-      transcribingStartTime.current = null;
-    }
-  }, []);
+    if (!mountedRef.current || isCancelled.current) return;
+    setFinalResult(text);
+    setPartialResult('');
+    transcribingStartTime.current = null;
+  }, [mountedRef]);
 
   // Extra recording time after user releases button (ms)
   // Whisper needs trailing audio/silence to properly process speech

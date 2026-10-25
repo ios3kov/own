@@ -65,11 +65,11 @@ export const GenerationSettingsModal: React.FC<GenerationSettingsModalProps> = (
         <View style={styles.statsBar}>
           <Text style={styles.statsLabel}>Last Generation:</Text>
           <Text style={styles.statsValue}>
-            {performanceStats.lastTokensPerSecond.toFixed(1)} tok/s
+            {performanceStats.lastTokenCountSource === 'stream-events-estimate' ? '~' : ''}{performanceStats.lastTokensPerSecond.toFixed(1)} tok/s
           </Text>
           <Text style={styles.statsSeparator}>•</Text>
           <Text style={styles.statsValue}>
-            {performanceStats.lastTokenCount} tokens
+            {performanceStats.lastTokenCountSource === 'stream-events-estimate' ? '~' : ''}{performanceStats.lastTokenCount} tokens
           </Text>
           <Text style={styles.statsSeparator}>•</Text>
           <Text style={styles.statsValue}>

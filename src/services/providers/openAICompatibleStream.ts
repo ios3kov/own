@@ -218,7 +218,7 @@ function handleOllamaChatLine(
     if (msg.tool_calls) {
       for (const tc of msg.tool_calls) {
         if (tc.function?.name) {
-          logger.log(`[OllamaChat] tool_call: ${tc.function.name}(${typeof tc.function.arguments === 'string' ? tc.function.arguments.substring(0, 100) : JSON.stringify(tc.function.arguments).substring(0, 100)})`);
+          if (__DEV__) logger.log(`[OllamaChat] tool_call: ${tc.function.name}(${typeof tc.function.arguments === 'string' ? tc.function.arguments.substring(0, 100) : JSON.stringify(tc.function.arguments).substring(0, 100)})`);
           streamState.accumulatedToolCalls.push(tc);
         }
       }

@@ -27,10 +27,12 @@ jest.mock('@react-navigation/native', () => {
 const mockGetDocumentsByProject = jest.fn<Promise<any[]>, [string]>(() => Promise.resolve([]));
 const mockIndexDocument = jest.fn<Promise<number>, [any]>(() => Promise.resolve(1));
 const mockDeleteDocument = jest.fn<Promise<void>, [number]>(() => Promise.resolve());
+const mockBackfill = jest.fn().mockResolvedValue(2);
 const mockToggleDocument = jest.fn<Promise<void>, [number, boolean]>(() => Promise.resolve());
 
 jest.mock('../../../src/services/rag', () => ({
   ragService: {
+    backfillEmbeddings: (id:string)=>mockBackfill(id),
     getDocumentsByProject: (projectId: string) => mockGetDocumentsByProject(projectId),
     indexDocument: (params: any) => mockIndexDocument(params),
     deleteDocument: (docId: number) => mockDeleteDocument(docId),
@@ -237,4 +239,15 @@ describe('KnowledgeBaseScreen', () => {
       expect(mockDeleteDocument).toHaveBeenCalledWith(1);
     });
   });
+});
+
+it('refreshes saved document search and blocks repeat actions while it is busy',async()=>{
+ mockGetDocumentsByProject.mockResolvedValue([{id:1,name:'saved.txt',path:'/saved',size:12,enabled:1}]);
+ let finish!:()=>void;mockBackfill.mockImplementationOnce(()=>new Promise(resolve=>{finish=()=>resolve(2);}));
+ const screen=render(<KnowledgeBaseScreen/>);await flushPromises();
+ fireEvent.press(screen.getByText('Refresh document search'));await flushPromises();
+ expect(mockBackfill).toHaveBeenCalledWith('proj1');
+ fireEvent.press(screen.getByText('Refresh document search'));expect(mockBackfill).toHaveBeenCalledTimes(1);
+ await act(async()=>finish());await flushPromises();
+ expect(screen.getByText('Refresh document search')).toBeTruthy();
 });

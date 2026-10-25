@@ -8,6 +8,7 @@ jest.mock('../../../../src/services/rag/database', () => ({
     getChunksByProject: jest.fn(() => []),
     getEmbeddingsByProject: jest.fn(() => []),
     insertEmbeddingsBatch: jest.fn(),
+    getDocumentEmbeddingVersion: jest.fn(() => "test-model"),
     hasEmbeddingsForDocument: jest.fn(() => false),
     getChunksByDocument: jest.fn(() => []),
     deleteDocumentsByProject: jest.fn(),
@@ -16,6 +17,8 @@ jest.mock('../../../../src/services/rag/database', () => ({
 
 jest.mock('../../../../src/services/rag/embedding', () => ({
   embeddingService: {
+    getModelIdentity: jest.fn(() => "test-model"),
+    clearDocumentCache: jest.fn().mockResolvedValue(undefined),
     load: jest.fn(() => Promise.resolve()),
     embedBatch: jest.fn(() => Promise.resolve([[0.1, 0.2], [0.3, 0.4]])),
     isLoaded: jest.fn(() => false),

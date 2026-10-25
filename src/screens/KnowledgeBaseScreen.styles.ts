@@ -16,6 +16,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     backgroundColor: colors.surface,
   },
   backButton: {
+    minWidth: 44, minHeight: 44, alignItems: 'center' as const, justifyContent: 'center' as const,
     padding: SPACING.xs,
     marginRight: SPACING.md,
   },
@@ -28,6 +29,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     fontWeight: '500' as const,
   },
   addButton: {
+    minWidth: 44, minHeight: 44, alignItems: 'center' as const, justifyContent: 'center' as const,
     padding: SPACING.sm,
   },
   indexingBanner: {
@@ -62,6 +64,18 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginTop: SPACING.xs,
     marginBottom: SPACING.lg,
   },
+  refreshButton: {
+    marginHorizontal: SPACING.lg,
+    marginVertical: SPACING.sm,
+    padding: SPACING.sm,
+    minHeight: 44,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: 8,
+  },
+  refreshButtonText: { ...TYPOGRAPHY.body, color: colors.primary, textAlign: 'center' as const },
   addFirstButton: {
     backgroundColor: colors.primary,
     paddingHorizontal: SPACING.lg,
@@ -101,6 +115,7 @@ export const createStyles = (colors: ThemeColors, _shadows: ThemeShadows) => ({
     marginTop: 2,
   },
   docDelete: {
+    minWidth: 44, minHeight: 44, alignItems: 'center' as const, justifyContent: 'center' as const,
     padding: SPACING.sm,
     marginLeft: SPACING.sm,
   },

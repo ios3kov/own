@@ -44,6 +44,8 @@ const deterministicEmbed = (text: string): number[] => {
 
 jest.mock('../../../src/services/rag/embedding', () => ({
   embeddingService: {
+    getModelIdentity: jest.fn(() => "test-model"),
+    clearDocumentCache: jest.fn().mockResolvedValue(undefined),
     load: jest.fn(() => Promise.resolve()),
     embed: jest.fn((text: string) => Promise.resolve(deterministicEmbed(text))),
     embedBatch: jest.fn((texts: string[]) => Promise.resolve(texts.map(deterministicEmbed))),
@@ -122,21 +124,23 @@ describe('Embedding Flow Integration', () => {
         if (typeof sql === 'string' && sql.includes('rag_embeddings') && sql.includes('SELECT')) {
           return {
             rows: [
-              { chunk_rowid: 1, doc_id: 1, name: 'ml.pdf', content: 'Machine learning algorithms', position: 0, embedding: mlBuffer },
-              { chunk_rowid: 2, doc_id: 2, name: 'recipes.pdf', content: 'Chocolate cake recipe', position: 0, embedding: cookBuffer },
+              { chunk_rowid: 1, doc_id: 1, name: 'ml.pdf', content: 'Machine learning algorithms', position: 0, model_id:"test-model",embedding: mlBuffer },
+              { chunk_rowid: 2, doc_id: 2, name: 'recipes.pdf', content: 'Chocolate cake recipe', position: 0, model_id:"test-model",embedding: cookBuffer },
             ],
           };
         }
         return { rows: [], insertId: 0, rowsAffected: 0 };
       });
 
+      expect(ragDatabase.getEmbeddingsByProject('proj-1')[0].embedding).toHaveLength(8);
+      expect(await embeddingService.embed('machine learning')).toHaveLength(8);
       const result = await retrievalService.search('proj-1', 'machine learning', 1);
 
       expect(result.chunks).toHaveLength(1);
       expect(result.chunks[0].content).toBe('Machine learning algorithms');
     });
 
-    it('falls back to first chunks when no embeddings exist', async () => {
+    it('reports unavailable when documents have no embeddings', async () => {
       (ragDatabase as any).ready = true;
       (ragDatabase as any).db = mockDb;
 
@@ -155,8 +159,8 @@ describe('Embedding Flow Integration', () => {
       });
 
       const result = await retrievalService.search('proj-1', 'anything');
-      expect(result.chunks).toHaveLength(1);
-      expect(result.chunks[0].content).toBe('Fallback content');
+      expect(result.chunks).toEqual([]);
+      expect(result.unavailable).toContain('unavailable');
     });
   });
 
@@ -188,6 +192,7 @@ describe('Embedding Flow Integration', () => {
       const total = await ragService.backfillEmbeddings('proj-1');
 
       expect(total).toBe(2);
+      expect(mockExecuteSync).toHaveBeenCalledWith('INSERT INTO rag_embedding_versions (doc_id, model_id) VALUES (?, ?)',[1,'test-model']);
       expect(embeddingService.embedBatch).toHaveBeenCalledWith(['Old chunk one', 'Old chunk two']);
 
       // Verify embeddings were stored
@@ -208,12 +213,13 @@ describe('Embedding Flow Integration', () => {
       const deleteCalls = mockExecuteSync.mock.calls.filter(
         (c: any[]) => typeof c[0] === 'string' && c[0].includes('DELETE')
       );
-      expect(deleteCalls.length).toBe(3);
+      expect(deleteCalls.length).toBe(4);
       // Order: embeddings, chunks, document
       expect(deleteCalls[0][0]).toContain('rag_embeddings');
       expect(deleteCalls[0][1]).toEqual([42]);
       expect(deleteCalls[1][0]).toContain('rag_chunks');
-      expect(deleteCalls[2][0]).toContain('rag_documents');
+      expect(deleteCalls[2][0]).toContain('rag_embedding_versions');
+      expect(deleteCalls[3][0]).toContain('rag_documents');
     });
   });
 

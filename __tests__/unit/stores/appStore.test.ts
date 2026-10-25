@@ -699,35 +699,7 @@ describe('appStore', () => {
       expect(merged.imageModelDownloadIds).toEqual({});
     });
 
-    it('migrates persisted modelLoadingStrategy memory to performance', () => {
-      const persistedState = {
-        settings: { modelLoadingStrategy: 'memory' },
-      };
-      const currentState = useAppStore.getState();
-      const merged: any = { ...currentState, ...persistedState };
-
-      if (persistedState?.settings?.modelLoadingStrategy === 'memory') {
-        merged.settings = { ...merged.settings, modelLoadingStrategy: 'performance' };
-      }
-
-      expect(merged.settings.modelLoadingStrategy).toBe('performance');
-    });
-
-    it('does not override explicit performance setting during migration', () => {
-      const persistedState = {
-        settings: { modelLoadingStrategy: 'performance' },
-      };
-      const currentState = useAppStore.getState();
-      const merged: any = { ...currentState, ...persistedState };
-
-      if ((persistedState as any)?.settings?.modelLoadingStrategy === 'memory') {
-        merged.settings = { ...merged.settings, modelLoadingStrategy: 'performance' };
-      }
-
-      expect(merged.settings.modelLoadingStrategy).toBe('performance');
-    });
-
-    it('actual store merge function migrates modelLoadingStrategy memory→performance', async () => {
+    it('actual store merge preserves the saved memory strategy', async () => {
       const AsyncStorage = require('@react-native-async-storage/async-storage');
 
       // Write persisted state with old 'memory' default into AsyncStorage (as Zustand persist would)
@@ -742,7 +714,7 @@ describe('appStore', () => {
       // Trigger Zustand persist to rehydrate from storage — this calls the actual merge function
       await (useAppStore as any).persist.rehydrate();
 
-      expect(useAppStore.getState().settings.modelLoadingStrategy).toBe('performance');
+      expect(useAppStore.getState().settings.modelLoadingStrategy).toBe('memory');
 
       // Clean up storage mock
       await AsyncStorage.removeItem('local-llm-app-storage');

@@ -98,18 +98,18 @@ export const KnowledgeBaseSection: React.FC<KBSectionProps> = ({ projectId, colo
 
   return (
     <View style={styles.sectionContent}>
-      <TouchableOpacity style={styles.sectionHeader} onPress={onNavigateToKb} activeOpacity={0.7}>
-        <View style={styles.sectionTitleRow}>
-          <Text style={styles.sectionTitle}>Knowledge Base</Text>
+      <View style={styles.sectionHeader}>
+        <TouchableOpacity style={styles.kbManageButton} onPress={onNavigateToKb} accessibilityRole="button" accessibilityLabel="Manage knowledge base" testID="knowledge-base-open" activeOpacity={0.7}>
+          <Text style={[styles.sectionTitle, styles.kbManageTitle]}>Knowledge Base</Text>
           {kbDocs.length > 0 && <Text style={styles.sectionCount}>{kbDocs.length}</Text>}
-        </View>
+          <Icon name="chevron-right" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
         <View style={styles.sectionActions}>
           <Button title="Add" variant="primary" size="small" onPress={handleAddDocument}
             disabled={isPicking || !!indexingFile}
             icon={<Icon name="plus" size={16} color={colors.primary} />} />
-          <Icon name="chevron-right" size={16} color={colors.textMuted} style={styles.navIcon} />
         </View>
-      </TouchableOpacity>
+      </View>
 
       {indexingFile && (
         <View style={styles.kbIndexing}>

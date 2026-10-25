@@ -15,4 +15,7 @@ export interface LLMPerformanceStats {
   lastTimeToFirstToken: number;
   lastGenerationTime: number;
   lastTokenCount: number;
+  lastTokenCountSource?: 'native' | 'stream-events-estimate';
+  lastPromptTokenCount?: number;
+  lastCachedTokenCount?: number;
 }

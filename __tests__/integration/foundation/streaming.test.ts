@@ -40,6 +40,37 @@ describe('Foundation stream ownership and existing tools', () => {
     expect(native.generate.mock.calls[0][0].messages).toEqual(messages.map(({role,content}: any) => ({role,content})));
     expect(mockListeners.size).toBe(0);
   });
+  it('reports context trimming only for the active native request',async()=>{
+    const notice=jest.fn();
+    NativeModules.OwnFoundationModels.generate=jest.fn(async(params:any)=>{
+      mockListeners.get('OwnFoundationContext')?.({requestId:'stale',omittedTurns:2});
+      mockListeners.get('OwnFoundationContext')?.({requestId:params.requestId,omittedTurns:2,promptTokens:512,replyReserve:1024,capacity:4096});
+      return {content:'Answer'};
+    });
+    await foundationModelService.generate(messages,{onToken:jest.fn(),onContextNotice:notice});
+    expect(notice).toHaveBeenCalledTimes(1);expect(notice).toHaveBeenCalledWith(expect.stringContaining('saved chat is unchanged'));
+    expect(mockListeners.size).toBe(0);
+  });
+  it('bounds long request history before native validation without changing stored inputs',async()=>{
+    const history:any[]=Array.from({length:300},(_,i)=>({id:String(i),role:'user',content:`Turn ${i}`}));
+    const original=JSON.stringify(history);const notice=jest.fn();
+    NativeModules.OwnFoundationModels.generate=jest.fn(async(params:any)=>{
+      expect(params.messages).toHaveLength(256);expect(params.messages.at(-1).content).toBe('Turn 299');
+      mockListeners.get('OwnFoundationContext')?.({requestId:params.requestId,omittedTurns:4});
+      return {content:'Answer'};
+    });
+    await foundationModelService.generate(history,{onToken:jest.fn(),onContextNotice:notice});
+    expect(notice).toHaveBeenCalledTimes(1);expect(JSON.stringify(history)).toBe(original);
+  });
+  it('answers a text follow-up after generated image output without requesting vision', async () => {
+    const native = NativeModules.OwnFoundationModels;
+    native.generate = jest.fn().mockResolvedValue({content:'4'});
+    const history: any = [{id:'u',role:'user',content:'Draw a puppy'},
+      {id:'a',role:'assistant',content:'Generated image of a puppy',attachments:[{type:'image',uri:'file:///puppy.png'}]},
+      {id:'next',role:'user',content:'2+2'}];
+    await expect(foundationModelService.generate(history,{onToken:jest.fn()})).resolves.toBe('4');
+    expect(native.generate.mock.calls[0][0].messages.at(-1)).toEqual({role:'user',content:'2+2'});
+  });
   it('passes saved tool output as quoted reference data using supported roles', async () => {
     const native = NativeModules.OwnFoundationModels;
     native.generate = jest.fn().mockResolvedValue({content: 'Answer'});

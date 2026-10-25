@@ -317,6 +317,7 @@ async function handleSearchKnowledgeBase(query: string, projectId?: string): Pro
   if (!projectId) return {content:'No project context. Knowledge base requires an active project.'};
   const { ragService } = require('../rag'); // NOSONAR
   const result = await ragService.searchProject(projectId, query);
+  if (result.unavailable) return {content:result.unavailable};
   if (result.chunks.length === 0) return {content:`No results found for "${query}" in the knowledge base.`};
   const content = result.chunks
     .map((c: import('../rag').RagSearchResult, i: number) => `[${i + 1}] ${c.name} (part ${c.position + 1}):\n${c.content}`)

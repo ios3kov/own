@@ -31,10 +31,11 @@ type OnboardingChecklist = {
 type AppSettings = {
   allowAppleSpeech: boolean;
   readRepliesAloud: boolean;
+  replyVoiceId: string;
   historyTurns: number;
   systemPrompt: string; temperature: number; maxTokens: number;
   topP: number; repeatPenalty: number; contextLength: number;
-  nThreads: number; nBatch: number;
+  nThreads: number; nBatch: number; nUbatch?: number;
   imageGenerationMode: ImageGenerationMode; autoDetectMethod: AutoDetectMethod;
   classifierModelId: string | null; imageSteps: number; imageGuidanceScale: number;
   imageThreads: number; imageWidth: number; imageHeight: number;
@@ -123,6 +124,7 @@ const DEFAULT_CHECKLIST: OnboardingChecklist = {
 const DEFAULT_SETTINGS: AppSettings = {
   allowAppleSpeech: false,
   readRepliesAloud: false,
+  replyVoiceId: '',
   historyTurns: 24,
   systemPrompt: 'You are a helpful AI assistant running locally on the user\'s device. Be concise and helpful.',
   temperature: 0.7,
@@ -132,6 +134,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   contextLength: 4096,
   nThreads: 0,
   nBatch: 512,
+  nUbatch: 0,
   imageGenerationMode: 'auto' as ImageGenerationMode,
   autoDetectMethod: 'pattern' as AutoDetectMethod,
   classifierModelId: null,
@@ -168,9 +171,6 @@ function migratePersistedState(persistedState: any, currentState: AppState): App
   delete merged.imageModelDownloading;
   delete merged.imageModelDownloadIds;
   delete merged.imageModelDownloadId;
-  if (persistedState?.settings?.modelLoadingStrategy === 'memory') {
-    merged.settings = { ...merged.settings, modelLoadingStrategy: 'performance' };
-  }
   if (persistedState?.settings && !persistedState.settings.cacheType) {
     merged.settings = { ...merged.settings, cacheType: persistedState.settings.flashAttn ? 'q8_0' : 'f16', flashAttn: true };
   }

@@ -2,8 +2,7 @@
  * Contract Tests: CoreMLDiffusion Native Module (iOS Image Generation)
  *
  * These tests verify that the CoreMLDiffusion native module interface
- * maintains parity with the Android CoreMLDiffusionModule so the shared
- * TypeScript bridge (coreMLImageGenerator.ts) works on both platforms.
+ * matches the iOS TypeScript bridge (coreMLImageGenerator.ts).
  */
 
 // The CoreMLDiffusionModule must expose the same methods as CoreMLDiffusionModule

@@ -8,7 +8,7 @@
 import { initWhisper,AudioSessionIos } from 'whisper.rn';
 import { Platform } from 'react-native';
 import RNFS from 'react-native-fs';
-import { whisperService,WHISPER_MODELS } from '../../../src/services/whisperService';
+import { whisperService,WHISPER_MODELS,whisperLanguage } from '../../../src/services/whisperService';
 import { backgroundDownloadService } from '../../../src/services/backgroundDownloadService';
 
 jest.mock('../../../src/services/backgroundDownloadService', () => ({
@@ -36,6 +36,7 @@ describe('WhisperService', () => {
     jest.restoreAllMocks();
     jest.clearAllMocks();
     // Reset singleton state
+    (whisperService as any).resourceWork = Promise.resolve();
     (whisperService as any).context = null;
     (whisperService as any).currentModelPath = null;
     (whisperService as any).isTranscribing = false;
@@ -599,6 +600,30 @@ describe('WhisperService', () => {
   // transcribeFile
   // ========================================================================
   describe('transcribeFile', () => {
+    it('does not let an old file completion clear a newer transcription', async () => {
+      mockValidModelFile();
+      let finishOld!: (result: any) => void;
+      let finishNew!: (result: any) => void;
+      const stopOld = jest.fn();
+      const stopNew = jest.fn();
+      let signalNew!: () => void;
+      const startedNew = new Promise<void>(resolve => { signalNew = resolve; });
+      const transcribe = jest.fn()
+        .mockReturnValueOnce({promise:new Promise(resolve => {finishOld=resolve;}),stop:stopOld})
+        .mockImplementationOnce(() => { signalNew(); return {promise:new Promise(resolve => {finishNew=resolve;}),stop:stopNew}; });
+      mockedInitWhisper.mockResolvedValueOnce({release:jest.fn(),transcribe} as any);
+      await whisperService.loadModel('/model.bin');
+      const old = whisperService.transcribeFile('/old.wav');
+      await Promise.resolve();
+      await whisperService.stopTranscription();
+      const current = whisperService.transcribeFile('/new.wav');
+      finishOld({result:'old'}); await old; await startedNew;
+      expect(whisperService.isCurrentlyTranscribing()).toBe(true);
+      await whisperService.stopTranscription();
+      expect(stopNew).toHaveBeenCalledTimes(1);
+      finishNew({result:'new'}); await current;
+    });
+
     it('throws when no model loaded', async () => {
       await expect(
         whisperService.transcribeFile('/path/to/audio.wav')
@@ -711,5 +736,17 @@ describe('WhisperService', () => {
       expect(mockStopFn).toHaveBeenCalled();
       expect(stopFnDuringCall).toBeNull();
     });
+  });
+});
+
+ describe('Whisper language policy', () => {
+  it('uses automatic language detection for multilingual models', () => {
+    expect(whisperLanguage('/ggml-base.bin')).toBe('auto');
+    expect(whisperLanguage('/ggml-base.bin','ru')).toBe('ru');
+  });
+  it('uses English for English-only models and rejects incompatible requests', () => {
+    expect(whisperLanguage('/ggml-tiny.en.bin')).toBe('en');
+    expect(whisperLanguage('/ggml-tiny.en.bin','en-US')).toBe('en');
+    expect(() => whisperLanguage('/ggml-tiny.en.bin','es')).toThrow('multilingual');
   });
 });

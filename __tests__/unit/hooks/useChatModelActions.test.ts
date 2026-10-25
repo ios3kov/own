@@ -27,6 +27,7 @@ jest.mock('../../../src/services/activeModelService', () => ({
 jest.mock('../../../src/services/llm', () => ({
   llmService: {
     getMultimodalSupport: jest.fn(),
+    supportsVision: jest.fn(),
     getLoadedModelPath: jest.fn(),
     stopGeneration: jest.fn(),
     isModelLoaded: jest.fn(),
@@ -69,6 +70,7 @@ jest.mock('../../../src/components', () => ({
 };
 
 beforeEach(() => {
+    (llmService.supportsVision as jest.Mock).mockImplementation(() => !!mockGetMultimodalSupport()?.vision);
   mockLoadTextModel.mockResolvedValue(undefined);
   mockUnloadTextModel.mockResolvedValue(undefined);
   mockCheckMemoryForModel.mockResolvedValue({ canLoad: true, severity: 'safe', message: '' });

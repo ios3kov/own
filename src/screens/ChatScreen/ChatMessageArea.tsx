@@ -1,4 +1,5 @@
-import React,{ useState,useMemo,useEffect,useRef } from 'react';
+import {activeReplyTiming,blurReplyConversation,focusReplyConversation,markReplyVisibility,requestReplyMeasurement,setReplyViewport} from '../../services/replyTiming';
+import React,{ useState,useMemo,useEffect,useRef,useCallback } from 'react';
 import { View,FlatList,Text,Keyboard,ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import Animated,{ FadeIn } from 'react-native-reanimated';
@@ -11,9 +12,18 @@ import { getPlaceholderText,useChatScreen } from './useChatScreen';
 import { createStyles } from './styles';
 import { useTheme } from '../../theme';
 import { useAppStore } from '../../stores';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation,useFocusEffect } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
+
+const replyViewability={itemVisiblePercentThreshold:1};
+function updateReplyViewport(ref:React.RefObject<FlatList|null>,conversationId:string|null):void {
+ if(!conversationId) return;
+ const native=ref.current?.getNativeScrollRef() as {measureInWindow?:(callback:(...bounds:number[])=>void)=>void}|undefined;
+ native?.measureInWindow?.((...bounds:number[])=>{
+  const [,y,,height]=bounds;setReplyViewport(conversationId,{top:y,bottom:y+height});
+ });
+}
 
 export type ChatMessageAreaProps = {
   flatListRef: React.RefObject<FlatList | null>;
@@ -29,6 +39,15 @@ export type ChatMessageAreaProps = {
 export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
   flatListRef, isNearBottomRef, chat, styles, colors, handleScroll, renderItem, chatSpotlight,
 }) => {
+  useFocusEffect(useCallback(()=>{
+    focusReplyConversation(chat.activeConversationId);
+    return ()=>blurReplyConversation(chat.activeConversationId);
+  },[chat.activeConversationId]));
+  const onReplyViewability=useRef(({viewableItems,changed}:any)=>{
+    const visible=new Set<string>(viewableItems.flatMap((item:any)=>item.item?.replyTraceId ? [item.item.replyTraceId] : []));
+    const affected=new Set<string>(changed.flatMap((item:any)=>item.item?.replyTraceId ? [item.item.replyTraceId] : []));
+    affected.forEach(id=>markReplyVisibility(id,visible.has(id)));
+  }).current;
   const tabNav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { toolCountHintDismissed } = useAppStore();
   const showSettingsDot = chat.enabledTools.length > 3 && !toolCountHintDismissed;
@@ -65,9 +84,12 @@ export const ChatMessageArea: React.FC<ChatMessageAreaProps> = ({
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messageList}
-          onScroll={handleScroll}
+          onViewableItemsChanged={onReplyViewability}
+          viewabilityConfig={replyViewability}
+          onScroll={event=>{handleScroll(event);requestReplyMeasurement(activeReplyTiming(chat.activeConversationId)?.id);}}
           onContentSizeChange={(_w, _h) => { if (isNearBottomRef.current) flatListRef.current?.scrollToEnd({ animated: false }); }}
           onLayout={(e) => {
+            updateReplyViewport(flatListRef,chat.activeConversationId);
             const newHeight = e.nativeEvent.layout.height;
             const prevHeight = flatListHeightRef.current;
             flatListHeightRef.current = newHeight;

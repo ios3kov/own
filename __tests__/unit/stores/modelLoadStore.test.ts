@@ -16,3 +16,16 @@ describe('model loading progress ownership',()=>{
     reportModelLoad(ticket,'Preparing',NaN);expect(useModelLoadStore.getState().percent).toBeNull();finishModelLoad(ticket);
   });
 });
+
+it('measures each phase once and keeps queue time separate',()=>{
+  const clock=jest.spyOn(Date,'now').mockReturnValue(1000);
+  const ticket=beginModelLoad('text','Waiting for model resource');
+  clock.mockReturnValue(1100);reportModelLoad(ticket,'Checking model files');
+  clock.mockReturnValue(1300);reportModelLoad(ticket,'Loading model file',25);
+  clock.mockReturnValue(1400);reportModelLoad(ticket,'Loading model file',50);
+  clock.mockReturnValue(1500);finishModelLoad(ticket);finishModelLoad(ticket);
+  expect(useModelLoadStore.getState().phases).toEqual([
+    {phase:'Waiting for model resource',durationMs:100},{phase:'Checking model files',durationMs:200},{phase:'Loading model file',durationMs:200},
+  ]);
+  expect(useModelLoadStore.getState().totalDurationMs).toBe(500);clock.mockRestore();
+});

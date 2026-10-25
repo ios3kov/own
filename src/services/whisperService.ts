@@ -20,16 +20,58 @@ export const WHISPER_MODELS = [
   { id: 'small.en', name: 'Whisper Small (English)', size: 466, url: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin', description: 'High accuracy, English only, needs more RAM' },
 ];
 
+export function whisperLanguage(modelPath: string | null, requested?: string): string {
+  const language = requested?.trim().toLowerCase() || 'auto';
+  if (!/\.en\.bin$/i.test(modelPath ?? '')) return language;
+  if (language === 'auto' || language === 'en' || language.startsWith('en-')) return 'en';
+  throw new Error('This speech model supports English only. Choose a multilingual Whisper model for this language.');
+}
+
 class WhisperService {
   private context: WhisperContext | null = null;
   private currentModelPath: string | null = null;
   private isTranscribing: boolean = false;
+  private transcriptionEpoch = 0;
+  private stopVersion = 0;
   private stopFn: (() => void) | null = null;
   private isReleasingContext: boolean = false;
   private contextReleasePromise: Promise<void> = Promise.resolve();
   private transcriptionFullyStopped: Promise<void> = Promise.resolve();
   private activeDownloadId: string | null = null;
+  private resourceOperations=0;
+  private idleReleasing=false;
+  private idleRestorePath:string|null=null;
+  private resourceWork: Promise<void> = Promise.resolve();
+  private withResource<T>(work: () => Promise<T>): Promise<T> {
+    this.resourceOperations+=1;
+    const pending = this.resourceWork.then(work).finally(()=>{this.resourceOperations-=1;});
+    this.resourceWork = pending.then(() => {}, () => {});
+    return pending;
+  }
+  loadModel(modelPath: string): Promise<void> {
+    this.idleRestorePath=null;
+    return this.withResource(() => this.loadModelNow(modelPath));
+  }
+  unloadModel(): Promise<void> {
+    this.idleRestorePath=null;
+    return this.withResource(() => this.unloadModelNow());
+  }
+  startRealtimeTranscription(onResult: TranscriptionCallback, options?: {language?: string; maxLen?: number}): Promise<void> {
+    const version = this.stopVersion;
+    return this.withResource(async()=>{await this.restoreAfterIdle();return this.startRealtimeTranscriptionNow(onResult, options, version);});
+  }
+  transcribeFile(filePath: string, options?: {language?: string; onProgress?: (progress: number) => void}): Promise<string> {
+    return this.withResource(async()=>{await this.restoreAfterIdle();return this.transcribeFileNow(filePath, options);});
+  }
 
+  async releaseIfIdle():Promise<boolean> {
+    if(!this.context || this.resourceOperations || this.isTranscribing || this.stopFn || this.isReleasingContext) return false;
+    this.idleRestorePath=this.currentModelPath;this.idleReleasing=true;
+    try {await this.withResource(()=>this.unloadModelNow());return true;} finally {this.idleReleasing=false;}
+  }
+  private async restoreAfterIdle():Promise<void> {
+    if(!this.context && this.idleRestorePath) await this.loadModelNow(this.idleRestorePath);
+  }
   getModelsDir(): string { return `${RNFS.DocumentDirectoryPath}/whisper-models`; }
   async ensureModelsDirExists(): Promise<void> {
     const dir = this.getModelsDir();
@@ -127,8 +169,8 @@ class WhisperService {
     logger.log(`[Whisper] Model file validated: ${modelPath} (${Math.round(fileSize / (1024 * 1024))} MB)`);
   }
 
-  async loadModel(modelPath: string): Promise<void> {
-    if (this.context && this.currentModelPath !== modelPath) await this.unloadModel();
+  private async loadModelNow(modelPath: string): Promise<void> {
+    if (this.context && this.currentModelPath !== modelPath) await this.unloadModelNow();
     if (this.context && this.currentModelPath === modelPath) return;
     if (this.isReleasingContext) {
       logger.log('[WhisperService] Waiting for context release to finish before loading');
@@ -143,6 +185,7 @@ class WhisperService {
     try {
       this.context = await initWhisper({ filePath: modelPath });
       this.currentModelPath = modelPath;
+      this.idleRestorePath=null;
       logger.log('[Whisper] Model loaded successfully');
     } catch (error) {
       logger.error('[Whisper] Failed to load model:', error);
@@ -152,7 +195,7 @@ class WhisperService {
     }
   }
 
-  async unloadModel(): Promise<void> {
+  private async unloadModelNow(): Promise<void> {
     if (!this.context) return;
     // Stop active transcription to prevent SIGSEGV on freed context
     if (this.isTranscribing || this.stopFn) {
@@ -160,6 +203,7 @@ class WhisperService {
       await this.stopTranscription();
       await this.transcriptionFullyStopped;
     }
+    await this.transcriptionFullyStopped;
     if (this.isReleasingContext) { logger.log('[WhisperService] Context release already in progress, skipping'); return; }
     this.isReleasingContext = true;
     this.contextReleasePromise = (async () => {
@@ -168,7 +212,7 @@ class WhisperService {
     })()
     await this.contextReleasePromise;
   }
-  isModelLoaded(): boolean { return this.context !== null; }
+  isModelLoaded(): boolean { return this.context !== null && !this.idleReleasing; }
   getLoadedModelPath(): string | null { return this.currentModelPath; }
 
   async requestPermissions(): Promise<boolean> {
@@ -183,13 +227,15 @@ class WhisperService {
     }
   }
 
-  async startRealtimeTranscription(
+  private async startRealtimeTranscriptionNow(
     onResult: TranscriptionCallback,
     options?: {
       language?: string;
       maxLen?: number;
-    }
+    },
+    stopVersion = this.stopVersion,
   ): Promise<void> {
+    if (stopVersion !== this.stopVersion) throw new Error('Recording cancelled.');
     logger.log('[WhisperService] startRealtimeTranscription called');
     logger.log('[WhisperService] Context exists:', !!this.context);
     logger.log('[WhisperService] isTranscribing:', this.isTranscribing);
@@ -201,9 +247,8 @@ class WhisperService {
     // If already transcribing, force stop before starting new
     if (this.isTranscribing || this.stopFn) {
       logger.log('[WhisperService] Stopping previous transcription before starting new one');
-      await this.stopTranscription();
-      // Small delay to ensure cleanup
-      await new Promise<void>(resolve => setTimeout(resolve, 100));
+      await this.stopTranscriptionNow();
+      await this.transcriptionFullyStopped;
     }
 
     logger.log('[WhisperService] Requesting permissions...');
@@ -214,6 +259,8 @@ class WhisperService {
       throw new Error('Microphone permission denied');
     }
 
+    if (stopVersion !== this.stopVersion) throw new Error('Recording cancelled.');
+    const operation = ++this.transcriptionEpoch;
     this.isTranscribing = true;
 
     // Create a promise that resolves when the native side fully finishes
@@ -233,7 +280,7 @@ class WhisperService {
       logger.log('[WhisperService] Calling transcribeRealtime...');
       // Use the transcribeRealtime API
       const { stop, subscribe } = await this.context.transcribeRealtime({
-        language: options?.language || 'en',
+        language: whisperLanguage(this.currentModelPath, options?.language),
         maxLen: options?.maxLen || 0, // 0 = no limit
         realtimeAudioSec: 30, // Process in 30-second chunks
         realtimeAudioSliceSec: 3, // Slice every 3 seconds for faster intermediate results
@@ -248,9 +295,14 @@ class WhisperService {
       });
 
       logger.log('[WhisperService] transcribeRealtime started successfully');
-      this.stopFn = stop;
+      const cancelledDuringStart = operation !== this.transcriptionEpoch || !this.isTranscribing;
+      if (!cancelledDuringStart) this.stopFn = stop;
 
       subscribe((evt: RealtimeTranscribeEvent) => {
+        if (cancelledDuringStart || operation !== this.transcriptionEpoch) {
+          if (!evt.isCapturing) resolveTranscriptionStopped();
+          return;
+        }
         logger.log('[WhisperService] Event received:', {
           isCapturing: evt.isCapturing,
           hasData: !!evt.data,
@@ -273,16 +325,27 @@ class WhisperService {
           resolveTranscriptionStopped();
         }
       });
+      if (cancelledDuringStart) {
+        stop();
+        await this.transcriptionFullyStopped;
+      }
     } catch (error) {
       logger.error('[WhisperService] transcribeRealtime error:', error);
-      this.isTranscribing = false;
-      this.stopFn = null;
+      if (operation === this.transcriptionEpoch) {
+        this.isTranscribing = false;
+        this.stopFn = null;
+      }
       resolveTranscriptionStopped();
       throw error;
     }
   }
 
   async stopTranscription(): Promise<void> {
+    this.stopVersion += 1;
+    await this.stopTranscriptionNow();
+  }
+
+  private async stopTranscriptionNow(): Promise<void> {
     logger.log('[WhisperService] stopTranscription called');
     try {
       // Grab and clear stopFn atomically to prevent double-stop race conditions.
@@ -310,6 +373,8 @@ class WhisperService {
   /** Force reset state — also calls native stop to prevent SIGSEGV from orphaned jobs. */
   forceReset(): void {
     logger.log('[WhisperService] Force resetting state');
+    this.transcriptionEpoch += 1;
+    this.stopVersion += 1;
     // Atomic grab-and-clear to match stopTranscription's pattern and prevent double-stop
     const fn = this.stopFn;
     this.stopFn = null;
@@ -317,13 +382,13 @@ class WhisperService {
       try { fn(); } catch (e) { logger.error('[WhisperService] Error calling stopFn during forceReset:', e); }
     }
     this.isTranscribing = false;
-    this.transcriptionFullyStopped = Promise.resolve();
+    // Keep the native completion barrier: resetting UI state does not free native work.
   }
 
   isCurrentlyTranscribing(): boolean { return this.isTranscribing; }
 
   // Transcribe a single audio file
-  async transcribeFile(
+  private async transcribeFileNow(
     filePath: string,
     options?: {
       language?: string;
@@ -335,18 +400,24 @@ class WhisperService {
     }
 
     if (this.isTranscribing) throw new Error('Another transcription is running. Stop it before importing audio.');
+    await this.transcriptionFullyStopped;
+    if (!this.context) throw new Error('No Whisper model loaded');
+    if (this.isTranscribing) throw new Error('Another transcription is running. Stop it before importing audio.');
+    const operation = ++this.transcriptionEpoch;
     this.isTranscribing = true;
     try {
       const { promise, stop } = this.context.transcribe(filePath, {
-        language: options?.language || 'auto', onProgress: options?.onProgress,
+        language: whisperLanguage(this.currentModelPath, options?.language), onProgress: options?.onProgress,
       });
       this.stopFn = stop;
       this.transcriptionFullyStopped = promise.then(() => {}, () => {});
       const { result } = await promise;
       return result;
     } finally {
-      this.stopFn = null;
-      this.isTranscribing = false;
+      if (operation === this.transcriptionEpoch) {
+        this.stopFn = null;
+        this.isTranscribing = false;
+      }
     }
   }
 }

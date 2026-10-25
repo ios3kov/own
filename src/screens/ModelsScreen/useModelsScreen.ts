@@ -257,6 +257,7 @@ export function useModelsScreen() {
     downloadedModels: text.downloadedModels,
     hasActiveFilters: text.hasActiveFilters,
     ramGB: text.ramGB,
+    deviceName: text.deviceName,
     deviceRecommendation: text.deviceRecommendation,
     filteredResults: text.filteredResults,
     recommendedAsModelInfo: text.recommendedAsModelInfo,

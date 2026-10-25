@@ -5,6 +5,7 @@ import { AnimatedEntry } from '../../components/AnimatedEntry';
 import { useThemedStyles } from '../../theme';
 import { GeneratedImage } from '../../types';
 import { createStyles } from './styles';
+import { storedMediaUri } from '../../services/storedMediaUri';
 
 interface GalleryGridItemProps {
   item: GeneratedImage;
@@ -37,7 +38,7 @@ export const GalleryGridItem: React.FC<GalleryGridItemProps> = ({
         activeOpacity={0.8}
       >
         <Image
-          source={{ uri: `file://${item.imagePath}` }}
+          source={{ uri: storedMediaUri(item.imagePath) }}
           style={styles.gridImage}
         />
         {isSelectMode && (

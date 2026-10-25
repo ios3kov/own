@@ -1,3 +1,4 @@
+import {registerReplySend,replyTimingNow,activeReplyTiming} from '../../services/replyTiming';
 import { APPLE_MODEL_ID,APPLE_MODEL_NAME,useFoundationStore } from '../../services/foundationModels';
 import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
 import { useNavigation,useRoute,RouteProp } from '@react-navigation/native';
@@ -181,7 +182,8 @@ export const useChatScreen = () => {
   }, []);
 
   const handleQueuedSend = useCallback(async (item: QueuedMessage) => {
-    addMessageRef.current(item.conversationId, { role: 'user', content: item.text, attachments: item.attachments });
+    const sent=addMessageRef.current(item.conversationId, { role: 'user', content: item.text, attachments: item.attachments });
+    if(sent?.id && item.requestedAt!==undefined) registerReplySend(sent.id,item.requestedAt,item.queuedAt===undefined ? 0 : Math.max(0,replyTimingNow()-item.queuedAt));
     await startGenerationRef.current(item.conversationId, item.messageText);
   }, []);
 
@@ -215,7 +217,7 @@ export const useChatScreen = () => {
   useChatImageModelEffects({ setDownloadedImageModels, settings, activeImageModelId, downloadedModels });
   useChatModelStateSync({ activeModelInfo, activeModelId, activeModel, modelDeps, activeRemoteModel, activeRemoteTextModelId, isModelLoading, setSupportsVision, setSupportsToolCalling, setSupportsThinking });
 
-  const displayMessages = getDisplayMessages(activeConversation?.messages || [], { isThinking, streamingMessage, streamingReasoningContent, isStreamingForThisConversation });
+  const displayMessages = getDisplayMessages(activeConversation?.messages || [], { isThinking, streamingMessage, streamingReasoningContent, isStreamingForThisConversation,replyTraceId:activeReplyTiming(activeConversationId)?.id });
 
   useEffect(() => {
     const prev = lastMessageCountRef.current, curr = displayMessages.length;
@@ -240,6 +242,7 @@ export const useChatScreen = () => {
     return (
       settings.nThreads !== loadedSettings.nThreads ||
       settings.nBatch !== loadedSettings.nBatch ||
+      (settings.nUbatch ?? 0) !== (loadedSettings.nUbatch ?? 0) ||
       settings.contextLength !== loadedSettings.contextLength ||
       settings.enableGpu !== loadedSettings.enableGpu ||
       settings.inferenceBackend !== loadedSettings.inferenceBackend ||

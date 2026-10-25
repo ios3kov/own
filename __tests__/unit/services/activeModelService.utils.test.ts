@@ -1,9 +1,9 @@
 /**
  * Unit tests for activeModelService/utils.ts
- * Focuses on syncWithNativeState LiteRT branch.
+ * Covers native residency synchronization and resource accounting.
  */
 
-import { syncWithNativeState } from '../../../src/services/activeModelService/utils';
+import { syncWithNativeState, getResourceUsage } from '../../../src/services/activeModelService/utils';
 
 jest.mock('../../../src/services/llm', () => ({
   llmService: { isModelLoaded: jest.fn() },
@@ -71,4 +71,18 @@ describe('syncWithNativeState', () => {
 
     expect(target.setLoadedTextModelId).toHaveBeenCalledWith('model-abc');
   });
+});
+
+
+it('does not count selected model weights after native contexts are released', async () => {
+  const {useAppStore} = require('../../../src/stores');
+  const {coreMLImageGeneratorService} = require('../../../src/services/coreMLImageGenerator');
+  useAppStore.getState.mockReturnValue({activeModelId:'text',activeImageModelId:'image',
+    downloadedModels:[{id:'text',fileSize:100}],downloadedImageModels:[{id:'image',size:200}]});
+  mockedLlm.isModelLoaded.mockReturnValue(false);
+  coreMLImageGeneratorService.isModelLoaded.mockResolvedValue(false);
+  expect((await getResourceUsage()).estimatedModelMemory).toBe(0);
+  mockedLlm.isModelLoaded.mockReturnValue(true);
+  coreMLImageGeneratorService.isModelLoaded.mockResolvedValue(true);
+  expect((await getResourceUsage()).estimatedModelMemory).toBe(380);
 });

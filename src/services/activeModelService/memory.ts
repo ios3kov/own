@@ -119,6 +119,7 @@ export interface CheckMemoryParams {
   modelType: ModelType;
   ids: LoadedModelIds;
   lists: ModelLists;
+  auxiliaryMemoryGB?: number;
 }
 
 export async function checkMemoryForModel(
@@ -147,7 +148,7 @@ export async function checkMemoryForModel(
   }
 
   const requiredMemoryGB = estimateModelMemoryGB(model, modelType);
-  const currentlyLoadedMemoryGB = getOtherLoadedMemoryGB(modelType, ids, lists);
+  const currentlyLoadedMemoryGB = getOtherLoadedMemoryGB(modelType, ids, lists) + (params.auxiliaryMemoryGB ?? 0);
   const totalRequiredMemoryGB = requiredMemoryGB + currentlyLoadedMemoryGB;
   const remainingBudgetGB = memoryBudgetGB - totalRequiredMemoryGB;
 
@@ -203,6 +204,7 @@ export interface CheckDualMemoryParams {
   textModelId: string | null;
   imageModelId: string | null;
   lists: ModelLists;
+  auxiliaryMemoryGB?: number;
 }
 
 export async function checkMemoryForDualModel(

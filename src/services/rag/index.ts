@@ -27,6 +27,10 @@ export interface IndexDocumentParams {
 
 class RagService {
   private indexing=new Set<string>();
+  private workTail:Promise<void>=Promise.resolve();
+  private schedule<T>(work:()=>Promise<T>):Promise<T> {
+    const result=this.workTail.then(work);this.workTail=result.then(()=>undefined,()=>undefined);return result;
+  }
   async ensureReady(): Promise<void> {
     await ragDatabase.ensureReady();
   }
@@ -35,7 +39,7 @@ class RagService {
     const keys=[JSON.stringify([params.projectId,'path',params.filePath]),JSON.stringify([params.projectId,'name',params.fileName])];
     if (keys.some(key=>this.indexing.has(key))) throw new Error('This document is already being indexed');
     keys.forEach(key=>this.indexing.add(key));
-    try { return await this.indexDocumentImpl(params); }
+    try { return await this.schedule(()=>this.indexDocumentImpl(params)); }
     finally { keys.forEach(key=>this.indexing.delete(key)); }
   }
 
@@ -69,6 +73,8 @@ class RagService {
     onProgress?.({ stage: 'embedding', message: 'Generating embeddings...' });
     try {
       await embeddingService.load();
+      const modelId=embeddingService.getModelIdentity();
+      if(!modelId) throw new Error('Could not verify the document-search model.');
       const texts = chunks.map(c => c.content);
       const embeddings = await embeddingService.embedBatch(texts);
       const entries = rowIds.map((rowId, i) => ({
@@ -76,7 +82,8 @@ class RagService {
         docId,
         embedding: embeddings[i],
       }));
-      ragDatabase.insertEmbeddingsBatch(entries);
+      if(embeddingService.getModelIdentity()!==modelId) throw new Error('Document-search model changed. Refresh document search.');
+      ragDatabase.insertEmbeddingsBatch(entries,modelId);
       logger.log(`[RAG] Generated ${embeddings.length} embeddings for ${fileName}`);
     } catch (err) {
       logger.error('[RAG] Embedding generation failed (non-fatal):', err);
@@ -87,13 +94,17 @@ class RagService {
     return docId;
   }
 
-  async backfillEmbeddings(projectId: string): Promise<number> {
+  backfillEmbeddings(projectId:string):Promise<number> {return this.schedule(()=>this.backfillEmbeddingsImpl(projectId));}
+  private async backfillEmbeddingsImpl(projectId: string): Promise<number> {
     await this.ensureReady();
     const docs = ragDatabase.getDocumentsByProject(projectId);
-    let total = 0;
-
+    let total = 0;let failures=0;
+    if(!docs.length) return 0;
+    await embeddingService.load();
+    const modelId=embeddingService.getModelIdentity();
+    if(!modelId) throw new Error('Could not verify the document-search model. Reload it and try again.');
     for (const doc of docs) {
-      if (ragDatabase.hasEmbeddingsForDocument(doc.id)) continue;
+      if (ragDatabase.getDocumentEmbeddingVersion(doc.id)===modelId && ragDatabase.hasEmbeddingsForDocument(doc.id)) continue;
 
       const chunks = ragDatabase.getChunksByDocument(doc.id);
       if (chunks.length === 0) continue;
@@ -107,20 +118,23 @@ class RagService {
           docId: doc.id,
           embedding: embeddings[i],
         }));
-        ragDatabase.insertEmbeddingsBatch(entries);
+        if(embeddingService.getModelIdentity()!==modelId) throw new Error('Document-search model changed. Refresh document search.');
+      ragDatabase.insertEmbeddingsBatch(entries,modelId);
         total += embeddings.length;
         logger.log(`[RAG] Backfilled ${embeddings.length} embeddings for ${doc.name}`);
       } catch (err) {
-        logger.error(`[RAG] Backfill failed for ${doc.name}:`, err);
+        failures+=1;logger.error(`[RAG] Backfill failed for ${doc.name}:`, err);
       }
     }
 
+    if(failures) throw new Error(`${failures} documents could not refresh. Try again.`);
     return total;
   }
 
   async deleteDocument(docId: number): Promise<void> {
-    await this.ensureReady();
-    ragDatabase.deleteDocument(docId);
+    return this.schedule(async()=>{
+      await this.ensureReady();await embeddingService.clearDocumentCache();ragDatabase.deleteDocument(docId);
+    });
   }
 
   async getDocumentsByProject(projectId: string) {
@@ -142,8 +156,9 @@ class RagService {
   }
 
   async deleteProjectDocuments(projectId: string): Promise<void> {
-    await this.ensureReady();
-    ragDatabase.deleteDocumentsByProject(projectId);
+    return this.schedule(async()=>{
+      await this.ensureReady();await embeddingService.clearDocumentCache();ragDatabase.deleteDocumentsByProject(projectId);
+    });
   }
 }
 

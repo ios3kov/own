@@ -44,7 +44,7 @@ export const resetStores = (): void => {
     activeModelId: null,
     isLoadingModel: false,
     settings: {
-      allowAppleSpeech: false, readRepliesAloud: false, historyTurns:24,
+      allowAppleSpeech: false, readRepliesAloud: false, replyVoiceId: '', historyTurns:24,
       systemPrompt: 'You are a helpful AI assistant running locally on the user\'s device. Be concise and helpful.',
       temperature: 0.7,
       maxTokens: 1024,

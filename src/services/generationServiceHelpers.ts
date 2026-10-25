@@ -1,3 +1,5 @@
+import {scheduleTokenFlush} from './streamFlush';
+export {FLUSH_INTERVAL_MS} from './streamFlush';
 import { buildGenerationMetaImpl } from './generationMetadata';
 import { beginContextUsage } from './contextUsage';
 import { mergeDocumentSources } from './documentSources';
@@ -17,7 +19,6 @@ import type { ToolResult } from './tools/types';
 import type { GenerationOptions,CompletionResult } from './providers/types';
 import logger from '../utils/logger';
 
-export const FLUSH_INTERVAL_MS = 50; // ~20 updates/sec
 type StreamChunk = string | { content?: string; reasoningContent?: string };
 
 
@@ -68,14 +69,13 @@ export function buildToolLoopHandlersImpl(svc: any) {
       if (stale()) return;
       const chunk = typeof data === 'string' ? { content: data } : data;
       handleStreamChunk(svc, chunk);
-      if (!svc.flushTimer) {
-        svc.flushTimer = setTimeout(() => svc.flushTokenBuffer(), FLUSH_INTERVAL_MS);
-      }
+      scheduleTokenFlush(svc);
     },
     onStreamReset: () => {
       if (stale()) return;
       svc.forceFlushTokens();
       svc.state.streamingContent = '';
+      svc.hasFlushedContent=false;
       svc.tokenBuffer = '';
       replySpeech.resetText();
     },
@@ -109,6 +109,7 @@ export async function prepareGenerationImpl(svc: any, conversationId: string, me
   if (svc.state.isGenerating) return false;
   svc.generationSequence = (svc.generationSequence || 0) + 1;
   const sequence = svc.generationSequence;
+  svc.hasFlushedContent=false;
   svc.documentSources = mergeDocumentSources([], messages.filter(m => m.role === 'system').flatMap(m => m.documentSources || []));
   svc.updateState({
     isGenerating: true, isThinking: true, conversationId,
@@ -170,9 +171,7 @@ export async function generateResponseImpl(
         if (chunk.reasoningContent) {
           svc.reasoningBuffer += chunk.reasoningContent;
         }
-        if (!svc.flushTimer) {
-          svc.flushTimer = setTimeout(() => svc.flushTokenBuffer(), FLUSH_INTERVAL_MS);
-        }
+        scheduleTokenFlush(svc);
       },
       () => {
         // If aborted, stopGeneration() already handled cleanup — don't clobber new generation state.
@@ -236,17 +235,13 @@ export async function generateRemoteResponseImpl(
         }
         svc.state.streamingContent += token;
         svc.tokenBuffer += token;
-        if (!svc.flushTimer) {
-          svc.flushTimer = setTimeout(() => svc.flushTokenBuffer(), FLUSH_INTERVAL_MS);
-        }
+        scheduleTokenFlush(svc);
       },
       onReasoning: (content: string) => {
         if (generationSignal.aborted || sequence !== svc.generationSequence) return;
         svc.reasoningBuffer += content;
         svc.totalReasoningLength += content.length;
-        if (!svc.flushTimer) {
-          svc.flushTimer = setTimeout(() => svc.flushTokenBuffer(), FLUSH_INTERVAL_MS);
-        }
+        scheduleTokenFlush(svc);
       },
       onComplete: (_result: CompletionResult) => {
         if (generationSignal.aborted || sequence !== svc.generationSequence) return;
@@ -297,7 +292,7 @@ export async function generateRemoteWithToolsImpl(
   const provider = svc.getCurrentProvider();
 
   if (!provider) { svc.resetState(); throw new Error('No remote provider available'); }
-  logger.log(`[GenService][DEBUG] Provider ready — type=${provider.type}, capabilities=${JSON.stringify(provider.capabilities)}`);
+  if (__DEV__) logger.log(`[GenService][DEBUG] Provider ready — type=${provider.type}, capabilities=${JSON.stringify(provider.capabilities)}`);
 
   const { enabledToolIds, projectId, ...callbacks } = options;
 

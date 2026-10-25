@@ -80,6 +80,16 @@ export const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
   },
+  kbManageTitle: { flexShrink: 1 },
+  kbManageButton: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    flexWrap: 'wrap' as const,
+    gap: SPACING.sm,
+    minHeight: 44,
+    paddingVertical: SPACING.xs,
+  },
   sectionTitleRow: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,

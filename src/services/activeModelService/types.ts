@@ -29,6 +29,7 @@ export interface ActiveModelInfo {
 }
 
 export interface ResourceUsage {
+  auxiliaryMemoryEstimateComplete?: boolean;
   memoryUsed: number;
   memoryTotal: number;
   memoryAvailable: number;

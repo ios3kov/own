@@ -1,3 +1,4 @@
+import {documentEmbeddingCache} from './documentEmbeddingCache';
 import { initLlama,LlamaContext } from 'llama.rn';
 import RNFS from 'react-native-fs';
 import logger from '../../utils/logger';
@@ -8,13 +9,28 @@ const EMBEDDING_CTX_SIZE = 512;
 
 class EmbeddingService {
   private context: LlamaContext | null = null;
+  private currentModelPath: string | null = null;
   private loading: Promise<void> | null = null;
+  private loadEpoch = 0;
+  private pendingWork=0;
+  private pendingReleases=0;
+  private workTail: Promise<void> = Promise.resolve();
+  private modelIdentity:string|null=null;
+  private queryCache = new Map<string, number[]>();
+
+  private schedule<T>(work: () => Promise<T>): Promise<T> {
+    this.pendingWork+=1;
+    const result = this.workTail.then(work).finally(()=>{this.pendingWork-=1;});
+    this.workTail = result.then(() => undefined, () => undefined);
+    return result;
+  }
 
   async load(): Promise<void> {
-    if (this.context) return;
+    if (this.context && this.pendingReleases===0) return;
     if (this.loading !== null) return this.loading;
 
-    this.loading = this.doLoad();
+    const epoch = this.loadEpoch;
+    this.loading = this.schedule(() => this.doLoad(epoch));
     try {
       await this.loading;
     } finally {
@@ -22,10 +38,12 @@ class EmbeddingService {
     }
   }
 
-  private async doLoad(): Promise<void> {
+  private async doLoad(epoch: number): Promise<void> {
     const modelPath = await this.ensureModelCopied();
+    const identity=await this.readModelIdentity(modelPath);
     logger.log('[Embedding] Loading embedding model...');
-    this.context = await initLlama({
+    if (epoch !== this.loadEpoch) throw new Error('Embedding load cancelled.');
+    const context = await initLlama({
       model: modelPath,
       embedding: true,
       n_gpu_layers: 0,
@@ -35,9 +53,26 @@ class EmbeddingService {
       use_mlock: false,
       use_mmap: true,
     } as any);
+    if (epoch !== this.loadEpoch) {
+      await context.release();
+      throw new Error('Embedding load cancelled.');
+    }
+    this.queryCache.clear();
+    this.context = context;
+    this.currentModelPath = modelPath;
+    this.modelIdentity=identity;
     logger.log('[Embedding] Model loaded successfully');
   }
 
+  private async readModelIdentity(path:string):Promise<string|null> {
+    try {
+      const digest=await RNFS.hash(path,'sha256');
+      return /^[a-f0-9]{64}$/i.test(digest) ? `${require('llama.rn/package.json').version}:384:${digest.toLowerCase()}` : null;
+    } catch {return null;}
+  }
+  async clearDocumentCache():Promise<void> {
+    return this.schedule(async()=>{this.queryCache.clear();await documentEmbeddingCache.clear();});
+  }
   private async ensureModelCopied(): Promise<string> {
     const destPath = `${RNFS.DocumentDirectoryPath}/${EMBEDDING_MODEL_FILENAME}`;
     const exists = await RNFS.exists(destPath);
@@ -52,6 +87,23 @@ class EmbeddingService {
   }
 
   async embed(text: string): Promise<number[]> {
+    return this.schedule(async () => {
+      if (!this.context) throw new Error('Embedding model not loaded. Call load() first.');
+      const cached = this.queryCache.get(text);
+      if (cached) {
+        this.queryCache.delete(text); this.queryCache.set(text, cached);
+        return [...cached];
+      }
+      const vector = await this.runEmbedding(text);
+      if (text.length <= 4096) {
+        if (this.queryCache.size >= 64) this.queryCache.delete(this.queryCache.keys().next().value!);
+        this.queryCache.set(text, [...vector]);
+      }
+      return vector;
+    });
+  }
+
+  private async runEmbedding(text: string): Promise<number[]> {
     if (!this.context) throw new Error('Embedding model not loaded. Call load() first.');
     try {
       const result = await (this.context as any).embedding(text);
@@ -62,7 +114,7 @@ class EmbeddingService {
       // Attempt recovery by reloading the embedding model
       if (msg.includes('ggml') || msg.includes('abort') || msg.includes('alloc') || msg.includes('OOM')) {
         try {
-          await this.unload();
+          await this.releaseContext();
         } catch { /* ignore cleanup errors */ }
         throw new Error(`Embedding failed (native error). Model has been unloaded for safety. (${msg})`);
       }
@@ -71,29 +123,49 @@ class EmbeddingService {
   }
 
   async embedBatch(texts: string[]): Promise<number[][]> {
-    const results: number[][] = [];
-    for (const text of texts) {
-      results.push(await this.embed(text));
-    }
-    return results;
+    return this.schedule(async () => {
+      if (!this.context) throw new Error('Embedding model not loaded. Call load() first.');
+      if (this.modelIdentity) await documentEmbeddingCache.prepare(this.modelIdentity);
+      const results: number[][] = [];
+      for (const text of texts) {
+        const cached=this.modelIdentity ? documentEmbeddingCache.get(text) : undefined;
+        const vector=cached ?? await this.runEmbedding(text);
+        results.push(vector);
+        if(this.modelIdentity && !cached) documentEmbeddingCache.put(text,vector);
+      }
+      if(this.modelIdentity) await documentEmbeddingCache.save();
+      return results;
+    });
   }
 
   async unload(): Promise<void> {
-    if (this.context) {
-      try {
-        await this.context.release();
-      } catch (e) {
-        logger.warn('[Embedding] Error releasing context (bridge may be torn down):', e);
-      }
-      this.context = null;
+    this.loadEpoch += 1;this.pendingReleases+=1;
+    try {await this.schedule(() => this.releaseContext());} finally {this.pendingReleases-=1;}
+  }
+
+  async releaseIfIdle():Promise<boolean> {
+    if(!this.context || this.loading || this.pendingWork || this.pendingReleases) return false;
+    await this.unload();return true;
+  }
+  private async releaseContext(): Promise<void> {
+    const context = this.context;
+    this.context = null;
+    this.currentModelPath = null;
+    this.modelIdentity=null;
+    this.queryCache.clear();
+    if (context) {
+      try { await context.release(); }
+      catch (error) { logger.warn('[Embedding] Error releasing context:', error); }
       logger.log('[Embedding] Model unloaded');
     }
   }
 
   isLoaded(): boolean {
-    return this.context !== null;
+    return this.context !== null && this.pendingReleases===0;
   }
 
+  getModelIdentity():string|null {return this.context && !this.pendingReleases ? this.modelIdentity : null;}
+  getLoadedModelPath(): string | null { return this.context ? this.currentModelPath : null; }
   getDimension(): number {
     return EMBEDDING_DIMENSION;
   }

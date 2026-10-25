@@ -12,6 +12,7 @@ import { useTheme, useThemedStyles } from '../../theme';
 import { GeneratedImage } from '../../types';
 import { createStyles } from './styles';
 import { formatDate } from './useGalleryActions';
+import { storedMediaUri } from '../../services/storedMediaUri';
 import type { AlertState } from '../../components/CustomAlert';
 
 interface FullscreenViewerProps {
@@ -54,7 +55,7 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
           <View style={styles.viewerContent} accessibilityElementsHidden={!!alert?.visible} importantForAccessibility={alert?.visible ? 'no-hide-descendants' : 'auto'}>
             {!showDetails && (
               <Image
-                source={{ uri: `file://${image.imagePath}` }}
+                source={{ uri: storedMediaUri(image.imagePath) }}
                 style={styles.fullscreenImage}
                 resizeMode="contain"
               />
@@ -68,7 +69,7 @@ export const FullscreenViewer: React.FC<FullscreenViewerProps> = ({
                   </TouchableOpacity>
                 </View>
                 <Image
-                  source={{ uri: `file://${image.imagePath}` }}
+                  source={{ uri: storedMediaUri(image.imagePath) }}
                   style={styles.detailsPreview}
                   resizeMode="contain"
                 />

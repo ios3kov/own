@@ -1,3 +1,4 @@
+import { InstalledVoicePicker } from '../components/InstalledVoicePicker';
 import { replySpeech,useReplySpeechState } from '../services/replySpeech';
 import React,{ useState } from 'react';
 import {
@@ -23,6 +24,7 @@ export const VoiceSettingsScreen: React.FC = () => {
   const navigation = useNavigation();
   const appleEnabled = useAppStore(s => s.settings.allowAppleSpeech);
   const readRepliesAloud = useAppStore(s => s.settings.readRepliesAloud);
+  const replyVoiceId = useAppStore(s => s.settings.replyVoiceId) || '';
   const speechError = useReplySpeechState(s => s.error);
   const updateSettings = useAppStore(s => s.updateSettings);
   const { colors } = useTheme();
@@ -56,10 +58,11 @@ export const VoiceSettingsScreen: React.FC = () => {
           <Card style={styles.section}>
             <Text style={styles.modelName}>Read replies aloud</Text>
             <Text style={styles.description}>
-              Uses a basic voice already on this device. No voice download is started. Playback stops when you use the microphone, leave the app or change models.
+              Uses an installed Apple voice, including Enhanced and Premium when available. No voice download is started. Playback stops when you use the microphone, leave the app or change models.
             </Text>
             <Switch accessibilityLabel="Read replies aloud" value={readRepliesAloud}
               onValueChange={value => { updateSettings({readRepliesAloud: value}); if (!value) replySpeech.stop(); }} />
+            <InstalledVoicePicker selectedId={replyVoiceId} onSelect={id => { replySpeech.stop(); updateSettings({replyVoiceId:id}); }} />
             <Button title="Stop speaking" variant="outline" size="small" onPress={() => { replySpeech.stop(); }} />
             {speechError ? <Text accessibilityRole="alert" style={styles.description}>{speechError}</Text> : null}
           </Card>

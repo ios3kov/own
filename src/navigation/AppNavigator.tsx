@@ -51,11 +51,11 @@ const mainTabsStyles = StyleSheet.create({
 // Main Tab Navigator
 const MainTabs: React.FC = () => {
   const { colors } = useTheme();
-  const { width, fontScale } = useWindowDimensions();
+  const { fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, 8);
-  const labelLines = Math.max(1, Math.ceil(8 * 6 * fontScale / Math.max(40, width / 5 - 12)));
-  const tabBarHeight = 36 + labelLines * 14 * fontScale + bottomInset;
+  const navigationScale = Math.min(fontScale, 1.5);
+  const tabBarHeight = 36 + 14 * navigationScale + bottomInset;
 
   return (
     <View style={mainTabsStyles.container}>
@@ -85,7 +85,7 @@ const MainTabs: React.FC = () => {
             <TabIcon name={route.name} color={focused ? colors.primary : colors.textMuted} />
           ),
           tabBarLabel: ({ focused, children }) => (
-            <Text style={[mainTabsStyles.label, focused ? mainTabsStyles.selectedLabel : mainTabsStyles.plainLabel,
+            <Text maxFontSizeMultiplier={1.5} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[mainTabsStyles.label, focused ? mainTabsStyles.selectedLabel : mainTabsStyles.plainLabel,
               { color: focused ? colors.primary : colors.textMuted }]}>
               {children}
             </Text>

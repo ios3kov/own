@@ -98,6 +98,36 @@ describe('CoreMLImageGeneratorService', () => {
       });
     });
 
+
+    it('disposes a cancelled late load before starting the next native load', async () => {
+      let finish!: (value: boolean) => void;
+      const order: string[] = [];
+      mockCoreMLDiffusionModule.loadModel.mockImplementationOnce(() => new Promise(resolve => {finish=resolve;}))
+        .mockImplementationOnce(async () => {order.push('new load'); return true;});
+      mockCoreMLDiffusionModule.unloadModel.mockImplementationOnce(async () => {order.push('release old');return true;});
+      const abort = new AbortController();
+      const old = service.loadModel('/old',4,{signal:abort.signal}).catch((error: Error) => error);
+      while (!finish) await Promise.resolve();
+      abort.abort();
+      const next = service.loadModel('/new',4);
+      finish(true);
+      expect((await old).message).toContain('cancelled');
+      await next;
+      expect(order).toEqual(['release old','new load']);
+    });
+
+    it('cancelling during preparation reclaims the late loaded pipeline', async () => {
+      let finish!: (value: boolean) => void;
+      mockCoreMLDiffusionModule.loadModel.mockImplementationOnce(() => new Promise(resolve => {finish=resolve;}));
+      mockCoreMLDiffusionModule.cancelGeneration.mockResolvedValue(true);
+      mockCoreMLDiffusionModule.unloadModel.mockResolvedValue(true);
+      const pending = service.loadModel('/cancelled',4).catch((error: Error) => error);
+      while (!finish) await Promise.resolve();
+      await service.cancelGeneration();
+      finish(true);
+      expect((await pending).message).toContain('cancelled');
+      expect(mockCoreMLDiffusionModule.unloadModel).toHaveBeenCalledTimes(1);
+    });
     it('loadModel delegates to native module', async () => {
       mockCoreMLDiffusionModule.loadModel.mockResolvedValue(true);
 
@@ -476,6 +506,12 @@ describe('CoreMLImageGeneratorService', () => {
         height: 512,
         previewInterval: 2,
       });
+    });
+
+    it('passes valid zero guidance to the native generator', async () => {
+      mockCoreMLDiffusionModule.generateImage.mockResolvedValue({id:'zero',imagePath:'/zero.png',width:512,height:512,seed:0});
+      await service.generateImage({prompt:'puppy',guidanceScale:0,seed:0});
+      expect(mockCoreMLDiffusionModule.generateImage).toHaveBeenCalledWith(expect.objectContaining({guidanceScale:0,seed:0}));
     });
 
     it('returns a GeneratedImage with correct shape', async () => {

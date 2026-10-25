@@ -38,12 +38,11 @@ class CoreMLDiffusionModule: RCTEventEmitter {
   }
 
   @objc private func handleMemoryWarning() {
-    // If we're not actively generating, release the pipeline to free memory
-    guard !generating else { return }
-    if pipeline != nil {
-      pipeline = nil
-      loadedModelPath = nil
-      sendEvent(withName: "OwnImageError", body: [
+    pipelineQueue.async { [weak self] in
+      guard let self = self, !self.generating, self.pipeline != nil else { return }
+      self.pipeline = nil
+      self.loadedModelPath = nil
+      self.sendEvent(withName: "OwnImageError", body: [
         "error": "Model unloaded due to low memory. Please try a smaller model."
       ])
     }
@@ -202,17 +201,42 @@ class CoreMLDiffusionModule: RCTEventEmitter {
 
   @objc func isModelLoaded(_ resolve: @escaping RCTPromiseResolveBlock,
                            rejecter _: @escaping RCTPromiseRejectBlock) {
-    resolve(pipeline != nil)
+    pipelineQueue.async { [weak self] in resolve(self?.pipeline != nil) }
   }
 
   // MARK: - getLoadedModelPath
 
   @objc func getLoadedModelPath(_ resolve: @escaping RCTPromiseResolveBlock,
                                 rejecter _: @escaping RCTPromiseRejectBlock) {
-    resolve(loadedModelPath as Any)
+    pipelineQueue.async { [weak self] in resolve(self?.loadedModelPath as Any) }
   }
 
   // MARK: - generateImage
+
+  static func fittedImageRect(source: CGSize, target: CGSize) -> CGRect {
+    let scale = min(target.width / source.width, target.height / source.height)
+    let size = CGSize(width: source.width * scale, height: source.height * scale)
+    return CGRect(x: (target.width - size.width) / 2, y: (target.height - size.height) / 2,
+                  width: size.width, height: size.height)
+  }
+
+  static func exportImage(_ image: CGImage, size: CGSize) -> UIImage {
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    let source = CGSize(width: image.width, height: image.height)
+    return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+      UIImage(cgImage: image).draw(in: fittedImageRect(source: source, target: size))
+    }
+  }
+
+  static func generationConfiguration(prompt: String, isXL: Bool) -> PipelineConfiguration {
+    var config = PipelineConfiguration(prompt: prompt)
+    // Match Apple's StableDiffusionCLI: SDXL uses a different VAE latent scale.
+    let scale: Float32 = isXL ? 0.13025 : 0.18215
+    config.encoderScaleFactor = scale
+    config.decoderScaleFactor = scale
+    return config
+  }
 
   // swiftlint:disable:next cyclomatic_complexity
   @objc func generateImage(_ params: NSDictionary,
@@ -263,7 +287,7 @@ class CoreMLDiffusionModule: RCTEventEmitter {
       }
 
       do {
-        var pipelineConfig = PipelineConfiguration(prompt: prompt)
+        var pipelineConfig = Self.generationConfiguration(prompt: prompt, isXL: pipe is StableDiffusionXLPipeline)
         pipelineConfig.negativePrompt = negativePrompt
         pipelineConfig.stepCount = max(1, steps)
         pipelineConfig.guidanceScale = Float(guidanceScale)
@@ -320,12 +344,7 @@ class CoreMLDiffusionModule: RCTEventEmitter {
         let imagePath = generatedDir.appendingPathComponent("\(imageId).png")
         // CoreML model tensor sizes are fixed. Apply the selected export size
         // after native inference; settings must not promise faster inference.
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
-        let uiImage = renderer.image { _ in
-          UIImage(cgImage: cgImage).draw(in: CGRect(x: 0, y: 0, width: width, height: height))
-        }
+        let uiImage = Self.exportImage(cgImage, size: CGSize(width: width, height: height))
         guard let pngData = uiImage.pngData() else {
           reject("ERR_ENCODE", "Failed to encode image as PNG", nil)
           return

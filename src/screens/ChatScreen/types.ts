@@ -1,5 +1,6 @@
 import { Message } from '../../types';
 export type ChatMessageItem = {
+  replyTraceId?:string;
   id: string;
   role: 'assistant';
   content: string;
@@ -10,6 +11,7 @@ export type ChatMessageItem = {
 };
 
 export type StreamingState = {
+  replyTraceId?:string;
   isThinking: boolean;
   streamingMessage: string;
   streamingReasoningContent: string;
@@ -37,7 +39,7 @@ export function getDisplayMessages(
     }
     return [
       ...allMessages,
-      { id: 'streaming', role: 'assistant' as const, content: streamingMessage, reasoningContent: streamingReasoningContent || undefined, timestamp: Date.now(), isStreaming: true },
+      { id: 'streaming', role: 'assistant' as const, content: streamingMessage, reasoningContent: streamingReasoningContent || undefined, timestamp: Date.now(), isStreaming: true,...(streaming.replyTraceId ? {replyTraceId:streaming.replyTraceId} : {}) },
     ];
   }
   if (_lastDisplayBranch !== 'done') {

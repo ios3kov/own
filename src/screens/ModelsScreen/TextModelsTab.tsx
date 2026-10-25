@@ -41,7 +41,7 @@ type Props = Pick<ModelsScreenViewModel,
   | 'filterState'
   | 'textFiltersVisible' | 'setTextFiltersVisible'
   | 'filteredResults' | 'recommendedAsModelInfo' | 'trendingAsModelInfo'
-  | 'ramGB' | 'deviceRecommendation'
+  | 'ramGB' | 'deviceName' | 'deviceRecommendation'
   | 'hasActiveFilters'
   | 'downloadedModels'
   | 'alertState' | 'setAlertState'
@@ -224,9 +224,13 @@ const ModelDetailView: React.FC<DetailProps> = ({
 };
 
 
-const DeviceBanner: React.FC<{ ramGB: number; rec: { maxParameters: number; recommendedQuantization: string }; showTitle: boolean; styles: any }> = ({ ramGB, showTitle, styles }) => (
+export const DeviceBanner: React.FC<{ deviceName?: string; ramGB: number; rec: { maxParameters: number; recommendedQuantization: string; warning?:string }; showTitle: boolean; styles: any }> = ({ deviceName = 'This iPhone', ramGB, rec, showTitle, styles }) => (
   <View>
-    <View style={styles.deviceBanner}><Text style={styles.deviceBannerText}>{Math.round(ramGB)} GB memory. Start with a smaller model; fit is estimated and other apps also use memory.</Text></View>
+    <View style={styles.deviceBanner}>
+      <Text style={styles.deviceBannerText}>{deviceName} · {Math.round(ramGB)} GB memory.</Text>
+      <Text style={styles.deviceBannerText}>Start with the models below. Open one to see a suggested available file. Fit is an estimate; speed varies.</Text>
+      {rec.warning ? <Text style={styles.deviceBannerText}>{rec.warning}</Text> : null}
+    </View>
     {showTitle && <Text style={styles.recommendedTitle}>Start here</Text>}
   </View>
 );
@@ -275,7 +279,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
     searchQuery, setSearchQuery, isLoading, isRefreshing, hasSearched,
     selectedModel, setSelectedModel, modelFiles, setModelFiles, isLoadingFiles,
     filterState, textFiltersVisible, setTextFiltersVisible,
-    filteredResults, recommendedAsModelInfo, trendingAsModelInfo, ramGB, deviceRecommendation,
+    filteredResults, recommendedAsModelInfo, trendingAsModelInfo, ramGB, deviceName, deviceRecommendation,
     hasActiveFilters, downloadedModels,
     alertState, setAlertState, focusTrigger,
     handleSearch, handleRefresh, handleSelectModel, handleDownload, handleRepairMmProj, handleCancelDownload, handleDeleteModel,
@@ -385,7 +389,7 @@ export const TextModelsTab: React.FC<Props> = (props) => {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={colors.primary} />}
           ListHeaderComponent={hasSearched ? null : (
             <View>
-              <DeviceBanner ramGB={ramGB} rec={deviceRecommendation} showTitle={recommendedAsModelInfo.length > 0} styles={styles} />
+              <DeviceBanner deviceName={deviceName} ramGB={ramGB} rec={deviceRecommendation} showTitle={recommendedAsModelInfo.length > 0} styles={styles} />
               <Text style={styles.sectionTitle}>What would you like to do?</Text>
               <View style={styles.filterChipWrap}>
                 {([['text', 'Everyday chat'], ['vision', 'Ask about photos'], ['code', 'Write code']] as const).map(([type, label]) => (

@@ -1,4 +1,5 @@
-import React from 'react';
+import React, {useState} from 'react';
+import { storedMediaUri } from '../../../services/storedMediaUri';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../../navigation/types';
@@ -22,13 +23,15 @@ import logger from '../../../utils/logger';
 interface FadeInImageProps {
   uri: string;
   imageStyle: any;
+  errorColor?: string;
   testID?: string;
   wrapperTestID?: string;
   onPress?: () => void;
 }
 
-function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress }: FadeInImageProps) {
+function FadeInImage({ uri, imageStyle, errorColor, testID, wrapperTestID, onPress }: FadeInImageProps) {
   const opacity = useSharedValue(0);
+  const [failed, setFailed] = useState(false);
   const fadeStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return (
     <Animated.View style={[fadeInImageStyles.wrapper, fadeStyle]}>
@@ -36,21 +39,26 @@ function FadeInImage({ uri, imageStyle, testID, wrapperTestID, onPress }: FadeIn
         testID={wrapperTestID}
         style={fadeInImageStyles.wrapper}
         onPress={onPress}
+        disabled={failed}
         activeOpacity={0.8}
       >
-        <Image
+        {failed ? <View style={[imageStyle, fadeInImageStyles.fallback]}>
+          <Text style={{color:errorColor}}>Image unavailable</Text>
+        </View> : <Image
           testID={testID}
           source={{ uri }}
           style={imageStyle}
           resizeMode="cover"
           onLoad={() => { opacity.value = withTiming(1, { duration: 300 }); }}
-        />
+          onError={() => {setFailed(true); opacity.value = 1;}}
+        />}
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
 const fadeInImageStyles = StyleSheet.create({
+  fallback: {alignItems: 'center', justifyContent: 'center'},
   wrapper: {
     borderRadius: 12,
     overflow: 'hidden',
@@ -110,7 +118,7 @@ export function MessageAttachments({
                 ts: 'text/typescript',
               };
               const mimeType = ext ? mimeMap[ext] || 'application/octet-stream' : undefined;
-              let uri = attachment.uri;
+              let uri = storedMediaUri(attachment.uri);
               if (uri.startsWith('/')) {
                 uri = `file://${uri}`;
               } else if (!uri.includes('://')) {
@@ -146,12 +154,13 @@ export function MessageAttachments({
           </TouchableOpacity>
         ) : (
           <FadeInImage
-            key={attachment.id}
-            uri={attachment.uri}
+            key={`${attachment.id}:${storedMediaUri(attachment.uri)}`}
+            uri={storedMediaUri(attachment.uri)}
             imageStyle={styles.attachmentImage}
+            errorColor={colors.textSecondary}
             wrapperTestID={isUser ? `message-attachment-${index}` : 'generated-image'}
             testID={isUser ? `message-image-${index}` : 'generated-image-content'}
-            onPress={() => onImagePress?.(attachment.uri)}
+            onPress={() => onImagePress?.(storedMediaUri(attachment.uri))}
           />
         )
       )}

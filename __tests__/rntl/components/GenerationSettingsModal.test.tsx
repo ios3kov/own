@@ -707,7 +707,7 @@ describe('GenerationSettingsModal', () => {
 
     expect(getByText('Image Steps')).toBeTruthy();
     expect(getByText('Guidance Scale')).toBeTruthy();
-    expect(getByText('Image Threads')).toBeTruthy();
+    expect(() => getByText('Image Threads')).toThrow();
     expect(getByText('Saved Image Size')).toBeTruthy();
   });
 

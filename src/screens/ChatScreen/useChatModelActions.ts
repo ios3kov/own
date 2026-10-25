@@ -43,7 +43,7 @@ import { InteractionManager } from 'react-native';
 /** Wait for loading UI to render before blocking the JS bridge with native calls. */
 function waitForRenderFrame(): Promise<void> {
   return new Promise<void>(resolve => {
-    InteractionManager.runAfterInteractions(() => setTimeout(resolve, 350));
+    InteractionManager.runAfterInteractions(() => requestAnimationFrame(() => resolve()));
   });
 }
 
@@ -64,8 +64,7 @@ async function doLoadTextModel(deps: ModelActionDeps): Promise<void> {
   if (!activeModel || !activeModelId) return;
   try {
     await activeModelService.loadTextModel(activeModelId);
-    const multimodalSupport = llmService.getMultimodalSupport();
-    deps.setSupportsVision(((multimodalSupport?.vision || false)));
+    deps.setSupportsVision(llmService.supportsVision());
     if (deps.modelLoadStartTimeRef.current && deps.settings.showGenerationDetails) {
       const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
       addSystemMsg(deps, `Model loaded: ${activeModel.name} (${loadTime}s)`);
@@ -115,8 +114,7 @@ export async function initiateModelLoad(
 
   try {
     await activeModelService.loadTextModel(activeModelId);
-    const multimodalSupport = llmService.getMultimodalSupport();
-    deps.setSupportsVision(((multimodalSupport?.vision || false)));
+    deps.setSupportsVision(llmService.supportsVision());
     if (!alreadyLoading && deps.modelLoadStartTimeRef.current && deps.settings.showGenerationDetails) {
       const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
       addSystemMsg(deps, `Model loaded: ${activeModel.name} (${loadTime}s)`);
@@ -141,7 +139,7 @@ export async function ensureModelLoadedFn(
   if (!activeModel || !activeModelId) return;
   ;
   const loadedPath = llmService.getLoadedModelPath();
-  const currentVisionSupport = llmService.getMultimodalSupport()?.vision || false;
+  const currentVisionSupport = llmService.supportsVision();
   const needsReload = loadedPath !== activeModel.filePath ||
     (activeModel.mmProjPath && !currentVisionSupport);
   if (!needsReload && loadedPath === activeModel.filePath) {
@@ -162,8 +160,7 @@ export async function proceedWithModelLoadFn(
   await waitForRenderFrame();
   try {
     await activeModelService.loadTextModel(model.id);
-    const multimodalSupport = llmService.getMultimodalSupport();
-    deps.setSupportsVision(((multimodalSupport?.vision || false)));
+    deps.setSupportsVision(llmService.supportsVision());
     if (deps.modelLoadStartTimeRef.current && deps.settings.showGenerationDetails && deps.activeConversationId) {
       const loadTime = ((Date.now() - deps.modelLoadStartTimeRef.current) / 1000).toFixed(1);
       deps.addMessage(deps.activeConversationId, {
@@ -313,7 +310,7 @@ export function useChatModelStateSync(deps: ModelStateSyncDeps): void {
     if (activeModelInfo.isRemote) {
       setSupportsVision(activeRemoteModel?.capabilities?.supportsVision ?? false);
     } else if (activeModelMmProjPath && llmService.isModelLoaded()) {
-      setSupportsVision(llmService.getMultimodalSupport()?.vision ?? false);
+      setSupportsVision(llmService.supportsVision());
     } else {
       setSupportsVision(false);
     }

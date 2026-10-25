@@ -20,6 +20,14 @@ type PreviewCallback = (preview: { previewPath: string; step: number; totalSteps
 class CoreMLImageGeneratorService {
   private loadedThreads: number | null = null;
   private generating = false;
+  private modelLoadEpoch = 0;
+  private pipelineWork: Promise<void> = Promise.resolve();
+
+  private serialize<T>(work: () => Promise<T>): Promise<T> {
+    const result = this.pipelineWork.then(work);
+    this.pipelineWork = result.then(() => undefined, () => undefined);
+    return result;
+  }
   private eventEmitter: NativeEventEmitter | null = null;
 
   private getEmitter(): NativeEventEmitter {
@@ -51,7 +59,7 @@ class CoreMLImageGeneratorService {
     }
   }
 
-  async loadModel(modelPath: string, threads?: number, opts: { cpuOnly?: boolean; attentionVariant?: 'split_einsum' | 'original' } = {}): Promise<boolean> {
+  async loadModel(modelPath: string, threads?: number, opts: { cpuOnly?: boolean; attentionVariant?: 'split_einsum' | 'original'; signal?: AbortSignal } = {}): Promise<boolean> {
     if (!this.isAvailable()) {
       throw new Error('Core ML image generation is not available on this platform');
     }
@@ -69,14 +77,24 @@ class CoreMLImageGeneratorService {
       params.attentionVariant = opts.attentionVariant;
     }
 
+    const epoch = this.modelLoadEpoch;
     const ticket=beginModelLoad('image');
     const listener=this.getEmitter().addListener('OwnImageLoadProgress',(event:{modelPath:string;phase:string})=>{
       if(event.modelPath===modelPath)reportModelLoad(ticket,event.phase);
     });
     try {
-      const result=await DiffusionModule.loadModel(params);
-      this.loadedThreads=typeof threads==='number'?threads:this.loadedThreads;
-      return result;
+      return await this.serialize(async () => {
+        if (opts.signal?.aborted || epoch !== this.modelLoadEpoch) throw new Error('Image model loading cancelled');
+        const result = await DiffusionModule.loadModel(params);
+        if (opts.signal?.aborted || epoch !== this.modelLoadEpoch) {
+          // Dispose before allowing any newer operation into the native queue.
+          await DiffusionModule.unloadModel();
+          this.loadedThreads = null;
+          throw new Error('Image model loading cancelled');
+        }
+        this.loadedThreads = typeof threads === 'number' ? threads : this.loadedThreads;
+        return result;
+      });
     } finally { listener.remove();finishModelLoad(ticket); }
   }
 
@@ -87,7 +105,7 @@ class CoreMLImageGeneratorService {
   async unloadModel(): Promise<boolean> {
     if (!this.isAvailable()) return true;
     try {
-      const result = await DiffusionModule.unloadModel();
+      const result = await this.serialize<boolean>(() => DiffusionModule.unloadModel());
       this.loadedThreads = null;
       return result;
     } catch (e) {
@@ -118,7 +136,7 @@ class CoreMLImageGeneratorService {
       prompt,
       negativePrompt: params.negativePrompt || '',
       steps: params.steps || 8,
-      guidanceScale: params.guidanceScale || 7.5,
+      guidanceScale: params.guidanceScale ?? 7.5,
       seed: params.seed ?? generateRandomSeed(),
       width: params.width || 512,
       height: params.height || 512,
@@ -161,7 +179,7 @@ class CoreMLImageGeneratorService {
     const progressSubscription = this.subscribeToProgress(onProgress, onPreview);
 
     try {
-      const result = await DiffusionModule.generateImage(this.buildNativeParams(params, trimmedPrompt));
+      const result = await this.serialize(() => DiffusionModule.generateImage(this.buildNativeParams(params, trimmedPrompt)));
       // Native side releases the CoreML pipeline after generation to free
       // memory, so clear TS-side state so the next request triggers a reload.
       this.loadedThreads = null;
@@ -179,8 +197,8 @@ class CoreMLImageGeneratorService {
   }
 
   async cancelGeneration(): Promise<boolean> {
+    this.modelLoadEpoch += 1;
     if (!this.isAvailable()) return true;
-    this.generating = false;
     return await DiffusionModule.cancelGeneration();
   }
 

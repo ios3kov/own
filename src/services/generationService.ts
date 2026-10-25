@@ -26,6 +26,7 @@ type StreamChunk = string | { content?: string; reasoningContent?: string };
 
 export interface QueuedMessage {
   id: string; conversationId: string; text: string;
+  requestedAt?:number;queuedAt?:number;
   attachments?: MediaAttachment[]; messageText: string;
 }
 
@@ -57,6 +58,7 @@ class GenerationService {
   private remoteTimeToFirstToken: number | undefined;
 
   // Token batching — collect tokens and flush to UI at a controlled rate
+  private hasFlushedContent=false;
   private tokenBuffer: string = '';
   private reasoningBuffer: string = '';
   private totalReasoningLength: number = 0;
@@ -317,7 +319,7 @@ class GenerationService {
     this.state = { ...this.state, queuedMessages: pending.slice(count) };
     this.notifyListeners();
     const combined: QueuedMessage = all.length === 1 ? all[0] : {
-      id: all[0].id, conversationId: all[0].conversationId,
+      id: all[0].id, conversationId: all[0].conversationId,requestedAt:all[0].requestedAt,queuedAt:all[0].queuedAt,
       text: all.map(m => m.text).join('\n\n'),
       attachments: all.flatMap(m => m.attachments || []),
       messageText: all.map(m => m.messageText).join('\n\n'),

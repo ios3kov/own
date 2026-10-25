@@ -5,6 +5,7 @@ import { useAppStore,useChatStore } from '../../stores';
 import { imageGenerationService,coreMLImageGeneratorService } from '../../services';
 import type { ImageGenerationState } from '../../services';
 import { GeneratedImage } from '../../types';
+import { storedMediaUri } from '../../services/storedMediaUri';
 
 export const formatDate = (dateStr: string): string => {
   const ts = Number(dateStr);
@@ -165,7 +166,7 @@ export const useGalleryActions = (conversationId: string | undefined) => {
 
   const handleSaveImage = useCallback(async (image: GeneratedImage) => {
     try {
-      await Share.share({ url: `file://${image.imagePath}` });
+      await Share.share({ url: storedMediaUri(image.imagePath) });
     } catch (error: any) {
       setAlertState(showAlert('Error', `Failed to save image: ${error?.message || 'Unknown error'}`));
     }
