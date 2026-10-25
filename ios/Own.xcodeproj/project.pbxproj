@@ -39,6 +39,7 @@
 		FB65B66C5F0F648EF80E01BB /* OwnReplySpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2630146B2C42E4B6B7372D9 /* OwnReplySpeech.swift */; };
 		A20261025000000000000041 /* OwnHardwareInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20261025000000000000031 /* OwnHardwareInfo.swift */; };
 		A20261025000000000000042 /* OwnHardwareInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = A20261025000000000000032 /* OwnHardwareInfo.m */; };
+		1429B65A7F9A4F1C94A9866A /* OwnStorageAndMediaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEC20CF178A74A0C910EE79A /* OwnStorageAndMediaTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -99,6 +100,7 @@
 		F40B23A0E07EDD24BDED1FFE /* AudioImport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioImport.swift; sourceTree = SOURCE_ROOT; };
 		A20261025000000000000031 /* OwnHardwareInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnHardwareInfo.swift; sourceTree = "<group>"; };
 		A20261025000000000000032 /* OwnHardwareInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = OwnHardwareInfo.m; sourceTree = "<group>"; };
+		BEC20CF178A74A0C910EE79A /* OwnStorageAndMediaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnStorageAndMediaTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -228,6 +230,7 @@
 			isa = PBXGroup;
 			children = (
 				AABB000200000000000002AA /* OwnTests.swift */,
+				BEC20CF178A74A0C910EE79A /* OwnStorageAndMediaTests.swift */,
 				0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */,
 			);
 			path = OwnTests;
@@ -513,6 +516,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				AABB000100000000000001AA /* OwnTests.swift in Sources */,
+				1429B65A7F9A4F1C94A9866A /* OwnStorageAndMediaTests.swift in Sources */,
 				0A7B3D072F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
