@@ -46,3 +46,21 @@ Acceptance: combined load admission must include loaded speech, embedding and vi
 The helper and caller now include auxiliary estimates. A unit regression and a real-service integration regression both failed before the fix for the reported omission. The affected service suites pass after the fix (90 tests). Final full-suite/type/lint results are recorded in the task handoff outside the repository.
 
 Items20/23/76/82/85 remain partial where the existing plan says so: native internal tokenization, approximate document budgets, full-vector scoring, Apple-version restrictions and pending-paragraph reparsing are not claimed solved by this patch. Items26/62/67/80/81 remain unimplemented experiments/evaluations; no performance benefit is established, and the plan retains the hardware/isolation/energy checks. All physical performance comparisons remain NOT_RUN in this follow-up. The earlier 52/21/10/5 totals have not been recomputed.
+
+
+## Local document-token admission follow-up
+
+Item23: before local completion, count the complete native-formatted request with the loaded tokenizer, including history, tools and image paths. Reserve requested output and64 tokens of margin. Drop low-ranked whole automatic knowledge excerpts until fit, preserving user/system instructions and original message objects. If counting fails or output has no finite limit, omit automatic excerpts rather than claim a precise fit. History-only overflow still follows existing recovery; no saved messages or documents are edited.
+
+The candidate-retrieval character bound remains a coarse upper limit, not a precise remaining-context claim. The native completion adapter reuses the accepted formatted prompt, and the meter reuses the accepted token count. Late preparation cannot update another conversation's meter. Unit tests and cross-module retrieval/formatter/meter/completion tests cover the policy. This is a local completion improvement; Apple and tool-result document budgeting remain open, as do real-model/native-tokenizer quality and latency checks.
+
+Follow-up automated checks:253 suites /5,524 JavaScript tests PASS with detectOpenHandles; TypeScript and scoped ESLint PASS. Release simulator build result and physical NOT_RUN boundaries are retained in the external handoff.
+
+
+## Long-paragraph speech follow-up
+
+Item85: reproduced repeated parsing of a long unfinished paragraph with a sanitizer-work regression (305,411 input characters processed for the fixed streamed fixture, above the128,000 bound). Commit safe whitespace-ended spans after512 raw characters, while retaining protected code/link/reasoning boundaries. Mid-line fragments use a non-spoken parser prefix to avoid turning text such as1. or- into a new Markdown list; adjacent span whitespace is normalized consistently.
+
+Unit comparisons against the full parser cover long paragraphs, links, HTML, code, mathematical comparisons and list-like text. A cross-module streaming-to-speech-queue check verifies no duplicated/lost words and no private reasoning read aloud. This reduces reparsing in ordinary paragraphs; cumulative-prefix comparisons and unclosed protected/no-whitespace spans still have costs. No measured phone-speed, battery or fully linear-complexity claim.
+
+Final combined JavaScript checks:253 suites /5,536 tests PASS with detectOpenHandles; TypeScript and affected ESLint PASS. Separate final review reproduced and corrected a long-indentation heading boundary; all41 speech regressions then passed, followed by the full suite. An earlier full runner crashed in V8 garbage collection (SIGSEGV/139) during a concurrent build and was not counted as PASS; standalone reruns passed. Physical speech latency/quality and native Apple tokenization remain NOT_RUN. The final artifact/build receipt is retained in the external handoff.

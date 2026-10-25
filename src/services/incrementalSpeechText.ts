@@ -1,6 +1,6 @@
 const BLOCKS=[['<think>','</think>'],['<tool_call>','</tool_call>'],['<|tool_call>','<tool_call|>'],['<|channel>thought\n','<channel|>'],['<|channel|>analysis<|message|>','<|channel|>final<|message|>']] as const;
 
-/** Commit only closed lines. Open code, links and reasoning retain their parser context. */
+/** Commit closed lines or bounded, whitespace-ended spans. Protected markup retains its context. */
 export class IncrementalSpeechText {
  private previous='';private committed='';private offset=0;private cursor=0;
  private end='';private cached='';private wasFinal=false;
@@ -11,11 +11,23 @@ export class IncrementalSpeechText {
   if(!raw.startsWith(this.previous)) this.reset();
   const boundary=this.scan(raw);
   if(boundary>this.offset) {
-   this.committed+=this.sanitize(raw.slice(this.offset,boundary));this.offset=boundary;
+   const part=this.clean(raw.slice(this.offset,boundary),this.committed.length===0 || this.committed.endsWith('\n'));
+   // Keep leading whitespace with its upcoming heading/list instead of committing it.
+   if(part.endsWith('\n') || /\S/.test(part.slice(part.lastIndexOf('\n')+1))) {
+    this.committed=this.join(this.committed,part);this.offset=boundary;
+   }
   }
-  this.cached=this.committed+this.sanitize(raw.slice(this.offset),final);
+  this.cached=this.join(this.committed,this.clean(raw.slice(this.offset),this.committed.length===0 || this.committed.endsWith('\n'),final));
   this.previous=raw;this.wasFinal=final;
   return this.cached;
+ }
+ private clean(part:string,lineStart:boolean,final=false):string {
+  // Prevent a mid-line "1. " or "- " from being treated as a new Markdown list.
+  return lineStart ? this.sanitize(part,final) : this.sanitize(`x${part}`,final).slice(1);
+ }
+ private join(left:string,right:string):string {
+  // The full sanitizer collapses whitespace even across a committed span boundary.
+  return left+(left.endsWith(' ') && right.startsWith(' ') ? right.slice(1) : right);
  }
  private scan(raw:string):number {
   let boundary=this.offset;
@@ -39,7 +51,7 @@ export class IncrementalSpeechText {
     if(/^\d+$/.test(raw.slice(this.cursor+1,close))) {this.cursor=close+1;continue;}
     this.end=')';this.cursor+=1;continue;
    }
-   if(char==='\n') boundary=this.cursor+1;
+   if(char==='\n' || ((char===' ' || char==='\t') && this.cursor-this.offset>=512 && this.cursor+1<raw.length)) boundary=this.cursor+1;
    this.cursor+=1;
   }
   return boundary;

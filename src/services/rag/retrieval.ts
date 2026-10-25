@@ -1,3 +1,4 @@
+import { KNOWLEDGE_HEADER,KNOWLEDGE_FOOTER } from '../documentTokenBudget';
 import { ragDatabase, RagSearchResult, StoredEmbedding } from './database';
 import { embeddingService } from './embedding';
 import { cosineSimilarity } from './vectorMath';
@@ -98,7 +99,7 @@ class RetrievalService {
       return `[Source: ${safeName} (part ${chunk.position + 1})]\n${safeContent}`;
     });
 
-    return `<knowledge_base>\nThe following excerpts are from the user's project knowledge base. Use them to inform your response when relevant.\n\n${sections.join('\n\n---\n\n')}\n</knowledge_base>`;
+    return KNOWLEDGE_HEADER + sections.join('\n\n---\n\n') + KNOWLEDGE_FOOTER;
   }
 
   estimateCharBudget(contextLengthTokens: number): number {

@@ -1,3 +1,4 @@
+import {fitDocumentContext,formatLocalRequest,MeasuredPrompt} from './documentTokenBudget';
 import {beginReplyTiming} from './replyTiming';
 import {create} from 'zustand';
 import type {LlamaContext} from 'llama.rn';
@@ -17,20 +18,21 @@ export function beginContextUsage(conversationId:string): number {
 }
 
 /** Count the actual managed prompt, including tools and media, with the loaded tokenizer. */
-export async function measureLocalContext(context:LlamaContext, params:Record<string,any>, capacity?:number): Promise<Awaited<ReturnType<LlamaContext['getFormattedChat']>>|undefined> {
+export function measureLocalContext(context:LlamaContext, params:Record<string,any>, capacity?:number) {
+  return measureContext(context,params,{capacity});
+}
+
+async function measureContext(context:LlamaContext, params:Record<string,any>, options:{capacity?:number; prepared?:MeasuredPrompt}): Promise<Awaited<ReturnType<LlamaContext['getFormattedChat']>>|undefined> {
+  const {capacity,prepared}=options;
   const owner=useContextUsage.getState().latest;
   if (!owner || useChatStore.getState().streamingForConversationId !== owner.conversationId) return;
   let formatted:Awaited<ReturnType<LlamaContext['getFormattedChat']>>|undefined;
   try {
-    formatted=await context.getFormattedChat(params.messages, params.chat_template || params.chatTemplate, {
-      jinja:params.jinja, tools:params.tools, parallel_tool_calls:params.parallel_tool_calls,
-      tool_choice:params.tool_choice, enable_thinking:params.enable_thinking, reasoning_format:params.reasoning_format,
-      add_generation_prompt:params.add_generation_prompt, now:params.now,
-      chat_template_kwargs:params.chat_template_kwargs, force_pure_content:params.force_pure_content,
-    });
-    const result=await context.tokenize(formatted.prompt,{media_paths:formatted.media_paths});
-    if (!Array.isArray(result.tokens) || useContextUsage.getState().latest?.request !== owner.request) return formatted;
-    useContextUsage.setState({latest:{...owner,formattedPrompt:formatted.prompt,messageCount:params.messages?.length,promptTokens:result.tokens.length,
+    formatted=prepared?.formatted ?? await formatLocalRequest(context,params);
+    const result=prepared ? undefined : await context.tokenize(formatted.prompt,{media_paths:formatted.media_paths});
+    const count=prepared?.tokens ?? (Array.isArray(result?.tokens) ? result.tokens.length : undefined);
+    if (count === undefined || useContextUsage.getState().latest?.request !== owner.request) return formatted;
+    useContextUsage.setState({latest:{...owner,formattedPrompt:formatted.prompt,messageCount:params.messages?.length,promptTokens:count,
       replyReserve:Number.isSafeInteger(params.n_predict) && params.n_predict > 0 ? params.n_predict : null,
       capacity:typeof capacity === 'number' && Number.isSafeInteger(capacity) && capacity > 0 ? capacity : null}});
   } catch {
@@ -59,7 +61,11 @@ export function reportAppleContextUsage(values: {promptTokens:number; replyReser
  * to this completion, and never replaces a method on the resident context.
  */
 export async function contextForMeasuredCompletion(context:LlamaContext, params:Record<string,any>, capacity?:number):Promise<LlamaContext> {
-  const formatted=await measureLocalContext(context,params,capacity);
+  const owner=useContextUsage.getState().latest?.request;
+  const prepared=await fitDocumentContext(context,params,capacity);
+  const measured=owner===useContextUsage.getState().latest?.request
+    ? await measureContext(context,params,{capacity,prepared}) : undefined;
+  const formatted=prepared?.formatted ?? measured;
   // Re-evaluate this adapter when changing the engine; unknown versions keep the safe original path.
   if (!formatted || require('llama.rn/package.json').version!=='0.12.0-rc.9') return context;
   const requestContext=Object.create(context) as LlamaContext;
