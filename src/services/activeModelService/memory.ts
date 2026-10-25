@@ -233,6 +233,9 @@ export async function checkMemoryForDualModel(
     }
   }
 
+  const requiredMemoryGB = totalRequiredGB;
+  const currentlyLoadedMemoryGB = params.auxiliaryMemoryGB ?? 0;
+  totalRequiredGB += currentlyLoadedMemoryGB;
   const remainingBudgetGB = memoryBudgetGB - totalRequiredGB;
   const namesStr = modelNames.join(' + ');
   const requiredStr = totalRequiredGB.toFixed(1);
@@ -263,9 +266,9 @@ export async function checkMemoryForDualModel(
   return {
     canLoad,
     severity,
-    availableMemoryGB: memoryBudgetGB,
-    requiredMemoryGB: totalRequiredGB,
-    currentlyLoadedMemoryGB: 0,
+    availableMemoryGB: memoryBudgetGB - currentlyLoadedMemoryGB,
+    requiredMemoryGB,
+    currentlyLoadedMemoryGB,
     totalRequiredMemoryGB: totalRequiredGB,
     remainingAfterLoadGB: remainingBudgetGB,
     message,

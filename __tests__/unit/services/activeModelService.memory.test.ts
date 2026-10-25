@@ -2,7 +2,7 @@
  * Unit tests for activeModelService/memory.ts
  */
 
-import { getCurrentlyLoadedMemoryGB,getOtherLoadedMemoryGB } from '../../../src/services/activeModelService/memory';
+import { checkMemoryForDualModel,getCurrentlyLoadedMemoryGB,getOtherLoadedMemoryGB } from '../../../src/services/activeModelService/memory';
 
 jest.mock('../../../src/services/llm', () => ({
   llmService: { isModelLoaded: jest.fn() },
@@ -95,5 +95,26 @@ describe('getOtherLoadedMemoryGB', () => {
 
     // 2 GB * IMAGE_MODEL_OVERHEAD_MULTIPLIER
     expect(result).toBeGreaterThan(2.9);
+  });
+});
+
+
+describe('dual-model admission with resident auxiliary engines', () => {
+  it('rejects a combination that fits only when auxiliary memory is omitted', async () => {
+    const result = await checkMemoryForDualModel({
+      textModelId: null,
+      imageModelId: 'small-image',
+      lists: { downloadedModels: [], downloadedImageModels: [
+        { id: 'small-image', name: 'Small image', size: 1024 ** 3 } as any,
+      ] },
+      auxiliaryMemoryGB: 4,
+    });
+    expect(result.canLoad).toBe(false);
+    expect(result.severity).toBe('critical');
+    expect(result.requiredMemoryGB).toBe(1.5);
+    expect(result.currentlyLoadedMemoryGB).toBe(4);
+    expect(result.totalRequiredMemoryGB).toBe(5.5);
+    expect(result.availableMemoryGB).toBeCloseTo(0.8);
+    expect(result.remainingAfterLoadGB).toBeCloseTo(-0.7);
   });
 });

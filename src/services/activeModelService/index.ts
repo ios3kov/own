@@ -313,7 +313,8 @@ class ActiveModelService {
     return _checkMemoryForModel({ modelId, modelType, ids: this.getIds(), lists: this.getLists(), auxiliaryMemoryGB:auxiliary.estimatedBytes / 1024 ** 3 });
   }
   async checkMemoryForDualModel(textModelId: string | null, imageModelId: string | null): Promise<MemoryCheckResult> {
-    return _checkMemoryForDualModel({ textModelId, imageModelId, lists: this.getLists() });
+    const auxiliary = await residentAuxiliaryMemory();
+    return _checkMemoryForDualModel({ textModelId, imageModelId, lists: this.getLists(), auxiliaryMemoryGB: auxiliary.estimatedBytes / 1024 ** 3 });
   }
   async clearTextModelCache(): Promise<void> {
     if (llmService.isModelLoaded()) {

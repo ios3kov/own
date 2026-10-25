@@ -35,3 +35,14 @@ Simulator/mock checks cannot substitute for these results. The90-row plan record
 This was a separate self-review, not an external review-service result. It found and corrected: two remaining zero-guidance defaults; the legacy image-thread load check; missing index-model provenance and partial-index rejection; inaccessible nested document-management navigation; oversized maximum-text chrome. Checks were repeated for affected behavior. Native queue tests cover empty-resource memory warnings and residency reads; they do not prove real SDXL memory pressure handling. The scanner still reports review candidates and does not certify safety.
 
 Final evidence totals and installable candidate identity are in `iphone-followup-2026-10-24.md`. Historical failed navigation/geometry/visual attempts are retained in logs; only the final inspected screenshots count as visual evidence.
+
+
+## Follow-up to the independent 88-item review
+
+The independent report inspected an earlier dirty working copy at eaf6923. Its counts are not a new acceptance verdict for later revisions. Its concrete item43 finding was reproduced in the current code: dual-model admission ignored the resident auxiliary estimate in both the service caller and helper.
+
+Acceptance: combined load admission must include loaded speech, embedding and vision estimates; reject totals above the device budget; return consistent available/required/resident/remaining fields; stop counting resources after unload. This changes admission only, with no storage migration, model deletion or chat mutation.
+
+The helper and caller now include auxiliary estimates. A unit regression and a real-service integration regression both failed before the fix for the reported omission. The affected service suites pass after the fix (90 tests). Final full-suite/type/lint results are recorded in the task handoff outside the repository.
+
+Items20/23/76/82/85 remain partial where the existing plan says so: native internal tokenization, approximate document budgets, full-vector scoring, Apple-version restrictions and pending-paragraph reparsing are not claimed solved by this patch. Items26/62/67/80/81 remain unimplemented experiments/evaluations; no performance benefit is established, and the plan retains the hardware/isolation/energy checks. All physical performance comparisons remain NOT_RUN in this follow-up. The earlier 52/21/10/5 totals have not been recomputed.

@@ -4,6 +4,8 @@ import RNFS from 'react-native-fs';
 import { llmService } from '../../../src/services/llm';
 import { whisperService } from '../../../src/services/whisperService';
 import { embeddingService } from '../../../src/services/rag/embedding';
+import { activeModelService } from '../../../src/services/activeModelService';
+import { useAppStore } from '../../../src/stores/appStore';
 import { residentAuxiliaryMemory } from '../../../src/services/residentAuxiliaryMemory';
 import { createMockLlamaContext, resetStores } from '../../utils/testHelpers';
 
@@ -22,4 +24,19 @@ it('counts only resident resources and adds vision after its first image request
   expect((await residentAuxiliaryMemory()).estimatedBytes).toBe(360_000_000);
   await whisperService.unloadModel();await embeddingService.unload();await llmService.unloadModel();
   expect(await residentAuxiliaryMemory()).toEqual({estimatedBytes:0,complete:true});
+});
+
+it('includes loaded speech and embedding engines in dual-model admission', async()=>{
+  (initLlama as jest.Mock).mockResolvedValue(createMockLlamaContext());
+  (initWhisper as jest.Mock).mockResolvedValue({release:jest.fn().mockResolvedValue(undefined)});
+  await whisperService.loadModel('/speech.bin');
+  await embeddingService.load();
+  useAppStore.setState({downloadedImageModels:[{id:'image',name:'Image',size:1024 ** 3} as any]});
+  const loaded=await activeModelService.checkMemoryForDualModel(null,'image');
+  expect(loaded.currentlyLoadedMemoryGB).toBeCloseTo(240_000_000 / 1024 ** 3);
+  expect(loaded.totalRequiredMemoryGB).toBeCloseTo(1.5 + 240_000_000 / 1024 ** 3);
+  await whisperService.unloadModel();await embeddingService.unload();
+  const unloaded=await activeModelService.checkMemoryForDualModel(null,'image');
+  expect(unloaded.currentlyLoadedMemoryGB).toBe(0);
+  expect(unloaded.totalRequiredMemoryGB).toBe(1.5);
 });
