@@ -32,6 +32,7 @@ export const GalleryGridItem: React.FC<GalleryGridItemProps> = ({
         testID={`gallery-image-${item.id}`}
         accessibilityRole="button"
         accessibilityLabel={`Open image: ${item.prompt}`}
+        accessibilityState={{selected: isSelectMode && isSelected}}
         style={styles.gridItem}
         onPress={onPress}
         onLongPress={onLongPress}
@@ -42,7 +43,7 @@ export const GalleryGridItem: React.FC<GalleryGridItemProps> = ({
           style={styles.gridImage}
         />
         {isSelectMode && (
-          <View style={[styles.selectionOverlay, isSelected && styles.selectionOverlaySelected]}>
+          <View pointerEvents="none" style={[styles.selectionOverlay, isSelected && styles.selectionOverlaySelected]}>
             <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
               {isSelected && <Icon name="check" size={14} color="#fff" />}
             </View>

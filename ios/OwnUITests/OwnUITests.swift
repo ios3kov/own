@@ -444,7 +444,11 @@ final class OwnUITests: XCTestCase {
     let second = app.buttons["gallery-image-own-qa-gallery-two"]
     XCTAssertTrue(second.waitForExistence(timeout: 5))
     second.tap()
-    app.buttons["Delete selected images"].tap()
+    let deleteSelected = app.buttons["Delete selected images"]
+    let selectionReady = NSPredicate { _, _ in second.isSelected && deleteSelected.isEnabled }
+    expectation(for: selectionReady, evaluatedWith: app)
+    waitForExpectations(timeout: 10)
+    deleteSelected.tap()
     XCTAssertTrue(app.staticTexts["Delete Images"].waitForExistence(timeout: 5))
     app.buttons["Delete"].tap()
     XCTAssertTrue(second.waitForNonExistence(timeout: 10))

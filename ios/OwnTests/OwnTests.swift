@@ -1,6 +1,7 @@
 import XCTest
 import PDFKit
 import AVFAudio
+import FoundationModels
 
 @testable import Own
 
@@ -67,6 +68,22 @@ final class PDFExtractorModuleTests: XCTestCase {
     } catch {
       if #available(iOS 26.0, *) { XCTAssertTrue(OwnFoundationModels.isContextLimitError(error)) }
     }
+  }
+
+  func testContextLimitErrorsKeepLegacySDKSupport() {
+    if #available(iOS 26.0, *) {
+      let legacy = LanguageModelSession.GenerationError.exceededContextWindowSize(
+        .init(debugDescription: "Synthetic context overflow"))
+      XCTAssertTrue(OwnFoundationModels.isContextLimitError(legacy))
+      XCTAssertFalse(OwnFoundationModels.isContextLimitError(NSError(domain: "OwnQA", code: 1)))
+    }
+    #if compiler(>=6.4)
+    if #available(iOS 27.0, *) {
+      let modern = LanguageModelError.contextSizeExceeded(
+        .init(contextSize: 4096, tokenCount: 5000, debugDescription: "Synthetic overflow"))
+      XCTAssertTrue(OwnFoundationModels.isContextLimitError(modern))
+    }
+    #endif
   }
 
   func testDocumentBudgetKeepsInstructionsAndHigherRankedExcerpts() async throws {

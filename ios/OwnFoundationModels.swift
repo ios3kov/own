@@ -213,8 +213,10 @@ final class OwnFoundationModels: RCTEventEmitter {
   @available(iOS 26.0, *)
   static func isContextLimitError(_ error: Error) -> Bool {
     if error is OwnFoundationInputError { return true }
+    #if compiler(>=6.4)
     if #available(iOS 27.0, *), let error = error as? LanguageModelError,
        case .contextSizeExceeded = error { return true }
+    #endif
     if let error = error as? LanguageModelSession.GenerationError,
        case .exceededContextWindowSize = error { return true }
     return false

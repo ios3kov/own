@@ -444,11 +444,16 @@ describe('GalleryScreen', () => {
     gridItems = getGridItems(result);
     fireEvent.press(gridItems[1]);
     expect(result.getByText('2 selected')).toBeTruthy();
+    expect(getGridItems(result)[1].props.accessibilityState).toEqual({selected: true});
 
     // Tap second image again to deselect
     gridItems = getGridItems(result);
     fireEvent.press(gridItems[1]);
     expect(result.getByText('1 selected')).toBeTruthy();
+    expect(getGridItems(result)[1].props.accessibilityState).toEqual({selected: false});
+    fireEvent(getGridItems(result)[1], 'onLongPress');
+    expect(result.getByText('2 selected')).toBeTruthy();
+    expect(getGridItems(result)[1].props.accessibilityState).toEqual({selected: true});
   });
 
   it('delete selected images with confirmation', async () => {

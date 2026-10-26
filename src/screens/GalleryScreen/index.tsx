@@ -61,8 +61,8 @@ export const GalleryScreen: React.FC = () => {
       onLongPress={() => {
         if (!isSelectMode) {
           toggleSelectMode();
-          toggleImageSelection(item.id);
         }
+        toggleImageSelection(item.id);
       }}
     />
   );
