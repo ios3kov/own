@@ -743,7 +743,7 @@ describe('GalleryScreen', () => {
     expect(result.getByText('PROMPT')).toBeTruthy();
   });
 
-  it('long press does not re-enter select mode if already in select mode', () => {
+  it('long press selects another item without leaving select mode', () => {
     mockGeneratedImages.push(...sampleImages);
 
     const result = render(<GalleryScreen />);
@@ -756,7 +756,7 @@ describe('GalleryScreen', () => {
     // Long press again on a different item while already in select mode
     gridItems = getGridItems(result);
     fireEvent(gridItems[1], 'onLongPress');
-    // Should still be in select mode, not re-entered
-    expect(result.getByText('1 selected')).toBeTruthy();
+    expect(result.getByText('2 selected')).toBeTruthy();
+    expect(getGridItems(result)[1].props.accessibilityState).toEqual({selected: true});
   });
 });
