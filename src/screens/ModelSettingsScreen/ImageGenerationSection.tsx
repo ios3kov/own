@@ -1,3 +1,4 @@
+import {ImagePreviewSetting} from '../../components/ModelResourceOptions';
 import React,{ useState } from 'react';
 import { View,Text,Switch } from 'react-native';
 import Slider from '@react-native-community/slider';
@@ -188,6 +189,8 @@ export const ImageGenerationSection: React.FC = () => {
           thumbTintColor={colors.primary}
         />
       </View>
+
+      <ImagePreviewSetting />
 
       <AdvancedToggle isExpanded={showAdvanced} onPress={() => setShowAdvanced(!showAdvanced)} testID="image-advanced-toggle" />
 

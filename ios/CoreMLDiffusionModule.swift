@@ -18,7 +18,20 @@ class CoreMLDiffusionModule: RCTEventEmitter {
   private var pipeline: StableDiffusionPipelineProtocol?
   private var loadedModelPath: String?
   private var generating = false
-  private var cancelRequested = false
+  private let cancellationLock = NSLock()
+  private var cancellationFlag = false
+  private var cancelRequested: Bool {
+    get {
+      cancellationLock.lock()
+      defer { cancellationLock.unlock() }
+      return cancellationFlag
+    }
+    set {
+      cancellationLock.lock()
+      cancellationFlag = newValue
+      cancellationLock.unlock()
+    }
+  }
 
   // Serial queue for all pipeline operations
   private let pipelineQueue = DispatchQueue(label: "io.github.ios3kov.own.coreml.diffusion", qos: .userInitiated)
@@ -238,6 +251,34 @@ class CoreMLDiffusionModule: RCTEventEmitter {
     return config
   }
 
+  private struct GenerationOptions {
+    let negativePrompt: String
+    let steps: Int
+    let guidanceScale: Double
+    let seed: UInt32
+    let requestId: String
+    let previewInterval: Int
+
+    init(_ params: NSDictionary) {
+      negativePrompt = params["negativePrompt"] as? String ?? ""
+      steps = params["steps"] as? Int ?? 20
+      guidanceScale = params["guidanceScale"] as? Double ?? 7.5
+      seed = params["seed"] as? UInt32 ?? UInt32.random(in: 0..<UInt32.max)
+      requestId = params["requestId"] as? String ?? UUID().uuidString
+      previewInterval = params["previewInterval"] as? Int ?? 0
+    }
+  }
+
+  private static func generationConfiguration(prompt: String, isXL: Bool, options: GenerationOptions, previews: Bool) -> PipelineConfiguration {
+    var config = generationConfiguration(prompt: prompt, isXL: isXL)
+    config.negativePrompt = options.negativePrompt
+    config.stepCount = max(1, options.steps)
+    config.guidanceScale = Float(options.guidanceScale)
+    config.seed = options.seed
+    config.useDenoisedIntermediates = previews
+    return config
+  }
+
   // swiftlint:disable:next cyclomatic_complexity
   @objc func generateImage(_ params: NSDictionary,
                            resolver resolve: @escaping RCTPromiseResolveBlock,
@@ -253,10 +294,11 @@ class CoreMLDiffusionModule: RCTEventEmitter {
     }
 
     let prompt = (params["prompt"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    let negativePrompt = params["negativePrompt"] as? String ?? ""
-    let steps = params["steps"] as? Int ?? 20
-    let guidanceScale = params["guidanceScale"] as? Double ?? 7.5
-    let seed = params["seed"] as? UInt32 ?? UInt32.random(in: 0..<UInt32.max)
+    let options = GenerationOptions(params)
+    guard !options.requestId.isEmpty, options.requestId.utf8.count <= 128 else {
+      reject("ERR_INVALID_PARAMS", "Invalid image generation request identifier.", nil)
+      return
+    }
 
     // Validate prompt before sending to the pipeline — an empty prompt causes
     // TextEncoder.encode(ids:) to force-unwrap a nil value and crash.
@@ -278,7 +320,11 @@ class CoreMLDiffusionModule: RCTEventEmitter {
     pipelineQueue.async { [weak self] in
       guard let self = self else { return }
 
-      defer { self.generating = false }
+      let previews = CoreMLImagePreviewSession(interval: options.previewInterval, requestId: options.requestId)
+      defer {
+        previews.cleanup()
+        self.generating = false
+      }
 
       // Re-check that pipeline hasn't been released (e.g. by a memory warning)
       guard self.pipeline != nil else {
@@ -287,25 +333,15 @@ class CoreMLDiffusionModule: RCTEventEmitter {
       }
 
       do {
-        var pipelineConfig = Self.generationConfiguration(prompt: prompt, isXL: pipe is StableDiffusionXLPipeline)
-        pipelineConfig.negativePrompt = negativePrompt
-        pipelineConfig.stepCount = max(1, steps)
-        pipelineConfig.guidanceScale = Float(guidanceScale)
-        pipelineConfig.seed = seed
+        let pipelineConfig = Self.generationConfiguration(prompt: prompt, isXL: pipe is StableDiffusionXLPipeline,
+                                                         options: options, previews: previews.isEnabled)
 
         let images: [CGImage?]
         do {
           images = try pipe.generateImages(configuration: pipelineConfig) { progress in
             if self.cancelRequested { return false }
 
-            let progressValue = Double(progress.step) / Double(progress.stepCount)
-            self.sendEvent(withName: "OwnImageProgress", body: [
-              "step": progress.step,
-              "totalSteps": progress.stepCount,
-              "progress": progressValue
-            ])
-
-            return true // continue
+            return self.reportGenerationProgress(progress, previews: previews)
           }
         } catch {
           // Catch errors from the pipeline (including TextEncoder failures)
@@ -344,12 +380,9 @@ class CoreMLDiffusionModule: RCTEventEmitter {
         let imagePath = generatedDir.appendingPathComponent("\(imageId).png")
         // CoreML model tensor sizes are fixed. Apply the selected export size
         // after native inference; settings must not promise faster inference.
-        let uiImage = Self.exportImage(cgImage, size: CGSize(width: width, height: height))
-        guard let pngData = uiImage.pngData() else {
-          reject("ERR_ENCODE", "Failed to encode image as PNG", nil)
-          return
-        }
-        try pngData.write(to: imagePath)
+        try CoreMLImageOutput.persist(to: imagePath, isCancelled: { self.cancelRequested }, encode: {
+          Self.exportImage(cgImage, size: CGSize(width: width, height: height)).pngData()
+        })
 
         // Release the pipeline immediately after generation to free memory.
         // On iOS devices the CoreML pipeline holds 1-2 GB+ even when idle;
@@ -363,9 +396,11 @@ class CoreMLDiffusionModule: RCTEventEmitter {
           "imagePath": imagePath.path,
           "width": width,
           "height": height,
-          "seed": seed
+          "seed": options.seed
         ] as [String: Any])
 
+      } catch CoreMLImageOutput.Failure.encoding {
+        reject("ERR_ENCODE", "Failed to encode image as PNG", nil)
       } catch {
         if !self.cancelRequested {
           self.sendEvent(withName: "OwnImageError", body: [
@@ -377,6 +412,18 @@ class CoreMLDiffusionModule: RCTEventEmitter {
         }
       }
     }
+  }
+
+  private func reportGenerationProgress(_ progress: PipelineProgress, previews: CoreMLImagePreviewSession) -> Bool {
+    let event = previews.progressEvent(rawStep: progress.step, totalSteps: progress.stepCount,
+                                      isCancelled: { self.cancelRequested }, decode: {
+      // currentImages uses try! inside the SDK. Use its throwing API instead.
+      try progress.pipeline.decodeToImages(progress.currentLatentSamples, configuration: progress.configuration)
+        .compactMap { $0 }.first
+    })
+    guard let event else { return false }
+    sendEvent(withName: "OwnImageProgress", body: event)
+    return !cancelRequested
   }
 
   // MARK: - cancelGeneration
@@ -469,6 +516,85 @@ class CoreMLDiffusionModule: RCTEventEmitter {
   }
 }
 
+/// Optional operation-owned drafts. This never writes to the user's image gallery.
+final class CoreMLImagePreviewSession {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent("own-image-preview-" + UUID().uuidString, isDirectory: true)
+  private let interval: Int
+  private let requestId: String
+  private var directoryCreated = false
+  private var disabled = false
+  var isEnabled: Bool { interval > 0 && !disabled }
+
+  init(interval: Int, requestId: String) {
+    self.interval = interval > 0 ? max(5, interval) : 0
+    self.requestId = requestId
+  }
+
+  deinit { cleanup() }
+
+  static func completedStep(_ rawStep: Int, totalSteps: Int) -> Int {
+    guard rawStep >= 0, totalSteps > 0 else { return 0 }
+    return rawStep >= totalSteps ? totalSteps : rawStep + 1
+  }
+
+  static func shouldPreview(completedStep: Int, totalSteps: Int, interval: Int) -> Bool {
+    guard interval > 0, completedStep > 0, completedStep < totalSteps else { return false }
+    // Never keep more than seven intermediate PNGs, even for unusually long jobs.
+    let boundedCadence = totalSteps / 8 + (totalSteps % 8 == 0 ? 0 : 1)
+    return completedStep % max(5, max(interval, boundedCadence)) == 0
+  }
+
+  func progressEvent(rawStep: Int, totalSteps: Int, isCancelled: () -> Bool,
+                     decode: () throws -> CGImage?) -> [String: Any]? {
+    guard !isCancelled(), totalSteps > 0 else { return nil }
+    let completed = Self.completedStep(rawStep, totalSteps: totalSteps)
+    var event: [String: Any] = ["requestId": requestId, "step": completed,
+                                "totalSteps": totalSteps, "progress": Double(completed) / Double(totalSteps)]
+    if isEnabled && Self.shouldPreview(completedStep: completed, totalSteps: totalSteps, interval: interval) {
+      do {
+        let path: String? = try autoreleasepool {
+          guard let image = try decode(), !isCancelled() else { return nil }
+          return try writePreview(image, step: completed, isCancelled: isCancelled)
+        }
+        if let path { event["previewPath"] = path }
+      } catch {
+        // A draft is optional. Stop decoding drafts after one failure; generation continues.
+        disabled = true
+      }
+    }
+    return isCancelled() ? nil : event
+  }
+
+  private func writePreview(_ image: CGImage, step: Int, isCancelled: () -> Bool) throws -> String? {
+    let scale = min(1, 256 / CGFloat(max(image.width, image.height)))
+    let size = CGSize(width: max(1, floor(CGFloat(image.width) * scale)), height: max(1, floor(CGFloat(image.height) * scale)))
+    guard let data = CoreMLDiffusionModule.exportImage(image, size: size).pngData(), !isCancelled() else { return nil }
+    if !directoryCreated {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false,
+                                             attributes: [.protectionKey: FileProtectionType.complete])
+      directoryCreated = true
+    }
+    let file = directory.appendingPathComponent("step-\(step).png")
+    guard !isCancelled() else { return nil }
+    try data.write(to: file, options: [.atomic, .completeFileProtection])
+    if isCancelled() {
+      try? FileManager.default.removeItem(at: file)
+      return nil
+    }
+    return file.path
+  }
+
+  func cleanup() {
+    guard directoryCreated else { return }
+    do {
+      try FileManager.default.removeItem(at: directory)
+      directoryCreated = false
+    } catch {
+      // Temporary protected files remain excluded from backup; a later cleanup retries.
+    }
+  }
+}
+
 // MARK: - Date helper
 
 private extension Date {
@@ -476,5 +602,34 @@ private extension Date {
     let formatter = ISO8601DateFormatter()
     formatter.formatOptions = [.withInternetDateTime]
     return formatter.string(from: self)
+  }
+}
+
+/// Publishes only a new operation-owned output; an existing gallery file is never replaced.
+enum CoreMLImageOutput {
+  enum Failure: Error { case encoding }
+
+  static func persist(
+    to destination: URL,
+    isCancelled: () -> Bool,
+    encode: () throws -> Data?,
+    write: (Data, URL) throws -> Void = { data, url in
+      try data.write(to: url, options: [.atomic, .completeFileProtection])
+    }
+  ) throws {
+    if isCancelled() { throw CancellationError() }
+    guard let data = try encode() else { throw Failure.encoding }
+    if isCancelled() { throw CancellationError() }
+    let staging = destination.deletingLastPathComponent()
+      .appendingPathComponent(".own-export-\(UUID().uuidString).tmp")
+    defer { try? FileManager.default.removeItem(at: staging) }
+    try write(data, staging)
+    if isCancelled() { throw CancellationError() }
+    // moveItem fails if destination already exists, unlike Data.write.
+    try FileManager.default.moveItem(at: staging, to: destination)
+    if isCancelled() {
+      try? FileManager.default.removeItem(at: destination)
+      throw CancellationError()
+    }
   }
 }

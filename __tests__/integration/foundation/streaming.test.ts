@@ -40,6 +40,18 @@ describe('Foundation stream ownership and existing tools', () => {
     expect(native.generate.mock.calls[0][0].messages).toEqual(messages.map(({role,content}: any) => ({role,content})));
     expect(mockListeners.size).toBe(0);
   });
+  it('passes opt-in retention identity and attachment or trimming exclusions to native', async () => {
+    const native = NativeModules.OwnFoundationModels;
+    native.generate = jest.fn().mockResolvedValue({content:'Answer'});
+    useAppStore.getState().updateSettings({appleSessionReuseEnabled:false,enabledTools:[]});
+    await foundationModelService.generate(messages,{onToken:jest.fn(),conversationId:'chat-a'});
+    expect(native.generate.mock.calls[0][0]).toMatchObject({conversationId:'chat-a',keepSessionReady:false,hasAttachments:false,historyTrimmed:false});
+    useAppStore.getState().updateSettings({appleSessionReuseEnabled:true});
+    const history:any[]=Array.from({length:300},(_,i)=>({id:String(i),role:'user',content:`Turn ${i}`}));
+    history[0].attachments=[{type:'image',uri:'file:///private/image.png'}];
+    await foundationModelService.generate(history,{onToken:jest.fn(),conversationId:'chat-b'});
+    expect(native.generate.mock.calls[1][0]).toMatchObject({conversationId:'chat-b',keepSessionReady:true,hasAttachments:true,historyTrimmed:true});
+  });
   it('reports context trimming only for the active native request',async()=>{
     const notice=jest.fn();
     NativeModules.OwnFoundationModels.generate=jest.fn(async(params:any)=>{

@@ -39,6 +39,7 @@ type AppSettings = {
   imageGenerationMode: ImageGenerationMode; autoDetectMethod: AutoDetectMethod;
   classifierModelId: string | null; imageSteps: number; imageGuidanceScale: number;
   imageThreads: number; imageWidth: number; imageHeight: number;
+  imagePreviewEnabled?: boolean; appleSessionReuseEnabled?: boolean;
   enhanceImagePrompts: boolean; modelLoadingStrategy: ModelLoadingStrategy;
   enableGpu: boolean; gpuLayers: number; flashAttn: boolean;
   cacheType: CacheType; showGenerationDetails: boolean; enabledTools: string[];
@@ -139,6 +140,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   autoDetectMethod: 'pattern' as AutoDetectMethod,
   classifierModelId: null,
   imageSteps: (20),
+  imagePreviewEnabled: false,
+  appleSessionReuseEnabled: false,
   imageGuidanceScale: 7.5,
   imageThreads: 4,
   imageWidth: 512,

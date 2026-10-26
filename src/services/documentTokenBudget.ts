@@ -5,6 +5,26 @@ export const KNOWLEDGE_FOOTER = '\n</knowledge_base>';
 const SEPARATOR = '\n\n---\n\n';
 export type MeasuredPrompt = {formatted: Awaited<ReturnType<LlamaContext['getFormattedChat']>>; tokens: number};
 
+const TOOL_HEADER = '[Tool Result: search_knowledge_base]\n';
+const TOOL_FOOTER = '\n[End Tool Result]';
+const TOOL_OMITTED = 'Document excerpts omitted to fit the model context.';
+const knowledgeToolParts = new WeakMap<object,string[]>();
+
+function makeKnowledgeToolMessage(parts:string[],truncated:boolean) {
+ const body=parts.join(SEPARATOR);
+ const notice=truncated ? `${body ? '\n\n' : ''}${TOOL_OMITTED}` : '';
+ const message={role:'user' as const,content:TOOL_HEADER+body+notice+TOOL_FOOTER};
+ knowledgeToolParts.set(message,parts);
+ return message;
+}
+
+/** Only the trusted role/tool-name converter calls this; user-written markers get no ownership. */
+export function knowledgeToolMessage(content:string) {
+ if(!/^\[1\] [\s\S]*? \(part \d+\):\n/.test(content))
+  return {role:'user' as const,content:TOOL_HEADER+content+TOOL_FOOTER};
+ return makeKnowledgeToolMessage(content.split(SEPARATOR),false);
+}
+
 export function formatLocalRequest(context:LlamaContext, params:Record<string,any>) {
  return context.getFormattedChat(params.messages, params.chat_template || params.chatTemplate, {
   jinja:params.jinja,tools:params.tools,parallel_tool_calls:params.parallel_tool_calls,
@@ -14,10 +34,15 @@ export function formatLocalRequest(context:LlamaContext, params:Record<string,an
  });
 }
 
-/** Remove the last, lowest-ranked automatic excerpt, without editing saved messages. */
+/** Remove low-ranked owned document excerpts, without editing saved messages. */
 function removeExcerpt(messages:any[], all=false):any[]|undefined {
  let changed=false;
  const next=messages.map(message=>{
+  const parts=knowledgeToolParts.get(message);
+  if(parts?.length) {
+   changed=true;
+   return makeKnowledgeToolMessage(all ? [] : parts.slice(0,-1),true);
+  }
   if(message.role!=='system' || typeof message.content!=='string') return message;
   let content=message.content;
   let start=content.indexOf(KNOWLEDGE_HEADER);

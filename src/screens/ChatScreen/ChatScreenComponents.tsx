@@ -223,7 +223,7 @@ export const ImageProgressIndicator: React.FC<{
     <View style={styles.imageProgressCard}>
       <View style={styles.imageProgressRow}>
         {imagePreviewPath && (
-          <Image source={{ uri: imagePreviewPath }} style={styles.imagePreview} resizeMode="cover" />
+          <Image source={{ uri: imagePreviewPath }} style={styles.imagePreview} resizeMode="contain" accessibilityLabel="Image draft" />
         )}
         <View style={styles.imageProgressContent}>
           <View style={styles.imageProgressHeader}>

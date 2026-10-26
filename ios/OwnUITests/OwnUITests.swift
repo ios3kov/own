@@ -512,3 +512,52 @@ final class OwnSearchUITests: XCTestCase {
     add(shot)
   }
 }
+
+final class OwnResourceSettingsUITests: XCTestCase {
+  func testLivePreviewControl() throws { try inspectPreview(largeText: false) }
+  func testLivePreviewControlWithLargeText() throws { try inspectPreview(largeText: true) }
+
+  private func inspectPreview(largeText: Bool) throws {
+    continueAfterFailure = false
+    let app = XCUIApplication()
+    if largeText {
+      app.launchArguments = ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+    }
+    app.launch()
+    let settings = app.descendants(matching: .any)["settings-tab"].firstMatch
+    XCTAssertTrue(settings.waitForExistence(timeout: 20))
+    settings.tap()
+    app.descendants(matching: .any)["settings-ModelSettings"].firstMatch.tap()
+    let accordion = app.descendants(matching: .any)["image-generation-accordion"].firstMatch
+    XCTAssertTrue(accordion.waitForExistence(timeout: 10))
+    accordion.tap()
+    let control = app.switches["image-live-preview"].firstMatch
+    for _ in 0..<8 {
+      if control.exists && control.isHittable { break }
+      app.swipeUp(velocity: .slow)
+    }
+    XCTAssertTrue(control.isHittable)
+    let label = app.staticTexts["Live image preview"].firstMatch
+    let header = app.staticTexts["Model Settings"].firstMatch
+    XCTAssertGreaterThanOrEqual(header.frame.minY, 44)
+    XCTAssertLessThan(header.frame.maxY, app.frame.height * 0.2)
+    for _ in 0..<4 {
+      if label.isHittable && label.frame.minY >= header.frame.maxY { break }
+      app.swipeDown(velocity: .slow)
+    }
+    XCTAssertTrue(label.isHittable)
+    XCTAssertGreaterThanOrEqual(label.frame.minY, header.frame.maxY)
+    XCTAssertTrue(control.isHittable)
+    XCTAssertEqual(control.label, "Live image preview")
+    XCTAssertTrue(app.staticTexts["Shows drafts in longer drawings. May use more memory and time."].exists)
+    let original = control.value as? String
+    control.tap()
+    XCTAssertNotEqual(control.value as? String, original)
+    control.tap()
+    XCTAssertEqual(control.value as? String, original)
+    let shot = XCTAttachment(screenshot: app.screenshot())
+    shot.name = largeText ? "Live preview setting large text" : "Live preview setting"
+    shot.lifetime = .keepAlways
+    add(shot)
+  }
+}

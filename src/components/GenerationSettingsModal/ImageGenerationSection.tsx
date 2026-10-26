@@ -1,3 +1,4 @@
+import {ImagePreviewSetting} from '../ModelResourceOptions';
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
@@ -318,6 +319,7 @@ export const ImageGenerationSection: React.FC = () => {
       </View>
 
       <ImageQualityBasicSliders />
+      <ImagePreviewSetting />
 
       <AdvancedToggle isExpanded={showAdvanced} onPress={() => setShowAdvanced(!showAdvanced)} testID="modal-image-advanced-toggle" />
 

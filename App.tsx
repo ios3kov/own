@@ -1,3 +1,4 @@
+import {useAppleSessionPolicy} from './src/hooks/useAppleSessionPolicy';
 import {refreshVisibleReplyTiming} from './src/services/replyTiming';
 import {runtimeDiagnostics} from './src/services/runtimeDiagnostics';
 import {releaseIdleAuxiliaries} from './src/services/idleResources';
@@ -38,6 +39,7 @@ const ensureRemoteServerStoreHydrated = async () => {
 };
 
 function App() {
+  useAppleSessionPolicy();
   useDownloadListeners();
   useEffect(()=>{runtimeDiagnostics.start();return ()=>runtimeDiagnostics.stop();},[]);
   useEffect(() => () => replyRecovery.stop(), []);

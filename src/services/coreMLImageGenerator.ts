@@ -20,6 +20,7 @@ type PreviewCallback = (preview: { previewPath: string; step: number; totalSteps
 class CoreMLImageGeneratorService {
   private loadedThreads: number | null = null;
   private generating = false;
+  private generationSequence = 0;
   private modelLoadEpoch = 0;
   private pipelineWork: Promise<void> = Promise.resolve();
 
@@ -115,32 +116,34 @@ class CoreMLImageGeneratorService {
     }
   }
 
-  private subscribeToProgress(onProgress?: ProgressCallback, onPreview?: PreviewCallback): any {
+  private subscribeToProgress(requestId: string, onProgress?: ProgressCallback, onPreview?: PreviewCallback): any {
     return this.getEmitter().addListener(
       'OwnImageProgress',
-      (event: { step: number; totalSteps: number; progress: number; previewPath?: string }) => {
+      (event: { requestId?: string; step: number; totalSteps: number; progress: number; previewPath?: string }) => {
+        if (event.requestId !== requestId) return;
         onProgress?.({
           step: event.step,
           totalSteps: event.totalSteps,
           progress: event.progress,
         });
-        if (event.previewPath && onPreview) {
+        if (typeof event.previewPath === 'string' && event.previewPath.startsWith('/') && onPreview) {
           onPreview({ previewPath: event.previewPath, step: event.step, totalSteps: event.totalSteps });
         }
       },
     );
   }
 
-  private buildNativeParams(params: ImageGenerationParams & { previewInterval?: number }, prompt: string) {
+  private buildNativeParams(params: ImageGenerationParams & { previewInterval?: number }, prompt: string, requestId: string) {
     return {
       prompt,
+      requestId,
       negativePrompt: params.negativePrompt || '',
       steps: params.steps || 8,
       guidanceScale: params.guidanceScale ?? 7.5,
       seed: params.seed ?? generateRandomSeed(),
       width: params.width || 512,
       height: params.height || 512,
-      previewInterval: params.previewInterval ?? 2,
+      previewInterval: params.previewInterval ?? 0,
     };
   }
 
@@ -176,10 +179,11 @@ class CoreMLImageGeneratorService {
     }
 
     this.generating = true;
-    const progressSubscription = this.subscribeToProgress(onProgress, onPreview);
+    const requestId = `image-${Date.now()}-${++this.generationSequence}`;
+    const progressSubscription = this.subscribeToProgress(requestId, onProgress, params.previewInterval && params.previewInterval > 0 ? onPreview : undefined);
 
     try {
-      const result = await this.serialize(() => DiffusionModule.generateImage(this.buildNativeParams(params, trimmedPrompt)));
+      const result = await this.serialize(() => DiffusionModule.generateImage(this.buildNativeParams(params, trimmedPrompt, requestId)));
       // Native side releases the CoreML pipeline after generation to free
       // memory, so clear TS-side state so the next request triggers a reload.
       this.loadedThreads = null;

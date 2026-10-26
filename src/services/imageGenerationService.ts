@@ -233,7 +233,8 @@ class ImageGenerationService {
     const startTime = Date.now();
     try {
       const result = await coreMLImageGeneratorService.generateImage(
-        { prompt: enhancedPrompt, negativePrompt: params.negativePrompt || '', steps, guidanceScale, seed: params.seed, width: imageWidth, height: imageHeight, previewInterval: params.previewInterval ?? 2 },
+        { prompt: enhancedPrompt, negativePrompt: params.negativePrompt || '', steps, guidanceScale, seed: params.seed, width: imageWidth, height: imageHeight, previewInterval: useAppStore.getState().settings.imagePreviewEnabled === true
+          ? Math.max(5, Number.isFinite(params.previewInterval) ? params.previewInterval! : 5) : 0 },
         (progress) => {
           if (this.cancelRequested) return;
           const displayStep = Math.min(progress.step, steps);

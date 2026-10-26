@@ -1,3 +1,4 @@
+import {serializeBoundedToolResult} from './boundedToolResult';
 import { NativeEventEmitter,NativeModules } from 'react-native';
 import { create } from 'zustand';
 import { useAppStore } from '../stores/appStore';
@@ -9,7 +10,7 @@ import { executeToolCall } from './tools/handlers';
 
 export const APPLE_MODEL_ID = 'apple-foundation-models';
 export const APPLE_MODEL_NAME = 'Apple Foundation Models';
-export type AppleAvailability = { available: boolean; reason: string };
+export type AppleAvailability = { available: boolean; reason: string; sessionReuseSupported?: boolean };
 export const useFoundationStore = create<{ availability: AppleAvailability }>(
   () => ({
     availability: { available: false, reason: 'checking' },
@@ -77,6 +78,9 @@ export const foundationModelService = {
     const status = await this.refreshAvailability(true);
     if (!status.available) throw new Error(appleAvailabilityMessage(status));
   },
+  async releaseSessionCache(): Promise<void> {
+    await bridge()?.releaseSessionCache?.();
+  },
   async stopGeneration(): Promise<void> {
     const id = activeRequest;
     activeRequest = null;
@@ -98,6 +102,7 @@ export const foundationModelService = {
       maxTokens?: number;
       temperature?: number;
       projectId?: string;
+      conversationId?: string;
       onToolCallStart?: (name: string, args: Record<string, unknown>) => void;
       onToolCallComplete?: (name: string, result: any) => void;
     },
@@ -184,10 +189,7 @@ export const foundationModelService = {
           native.resolveTool(
             requestId,
             event.callId,
-            JSON.stringify({
-              content: result.content,
-              error: result.error,
-            }).slice(0, 24000),
+            serializeBoundedToolResult(result),
           );
         } catch {
           if (activeRequest === requestId)
@@ -201,6 +203,10 @@ export const foundationModelService = {
       const settings = useAppStore.getState().settings;
       const result = await native.generate({
         requestId,
+        conversationId: options.conversationId,
+        keepSessionReady: settings.appleSessionReuseEnabled === true,
+        hasAttachments: messages.some(message => (message.attachments?.length ?? 0) > 0),
+        historyTrimmed: bounded.trimmed,
         messages: bounded.messages
           .filter(m => !m.isSystemInfo)
           .map(m => m.role === 'tool'

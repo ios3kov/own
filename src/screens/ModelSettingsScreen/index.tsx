@@ -57,7 +57,7 @@ export const ModelSettingsScreen: React.FC = () => {
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" style={styles.backButton} onPress={() => navigation.goBack()}>
           <Icon name="arrow-left" size={20} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.title}>Model Settings</Text>
+        <Text accessibilityRole="header" maxFontSizeMultiplier={1.5} numberOfLines={1} adjustsFontSizeToFit style={styles.title}>Model Settings</Text>
       </View>
       <KeyboardAvoidingView style={styles.flex1} behavior={('padding')}>
       <ScrollView testID="model-settings-scroll" keyboardShouldPersistTaps="handled" style={styles.scrollView} contentContainerStyle={styles.content}>

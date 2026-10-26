@@ -275,3 +275,157 @@ final class OwnLocalImportAndURLTests: XCTestCase {
   }
 
 }
+
+@MainActor
+final class CoreMLImagePreviewTests: XCTestCase {
+  private func sourceImage() throws -> CGImage {
+    let image = UIGraphicsImageRenderer(size: CGSize(width: 800, height: 400)).image { context in
+      UIColor.red.setFill()
+      context.fill(CGRect(x: 0, y: 0, width: 800, height: 400))
+    }
+    return try XCTUnwrap(image.cgImage)
+  }
+
+  func testDisabledPreviewDoesNotDecodeAndReportsCompletedStep() throws {
+    let previews = CoreMLImagePreviewSession(interval: 0, requestId: "request-off")
+    defer { previews.cleanup() }
+    let event = try XCTUnwrap(previews.progressEvent(rawStep: 0, totalSteps: 20, isCancelled: { false }, decode: {
+      XCTFail("A disabled preview must not load the image decoder")
+      return nil
+    }))
+    XCTAssertEqual(event["requestId"] as? String, "request-off")
+    XCTAssertEqual(event["step"] as? Int, 1)
+    XCTAssertEqual(event["progress"] as? Double, 0.05)
+    XCTAssertNil(event["previewPath"])
+    XCTAssertFalse(FileManager.default.fileExists(atPath: previews.directory.path))
+  }
+
+  func testPreviewPolicyClampsCadenceAndBoundsStoredFrames() {
+    XCTAssertEqual((1...20).filter { CoreMLImagePreviewSession.shouldPreview(completedStep: $0, totalSteps: 20, interval: 1) }, [5, 10, 15])
+    for count in [1, 4, 8, 20, 1000] {
+      let frames = (1...count).filter { CoreMLImagePreviewSession.shouldPreview(completedStep: $0, totalSteps: count, interval: 5) }
+      XCTAssertLessThanOrEqual(frames.count, 7)
+      XCTAssertFalse(frames.contains(count), "The final image is returned directly, not decoded again for preview")
+    }
+    XCTAssertFalse(CoreMLImagePreviewSession.shouldPreview(completedStep: 5, totalSteps: 20, interval: -1))
+    XCTAssertEqual(CoreMLImagePreviewSession.completedStep(Int.max, totalSteps: 20), 20)
+    XCTAssertEqual(CoreMLImagePreviewSession.completedStep(-1, totalSteps: 20), 0)
+  }
+
+  func testPreviewEncodesRealPNGAndCleansOnlyItsOwnedDirectory() throws {
+    let originalFolder = try makeTempDirectory()
+    defer { try? FileManager.default.removeItem(at: originalFolder) }
+    let original = originalFolder.appendingPathComponent("original.png")
+    try Data("existing user image".utf8).write(to: original)
+    let previews = CoreMLImagePreviewSession(interval: 5, requestId: "request-preview")
+    defer { previews.cleanup() }
+    let source = try sourceImage()
+    let event = try XCTUnwrap(previews.progressEvent(rawStep: 4, totalSteps: 20, isCancelled: { false }, decode: { source }))
+    let path = try XCTUnwrap(event["previewPath"] as? String)
+    XCTAssertTrue(path.hasPrefix(previews.directory.path + "/"))
+    let decoded = try XCTUnwrap(UIImage(data: Data(contentsOf: URL(fileURLWithPath: path))))
+    XCTAssertEqual(decoded.size, CGSize(width: 256, height: 128))
+    previews.cleanup()
+    previews.cleanup()
+    XCTAssertFalse(FileManager.default.fileExists(atPath: previews.directory.path))
+    XCTAssertEqual(try Data(contentsOf: original), Data("existing user image".utf8))
+  }
+
+  func testDecoderFailureOnlyDisablesOptionalDrafts() throws {
+    let previews = CoreMLImagePreviewSession(interval: 5, requestId: "request-error")
+    defer { previews.cleanup() }
+    var decodes = 0
+    let event = previews.progressEvent(rawStep: 4, totalSteps: 20, isCancelled: { false }, decode: {
+      decodes += 1
+      throw NSError(domain: "OwnPreviewFixture", code: 1)
+    })
+    XCTAssertNotNil(event)
+    XCTAssertNil(event?["previewPath"])
+    XCTAssertFalse(previews.isEnabled)
+    let next = previews.progressEvent(rawStep: 9, totalSteps: 20, isCancelled: { false }, decode: { decodes += 1; return nil })
+    XCTAssertEqual(next?["step"] as? Int, 10)
+    XCTAssertEqual(decodes, 1)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: previews.directory.path))
+  }
+
+  func testCancelDuringDecodeDoesNotWriteOrPublishDraft() throws {
+    let previews = CoreMLImagePreviewSession(interval: 5, requestId: "request-cancel")
+    defer { previews.cleanup() }
+    let source = try sourceImage()
+    let alreadyCancelled = previews.progressEvent(rawStep: 4, totalSteps: 20, isCancelled: { true }, decode: {
+      XCTFail("Cancellation before decoding must not load the decoder")
+      return source
+    })
+    XCTAssertNil(alreadyCancelled)
+    var cancelled = false
+    let event = previews.progressEvent(rawStep: 4, totalSteps: 20, isCancelled: { cancelled }, decode: {
+      cancelled = true
+      return source
+    })
+    XCTAssertNil(event)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: previews.directory.path))
+  }
+
+  func testNilSafetyImageDoesNotCreateADraftOrDisableGeneration() throws {
+    let previews = CoreMLImagePreviewSession(interval: 5, requestId: "request-no-image")
+    defer { previews.cleanup() }
+    let event = previews.progressEvent(rawStep: 4, totalSteps: 20, isCancelled: { false }, decode: { nil })
+    XCTAssertEqual(event?["step"] as? Int, 5)
+    XCTAssertNil(event?["previewPath"])
+    XCTAssertTrue(previews.isEnabled)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: previews.directory.path))
+  }
+
+  func testOwnedDraftDirectoryIsRemovedOnDeinit() throws {
+    var previews: CoreMLImagePreviewSession? = CoreMLImagePreviewSession(interval: 5, requestId: "request-release")
+    let source = try sourceImage()
+    let directory = try XCTUnwrap(previews?.directory)
+    _ = previews?.progressEvent(rawStep: 4, totalSteps: 20, isCancelled: { false }, decode: { source })
+    XCTAssertTrue(FileManager.default.fileExists(atPath: directory.path))
+    previews = nil
+    XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+  }
+}
+
+final class CoreMLImageOutputTests: XCTestCase {
+  func testCancellationAfterEncodingLeavesNoOutput() throws {
+    let folder = try makeTempDirectory()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    var cancelled = false
+    XCTAssertThrowsError(try CoreMLImageOutput.persist(
+      to: folder.appendingPathComponent("new.png"), isCancelled: { cancelled }, encode: {
+        cancelled = true
+        return Data("encoded".utf8)
+      })) { XCTAssertTrue($0 is CancellationError) }
+    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.path), [])
+  }
+
+  func testCancellationDuringWriteCleansStagingAndPreservesExistingTarget() throws {
+    let folder = try makeTempDirectory()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let target = folder.appendingPathComponent("existing.png")
+    let original = Data("original user image".utf8)
+    try original.write(to: target)
+    var cancelled = false
+    XCTAssertThrowsError(try CoreMLImageOutput.persist(
+      to: target, isCancelled: { cancelled }, encode: { Data("new".utf8) }, write: { data, url in
+        try data.write(to: url)
+        cancelled = true
+      })) { XCTAssertTrue($0 is CancellationError) }
+    XCTAssertEqual(try Data(contentsOf: target), original)
+    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.path), ["existing.png"])
+    XCTAssertThrowsError(try CoreMLImageOutput.persist(
+      to: target, isCancelled: { false }, encode: { Data("replacement".utf8) }))
+    XCTAssertEqual(try Data(contentsOf: target), original)
+  }
+
+  func testCancellationAfterPublishingRemovesOnlyNewOutput() throws {
+    let folder = try makeTempDirectory()
+    defer { try? FileManager.default.removeItem(at: folder) }
+    let target = folder.appendingPathComponent("new.png")
+    XCTAssertThrowsError(try CoreMLImageOutput.persist(
+      to: target, isCancelled: { FileManager.default.fileExists(atPath: target.path) },
+      encode: { Data("new".utf8) })) { XCTAssertTrue($0 is CancellationError) }
+    XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.path), [])
+  }
+}

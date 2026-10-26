@@ -1,3 +1,4 @@
+import {AppleReadySetting} from './ModelResourceOptions';
 import React,{ useState,useRef,useEffect } from 'react';
 import { View,Text,TextInput } from 'react-native';
 import Slider from '@react-native-community/slider';
@@ -93,6 +94,7 @@ export function SimpleModelSettings({advancedContent}:{advancedContent?:React.Re
       <Text style={styles.help}>Up to {values.historyTurns} recent exchanges.</Text>
     </View>
     <MemoryNote backend={backend} memory={memory}/>
+    <AppleReadySetting/>
     {backend==='remote'?<Text style={styles.help}>This server does not report its supported response controls. Own can still limit recent history.</Text>:null}
     {backend==='none'?<Text style={styles.help}>Choose a model to see its response controls.</Text>:null}
     <Text style={styles.heading}>Your profiles</Text>

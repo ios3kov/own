@@ -1,3 +1,4 @@
+import {knowledgeToolMessage} from './documentTokenBudget';
 import { RNLlamaOAICompatibleMessage, RNLlamaMessagePart } from 'llama.rn';
 import { Message } from '../types';
 
@@ -55,6 +56,7 @@ export function buildOAIMessages(messages: Message[], includeImages = true): RNL
     // avoids role:"tool" which some Jinja templates don't handle
     if (message.role === 'tool') {
       const label = message.toolName || 'tool';
+      if(label==='search_knowledge_base') return knowledgeToolMessage(message.content);
       return {
         role: 'user' as const,
         content: `[Tool Result: ${label}]\n${message.content}\n[End Tool Result]`,

@@ -504,7 +504,8 @@ describe('CoreMLImageGeneratorService', () => {
         seed: 42,
         width: 512,
         height: 512,
-        previewInterval: 2,
+        previewInterval: 0,
+        requestId: expect.any(String),
       });
     });
 
@@ -614,9 +615,9 @@ describe('CoreMLImageGeneratorService', () => {
         return { remove: jest.fn() };
       });
 
-      mockCoreMLDiffusionModule.generateImage.mockImplementation(async () => {
+      mockCoreMLDiffusionModule.generateImage.mockImplementation(async (params: any) => {
         // Simulate progress event mid-generation
-        progressHandler?.({ step: 5, totalSteps: 20, progress: 0.25 });
+        progressHandler?.({ requestId: params.requestId, step: 5, totalSteps: 20, progress: 0.25 });
         return { id: 'img', imagePath: '/p.png', width: 512, height: 512, seed: 1 };
       });
 
@@ -639,8 +640,9 @@ describe('CoreMLImageGeneratorService', () => {
         return { remove: jest.fn() };
       });
 
-      mockCoreMLDiffusionModule.generateImage.mockImplementation(async () => {
+      mockCoreMLDiffusionModule.generateImage.mockImplementation(async (params: any) => {
         progressHandler?.({
+          requestId: params.requestId,
           step: 10,
           totalSteps: 20,
           progress: 0.5,
@@ -650,7 +652,7 @@ describe('CoreMLImageGeneratorService', () => {
       });
 
       const onPreview = jest.fn();
-      await service.generateImage({ prompt: 'test' }, undefined, onPreview);
+      await service.generateImage({ prompt: 'test', previewInterval: 5 }, undefined, onPreview);
 
       expect(onPreview).toHaveBeenCalledWith({
         previewPath: '/preview/step_10.png',

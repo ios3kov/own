@@ -1254,6 +1254,16 @@ describe('Image Generation Flow Integration', () => {
   // ============================================================================
   // Coverage for lines 388-389: onPreview callback normal path (cancelRequested=false)
   // ============================================================================
+  it.each([[false,2,0],[true,2,5],[true,10,10]])('honors live draft preference %s and requested cadence %s',async(enabled,requested,expected)=>{
+    const imageModel=setupImageModelState();
+    useAppStore.getState().updateSettings({imagePreviewEnabled:enabled as boolean});
+    mockActiveModelService.getActiveModels.mockReturnValue({
+      text:{model:null,isLoaded:false,isLoading:false},
+      image:{model:imageModel,isLoaded:true,isLoading:false},
+    });
+    await imageGenerationService.generateImage({prompt:'A puppy',previewInterval:requested as number});
+    expect(mockLocalDreamService.generateImage.mock.calls[0][0].previewInterval).toBe(expected);
+  });
   describe('onPreview callback normal path (lines 388-389)', () => {
     it('should update previewPath state when onPreview fires without cancellation', async () => {
       const imageModel = setupImageModelState();
