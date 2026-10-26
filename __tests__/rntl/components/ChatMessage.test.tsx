@@ -35,6 +35,7 @@ describe('ChatMessage', () => {
   it('marks recovered partial replies as interrupted', () => {
     const view=render(<ChatMessage message={{...createAssistantMessage('Partial'),interrupted:true}} />);
     expect(view.getByText('Recovered unfinished reply')).toBeTruthy();
+    expect(view.getByText('This answer was saved before the app closed.')).toBeTruthy();
     expect(view.getByText(/Partial/)).toBeTruthy();
   });
 

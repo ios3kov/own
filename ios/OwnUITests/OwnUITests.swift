@@ -98,6 +98,9 @@ final class OwnUITests: XCTestCase {
     continueAfterFailure = false
     let app = XCUIApplication()
     app.launch()
+    let chats = app.descendants(matching: .any)["chats-tab"].firstMatch
+    XCTAssertTrue(chats.waitForExistence(timeout: 20))
+    chats.tap()
     let title = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Own QA document sources")).firstMatch
     guard title.waitForExistence(timeout: 10) else {
       throw XCTSkip("Requires scripts/qa/document-fixture.py synthetic simulator data")

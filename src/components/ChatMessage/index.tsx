@@ -275,7 +275,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           />
         )}
 
-        {message.interrupted ? <Text maxFontSizeMultiplier={1.5} accessibilityRole="alert" style={[styles.text,styles.assistantText]}>Recovered unfinished reply</Text> : null}
+        {message.interrupted ? <>
+          <Text maxFontSizeMultiplier={1.5} accessibilityRole="alert" style={[styles.text,styles.assistantText]}>Recovered unfinished reply</Text>
+          <Text maxFontSizeMultiplier={1.5} style={[styles.text,styles.assistantText]}>This answer was saved before the app closed.</Text>
+        </> : null}
         <MessageContent
           replyTraceId={message.replyTraceId}
           isUser={isUser}
