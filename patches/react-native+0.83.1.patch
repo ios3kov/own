@@ -1,0 +1,56 @@
+diff --git a/node_modules/react-native/Libraries/Network/RCTHTTPRequestHandler.mm b/node_modules/react-native/Libraries/Network/RCTHTTPRequestHandler.mm
+index 0303970..7543b0a 100644
+--- a/node_modules/react-native/Libraries/Network/RCTHTTPRequestHandler.mm
++++ b/node_modules/react-native/Libraries/Network/RCTHTTPRequestHandler.mm
+@@ -6,6 +6,7 @@
+  */
+ 
+ #import <React/RCTHTTPRequestHandler.h>
++#import "OwnPrivacyNetworkPolicy.h"
+ 
+ #import <mutex>
+ 
+@@ -93,6 +94,9 @@ RCT_EXPORT_MODULE()
+       [configuration setHTTPCookieStorage:[NSHTTPCookieStorage sharedHTTPCookieStorage]];
+     }
+     assert(configuration != nil);
++    configuration.HTTPShouldSetCookies = NO;
++    configuration.HTTPCookieStorage = nil;
++    configuration.HTTPCookieAcceptPolicy = NSHTTPCookieAcceptPolicyNever;
+     _session = [NSURLSession sessionWithConfiguration:configuration delegate:self delegateQueue:callbackQueue];
+ 
+     _delegates = [[NSMapTable alloc] initWithKeyOptions:NSPointerFunctionsStrongMemory
+@@ -101,7 +105,8 @@ RCT_EXPORT_MODULE()
+   }
+   NSURLSessionDataTask *task = [_session dataTaskWithRequest:request];
+   [_delegates setObject:delegate forKey:task];
+-  [task resume];
++  if (OwnPrivacyAllowsURL(request.URL)) [task resume];
++  else [task cancel];
+   return task;
+ }
+ 
+@@ -136,12 +141,18 @@ RCT_EXPORT_MODULE()
+                     newRequest:(NSURLRequest *)request
+              completionHandler:(void (^)(NSURLRequest *))completionHandler
+ {
+-  // Reset the cookies on redirect.
+-  // This is necessary because we're not letting iOS handle cookies by itself
++  if (!OwnPrivacyAllowsRedirect(response.URL, request.URL)) {
++    completionHandler(nil);
++    [task cancel];
++    return;
++  }
+   NSMutableURLRequest *nextRequest = [request mutableCopy];
+-
+-  NSArray<NSHTTPCookie *> *cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:request.URL];
+-  nextRequest.allHTTPHeaderFields = [NSHTTPCookie requestHeaderFieldsWithCookies:cookies];
++  [nextRequest setValue:nil forHTTPHeaderField:@"Cookie"];
++  if (![response.URL.host.lowercaseString isEqualToString:request.URL.host.lowercaseString] ||
++      ![response.URL.scheme isEqualToString:request.URL.scheme] ||
++      ![(response.URL.port ?: @443) isEqual:(request.URL.port ?: @443)]) {
++    [nextRequest setValue:nil forHTTPHeaderField:@"Authorization"];
++  }
+   completionHandler(nextRequest);
+ }
+ 

@@ -1,0 +1,185 @@
+diff --git a/node_modules/whisper.rn/ios/RNWhisper.mm b/node_modules/whisper.rn/ios/RNWhisper.mm
+index 27908d4..7e2cfcd 100644
+--- a/node_modules/whisper.rn/ios/RNWhisper.mm
++++ b/node_modules/whisper.rn/ios/RNWhisper.mm
+@@ -108,6 +108,7 @@ RCT_REMAP_METHOD(initContext,
+         @"contextId": @(contextId),
+         @"gpu": @([context isMetalEnabled]),
+         @"reasonNoGPU": [context reasonNoMetal],
++        @"multilingual": @(whisper_is_multilingual([context getContext]) != 0),
+     });
+ }
+ 
+diff --git a/node_modules/whisper.rn/lib/commonjs/index.js b/node_modules/whisper.rn/lib/commonjs/index.js
+index 34ea574..57ee512 100644
+--- a/node_modules/whisper.rn/lib/commonjs/index.js
++++ b/node_modules/whisper.rn/lib/commonjs/index.js
+@@ -72,17 +72,20 @@ const updateAudioSession = async setting => {
+ class WhisperContext {
+   gpu = false;
+   reasonNoGPU = '';
++  multilingual;
+   constructor(_ref) {
+     let {
+       contextPtr,
+       contextId,
+       gpu,
+-      reasonNoGPU
++      reasonNoGPU,
++      multilingual
+     } = _ref;
+     this.ptr = contextPtr;
+     this.id = contextId;
+     this.gpu = gpu;
+     this.reasonNoGPU = reasonNoGPU;
++    this.multilingual = multilingual;
+   }
+   transcribeWithNativeMethod(method, data) {
+     let options = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+@@ -445,7 +448,8 @@ async function initWhisper(_ref2) {
+     contextPtr,
+     contextId,
+     gpu,
+-    reasonNoGPU
++    reasonNoGPU,
++    multilingual
+   } = await _NativeRNWhisper.default.initContext({
+     filePath: path,
+     isBundleAsset: !!isBundleAsset,
+@@ -460,7 +464,8 @@ async function initWhisper(_ref2) {
+     contextPtr,
+     contextId,
+     gpu,
+-    reasonNoGPU
++    reasonNoGPU,
++    multilingual
+   });
+ }
+ async function releaseAllWhisper() {
+diff --git a/node_modules/whisper.rn/lib/module/index.js b/node_modules/whisper.rn/lib/module/index.js
+index bd83fb0..e4afb10 100644
+--- a/node_modules/whisper.rn/lib/module/index.js
++++ b/node_modules/whisper.rn/lib/module/index.js
+@@ -52,17 +52,20 @@ const updateAudioSession = async setting => {
+ export class WhisperContext {
+   gpu = false;
+   reasonNoGPU = '';
++  multilingual;
+   constructor(_ref) {
+     let {
+       contextPtr,
+       contextId,
+       gpu,
+-      reasonNoGPU
++      reasonNoGPU,
++      multilingual
+     } = _ref;
+     this.ptr = contextPtr;
+     this.id = contextId;
+     this.gpu = gpu;
+     this.reasonNoGPU = reasonNoGPU;
++    this.multilingual = multilingual;
+   }
+   transcribeWithNativeMethod(method, data) {
+     let options = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
+@@ -424,7 +427,8 @@ export async function initWhisper(_ref2) {
+     contextPtr,
+     contextId,
+     gpu,
+-    reasonNoGPU
++    reasonNoGPU,
++    multilingual
+   } = await RNWhisper.initContext({
+     filePath: path,
+     isBundleAsset: !!isBundleAsset,
+@@ -439,7 +443,8 @@ export async function initWhisper(_ref2) {
+     contextPtr,
+     contextId,
+     gpu,
+-    reasonNoGPU
++    reasonNoGPU,
++    multilingual
+   });
+ }
+ export async function releaseAllWhisper() {
+diff --git a/node_modules/whisper.rn/lib/typescript/NativeRNWhisper.d.ts b/node_modules/whisper.rn/lib/typescript/NativeRNWhisper.d.ts
+index e720770..1a6d2ca 100644
+--- a/node_modules/whisper.rn/lib/typescript/NativeRNWhisper.d.ts
++++ b/node_modules/whisper.rn/lib/typescript/NativeRNWhisper.d.ts
+@@ -60,6 +60,7 @@ export type NativeWhisperContext = {
+     contextId: number;
+     gpu: boolean;
+     reasonNoGPU: string;
++    multilingual?: boolean;
+ };
+ export type VadOptions = {
+     /** Probability threshold to consider as speech (Default: 0.5) */
+diff --git a/node_modules/whisper.rn/lib/typescript/index.d.ts b/node_modules/whisper.rn/lib/typescript/index.d.ts
+index e5c402a..c6a11ce 100644
+--- a/node_modules/whisper.rn/lib/typescript/index.d.ts
++++ b/node_modules/whisper.rn/lib/typescript/index.d.ts
+@@ -144,7 +144,8 @@ export declare class WhisperContext {
+     id: number;
+     gpu: boolean;
+     reasonNoGPU: string;
+-    constructor({ contextPtr, contextId, gpu, reasonNoGPU, }: NativeWhisperContext);
++    multilingual?: boolean;
++    constructor({ contextPtr, contextId, gpu, reasonNoGPU, multilingual, }: NativeWhisperContext);
+     private transcribeWithNativeMethod;
+     /**
+      * Transcribe audio file (path or base64 encoded wav file)
+diff --git a/node_modules/whisper.rn/src/NativeRNWhisper.ts b/node_modules/whisper.rn/src/NativeRNWhisper.ts
+index f93c5e5..52a721e 100644
+--- a/node_modules/whisper.rn/src/NativeRNWhisper.ts
++++ b/node_modules/whisper.rn/src/NativeRNWhisper.ts
+@@ -67,6 +67,7 @@ export type NativeWhisperContext = {
+   contextId: number
+   gpu: boolean
+   reasonNoGPU: string
++  multilingual?: boolean
+ }
+ 
+ export type VadOptions = {
+diff --git a/node_modules/whisper.rn/src/index.ts b/node_modules/whisper.rn/src/index.ts
+index c2380c6..bcff2e8 100644
+--- a/node_modules/whisper.rn/src/index.ts
++++ b/node_modules/whisper.rn/src/index.ts
+@@ -265,16 +265,20 @@ export class WhisperContext {
+ 
+   reasonNoGPU: string = ''
+ 
++  multilingual?: boolean
++
+   constructor({
+     contextPtr,
+     contextId,
+     gpu,
+     reasonNoGPU,
++    multilingual,
+   }: NativeWhisperContext) {
+     this.ptr = contextPtr
+     this.id = contextId
+     this.gpu = gpu
+     this.reasonNoGPU = reasonNoGPU
++    this.multilingual = multilingual
+   }
+ 
+   private transcribeWithNativeMethod(
+@@ -701,7 +705,7 @@ export async function initWhisper({
+     path = filePath
+   }
+   if (path.startsWith('file://')) path = path.slice(7)
+-  const { contextPtr, contextId, gpu, reasonNoGPU } =
++  const { contextPtr, contextId, gpu, reasonNoGPU, multilingual } =
+     await RNWhisper.initContext({
+       filePath: path,
+       isBundleAsset: !!isBundleAsset,
+@@ -712,7 +716,7 @@ export async function initWhisper({
+       downloadCoreMLAssets: __DEV__ && !!coreMLAssets,
+       coreMLAssets,
+     })
+-  return new WhisperContext({ contextPtr, contextId, gpu, reasonNoGPU })
++  return new WhisperContext({ contextPtr, contextId, gpu, reasonNoGPU, multilingual })
+ }
+ 
+ export async function releaseAllWhisper(): Promise<void> {

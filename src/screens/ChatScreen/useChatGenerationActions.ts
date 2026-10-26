@@ -1,0 +1,395 @@
+import {registerReplySend,replyTimingNow} from '../../services/replyTiming';
+import {useContextUsage} from '../../services/contextUsage';
+import { sourcesFromChunks } from '../../services/documentSources';
+import { foundationModelService,isAppleModelSelected } from '../../services/foundationModels';
+import { Dispatch,MutableRefObject,SetStateAction } from 'react';
+import {
+AlertState,
+showAlert,
+hideAlert,
+} from '../../components';
+import { APP_CONFIG } from '../../constants';
+import {
+llmService,
+intentClassifier,
+generationService,
+imageGenerationService,
+coreMLImageGeneratorService,
+ImageGenerationState,
+buildToolSystemPromptHint,
+contextCompactionService,
+ragService,
+retrievalService,
+} from '../../services';
+
+import { useChatStore,useProjectStore,useRemoteServerStore } from '../../stores';
+import { Message,MediaAttachment,Project,DownloadedModel,RemoteModel,ModelLoadingStrategy,CacheType } from '../../types';
+import logger from '../../utils/logger';
+type SetState<T> = Dispatch<SetStateAction<T>>;
+const FALLBACK_RECENT_MESSAGE_COUNT = 2;
+export type GenerationDeps = {
+  activeModelId: string | null;
+  activeModel: DownloadedModel | null | undefined;
+  activeModelInfo?: { isRemote: boolean; model: DownloadedModel | RemoteModel | null; modelId: string | null; modelName: string };
+  hasActiveModel?: boolean;
+  hasTextModel?: boolean;
+  activeConversationId: string | null | undefined;
+  activeConversation: any;
+  activeProject: any;
+  activeImageModel: any;
+  imageModelLoaded: boolean;
+  isStreaming: boolean;
+  isGeneratingImage: boolean;
+  imageGenState: ImageGenerationState;
+  settings: {
+    showGenerationDetails: boolean;
+    imageGenerationMode: string;
+    autoDetectMethod: string;
+    classifierModelId?: string | null;
+    modelLoadingStrategy: ModelLoadingStrategy;
+    systemPrompt?: string;
+    imageSteps?: number;
+    imageGuidanceScale?: number;
+    enabledTools?: string[];
+    cacheType?: CacheType;
+    contextLength?: number;
+    thinkingEnabled?: boolean;
+  };
+  downloadedModels: DownloadedModel[];
+  setAlertState: SetState<AlertState>;
+  setIsClassifying: SetState<boolean>;
+  setAppImageGenerationStatus: (v: string | null) => void;
+  setAppIsGeneratingImage: (v: boolean) => void;
+  addMessage: (convId: string, msg: any) => Message|void;
+  clearStreamingMessage: () => void;
+  deleteConversation: (convId: string) => void;
+  setActiveConversation: (convId: string | null) => void;
+  removeImagesByConversationId: (convId: string) => string[];
+  generatingForConversationRef: MutableRefObject<string | null>;
+  navigation: any;
+  setShowSettingsPanel?: SetState<boolean>;
+  ensureModelLoaded: () => Promise<void>;
+  createConversation: (modelId: string, title?: string, projectId?: string) => string;
+  pendingProjectId?: string;
+};
+function applyCompactionPrefix(conversation: any, systemPrompt: string, messages: Message[]): { prefix: Message[]; filtered: Message[] } {
+  const prefix: Message[] = [{ id: 'system', role: 'system', content: systemPrompt, timestamp: 0 }];
+  let filtered = messages;
+  if (conversation?.compactionSummary && conversation?.compactionCutoffMessageId) {
+    prefix.push({ id: 'compaction-summary', role: 'assistant', content: `[Previous conversation summary]\n${conversation.compactionSummary}`, timestamp: 0 });
+    const cutoffIdx = messages.findIndex(m => m.id === conversation.compactionCutoffMessageId);
+    if (cutoffIdx !== -1) filtered = messages.slice(cutoffIdx + 1);
+  }
+  return { prefix, filtered };
+}
+function appendAttachmentText(text: string, attachments?: MediaAttachment[]): string {
+  if (!attachments) return text;
+  return attachments.filter(a => a.type === 'document' && a.textContent)
+    .reduce((acc, doc) => `${acc}\n\n---\n📄 **Attached Document: ${doc.fileName || 'document'}**\n\`\`\`\n${doc.textContent}\n\`\`\`\n---`, text);
+}
+function buildMessagesForContext(conversationId: string, messageText: string, systemPrompt: string): Message[] {
+  const conversation = useChatStore.getState().conversations.find(c => c.id === conversationId);
+  const allMessages = (conversation?.messages || []).filter(m => !m.isSystemInfo);
+  const { prefix, filtered } = applyCompactionPrefix(conversation, systemPrompt, allMessages);
+  const lastMsg = filtered.at(-1);
+  const userMessageForContext = (lastMsg?.role === 'user' ? { ...lastMsg, content: messageText } : lastMsg) as Message;
+  return [...prefix, ...filtered.slice(0, -1), userMessageForContext];
+}
+export async function shouldRouteToImageGenerationFn(
+  deps: Pick<GenerationDeps, 'isGeneratingImage' | 'settings' | 'imageModelLoaded' | 'downloadedModels' | 'setIsClassifying' | 'setAppImageGenerationStatus' | 'setAppIsGeneratingImage' | 'hasTextModel'>,
+  text: string,
+  forceImageMode?: boolean,
+): Promise<boolean> {
+  if (deps.isGeneratingImage) return false;
+  if (deps.settings.imageGenerationMode === 'manual') return forceImageMode === true;
+  if (forceImageMode) return true;
+  if (!deps.imageModelLoaded) return false;
+  try {
+    const useLLM = deps.settings.autoDetectMethod === 'llm';
+    const classifierModel = deps.settings.classifierModelId
+      ? deps.downloadedModels.find(m => m.id === deps.settings.classifierModelId)
+      : null;
+    deps.setIsClassifying(true);
+    const intent = await intentClassifier.classifyIntent(text, {
+      useLLM,
+      classifierModel,
+      currentModelPath: llmService.getLoadedModelPath(),
+      onStatusChange: deps.setAppImageGenerationStatus,
+      modelLoadingStrategy: deps.settings.modelLoadingStrategy,
+    });
+    deps.setIsClassifying(false);
+    if (intent !== 'image') {
+      deps.setAppImageGenerationStatus(null);
+      deps.setAppIsGeneratingImage(false);
+    }
+    return intent === 'image';
+  } catch (error) {
+    logger.warn('[ChatScreen] Intent classification failed:', error);
+    deps.setIsClassifying(false);
+    deps.setAppImageGenerationStatus(null);
+    deps.setAppIsGeneratingImage(false);
+    return false;
+  }
+}
+export type ImageGenCall = {
+  prompt: string;
+  conversationId: string;
+  skipUserMessage?: boolean;
+};
+export async function handleImageGenerationFn(
+  deps: Pick<GenerationDeps, 'activeImageModel' | 'settings' | 'imageGenState' | 'setAlertState' | 'addMessage'>,
+  call: ImageGenCall,
+): Promise<void> {
+  const { prompt, conversationId, skipUserMessage = false } = call;
+  if (!deps.activeImageModel) { deps.setAlertState(showAlert('Error', 'No image model loaded.')); return; }
+  if (!skipUserMessage) { deps.addMessage(conversationId, { role: 'user', content: prompt }); }
+  const result = await imageGenerationService.generateImage({
+    prompt, conversationId,
+    steps: deps.settings.imageSteps || 8,
+    guidanceScale: deps.settings.imageGuidanceScale ?? 2,
+    previewInterval: 2,
+  });
+  const error = imageGenerationService.getState().error;
+  if (!result && error && !error.toLowerCase().includes('cancelled')) {
+    deps.setAlertState(showAlert('Image could not be generated', error));
+  }
+}
+export type StartGenerationCall = { setDebugInfo: SetState<any>; targetConversationId: string; messageText: string };
+async function ensureModelReady(deps: GenerationDeps): Promise<boolean> {
+  if (isAppleModelSelected()) { await foundationModelService.assertReady(); return true; }
+  if (deps.activeModelInfo?.isRemote) return true;
+  ;
+  const loadedPath = llmService.getLoadedModelPath();
+  if (loadedPath && loadedPath === deps.activeModel!.filePath) return true;
+  await deps.ensureModelLoaded();
+  return llmService.isModelLoaded() && llmService.getLoadedModelPath() === deps.activeModel!.filePath;
+}
+function prepareContext(setDebugInfo:SetState<any>, systemPrompt:string, request:{messages:Message[];conversationId:string}):void {
+  const {messages,conversationId}=request;
+  const measured=useContextUsage.getState().latest;
+  if (!measured || measured.conversationId!==conversationId || measured.promptTokens===null || !measured.capacity || !measured.formattedPrompt) {setDebugInfo(null);return;}
+  setDebugInfo({systemPrompt,originalMessageCount:messages.length,managedMessageCount:measured.messageCount ?? messages.length,
+    truncatedCount:0,formattedPrompt:measured.formattedPrompt,estimatedTokens:measured.promptTokens,
+    maxContextLength:measured.capacity,contextUsagePercent:measured.promptTokens/measured.capacity*100});
+}
+/** Run generation; if context is full, compact old messages and retry once. */
+async function generateWithCompactionRetry(
+  opts: { id: string; prompt: string; messages: Message[] },
+  enabledTools: string[],
+  projectId?: string,
+): Promise<void> {
+  const gen = (msgs: Message[]) => enabledTools.length > 0
+    ? generationService.generateWithTools(opts.id, msgs, { enabledToolIds: enabledTools, projectId })
+    : generationService.generateResponse(opts.id, msgs);
+  try { await gen(opts.messages); } catch (error: any) {
+    if (!contextCompactionService.isContextFullError(error)) throw error;
+    logger.log('[ChatGen] Context full — compacting');
+    await llmService.stopGeneration().catch(() => { });
+    const conversation = useChatStore.getState().conversations.find(c => c.id === opts.id);
+    const previousSummary = conversation?.compactionSummary;
+    const compacted = await contextCompactionService.compact({ conversationId: opts.id, systemPrompt: opts.prompt, allMessages: opts.messages, previousSummary }).catch(async () => {
+      logger.log(`[ChatGen] Compaction failed — falling back to last ${FALLBACK_RECENT_MESSAGE_COUNT} messages`);
+      await llmService.clearKVCache(true).catch(() => { });
+      const recent = opts.messages.filter(m => m.role !== 'system').slice(-FALLBACK_RECENT_MESSAGE_COUNT);
+      return [{ id: 'system', role: 'system', content: opts.prompt, timestamp: 0 } as Message, ...recent];
+    });
+    const system = compacted.find(m => m.role === 'system');
+    if (system) system.documentSources = opts.messages.find(m => m.role === 'system')?.documentSources;
+    await gen(compacted);
+  }
+}
+async function injectRagContext(projectId: string | undefined, query: string, options: {prompt:string; canSearchTool:boolean; contextLength?:number}): Promise<{prompt:string; sources:import('../../types').DocumentSource[]; warning?:string}> {
+  const {prompt,canSearchTool}=options;
+  if (!projectId) return {prompt,sources:[]};
+  try {
+    const docs = await ragService.getDocumentsByProject(projectId);
+    const enabledDocs = docs.filter((d: import('../../services/rag').RagDocument) => d.enabled);
+    if (enabledDocs.length === 0) return {prompt,sources:[]};
+    const docList = enabledDocs.slice(0,20).map((d: import('../../services/rag').RagDocument) => `- ${JSON.stringify(d.name.slice(0,160))}`).join('\n')
+      + (enabledDocs.length > 20 ? `\nAnd ${enabledDocs.length - 20} more documents.` : '');
+    let kbPrompt = `\n\nYou have a knowledge base with these documents:\n${docList}`;
+    if (canSearchTool) kbPrompt += '\nUse the search_knowledge_base tool to look up specific information from these documents.';
+    const loaded = await llmService.getModelInfo?.();
+    const contextLength = Math.min(options.contextLength ?? 2048, loaded?.contextLength ?? 2048);
+    const r = await ragService.searchProject(projectId, query, contextLength);
+    if (r.chunks.length > 0 || r.unavailable) {
+      kbPrompt += `\n\n${retrievalService.formatForPrompt(r)}`;
+    }
+    return {prompt:prompt + kbPrompt, sources:sourcesFromChunks(projectId,r.chunks), warning:r.unavailable};
+  } catch (err) {
+    logger.error('[RAG] Context injection failed', err);
+  }
+  return {prompt,sources:[]};
+}
+
+const applyGemma4ThinkToken = (prompt: string, isRemote: boolean, _opts?: {  thinkingEnabled?: boolean }): string => {
+
+
+  const llamaWantsThink = !isRemote && llmService.isGemma4Model() && llmService.isThinkingEnabled();
+  return llamaWantsThink ? `<|think|>\n${prompt}` : prompt;
+};
+function resolveToolsAndPrompt(deps: GenerationDeps, conversation: any, _messageText: string): { enabledTools: string[]; rawPrompt: string;  } {
+  const project = conversation?.projectId ? useProjectStore.getState().getProject(conversation.projectId) : null;
+  const { activeServerId, activeRemoteTextModelId } = useRemoteServerStore.getState();
+  const localToolCalling = llmService.supportsToolCalling();
+  const isRemoteActive = !!(activeServerId && activeRemoteTextModelId);
+
+  const canUseTools = isAppleModelSelected() || localToolCalling || isRemoteActive;
+
+  const enabledTools = canUseTools ? (deps.settings.enabledTools || []) : [];
+
+  const rawPrompt = project?.systemPrompt || deps.settings.systemPrompt || APP_CONFIG.defaultSystemPrompt;
+  logger.log(`[ChatGen][resolveTools] canUseTools=${canUseTools}, enabledTools=[${enabledTools.join(', ')}]`);
+  return { enabledTools, rawPrompt };
+}
+export async function startGenerationFn(deps: GenerationDeps, call: StartGenerationCall): Promise<void> {
+  const { setDebugInfo, targetConversationId, messageText } = call;
+  if (!deps.hasActiveModel) return;
+  // Missing text weights must never turn an ordinary message into an image request.
+  if (deps.hasTextModel === false && !isAppleModelSelected()) {
+    deps.setAlertState(showAlert('Text model needed', 'Select Apple Intelligence or a downloaded text model to send this message.'));
+    return;
+  }
+  deps.generatingForConversationRef.current = targetConversationId;
+  // For remote models, skip local model loading
+  if (!deps.activeModelInfo?.isRemote && deps.activeModel) {
+    if (!(await ensureModelReady(deps))) {
+      deps.setAlertState(showAlert('Error', 'Failed to load model. Please try again.'));
+      deps.generatingForConversationRef.current = null;
+      return;
+    }
+  }
+  const conversation = useChatStore.getState().conversations.find(c => c.id === targetConversationId);
+  const { enabledTools, rawPrompt } = resolveToolsAndPrompt(deps, conversation, messageText);
+
+  const ragContext = await injectRagContext(deps.settings.enabledTools?.includes('search_knowledge_base') ? conversation?.projectId : undefined, messageText, {prompt:rawPrompt,canSearchTool:enabledTools.includes('search_knowledge_base'),contextLength:deps.settings.contextLength});
+  if (ragContext.warning) deps.addMessage(targetConversationId, {
+    id: `document-search-${Date.now()}`, role: 'system', content: ragContext.warning,
+    timestamp: Date.now(), isSystemInfo: true,
+  });
+  const basePrompt = ragContext.prompt;
+  const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
+  const activeTools = enabledTools;
+  // llama.cpp uses text hint only when it lacks native Jinja tool calling support.
+  const useTextHint = !isAppleModelSelected() && !isRemote && activeTools.length > 0 && !llmService.supportsToolCalling();
+  const systemPrompt = applyGemma4ThinkToken(
+    useTextHint ? `${basePrompt}${buildToolSystemPromptHint(activeTools)}` : basePrompt,
+    isRemote,
+  );
+  logger.log(`[ChatGen][DEBUG] isRemote=${isRemote}, useTextHint=${useTextHint}, tools=[${activeTools.join(', ')}], path=${activeTools.length > 0 ? 'withTools' : 'generate'}`);
+  logger.log(`[ChatGen][PROMPT] systemPrompt (${systemPrompt.length}ch): "${systemPrompt.substring(0, 800)}"`);
+  const messagesForContext = buildMessagesForContext(targetConversationId, messageText, systemPrompt);
+  messagesForContext[0].documentSources = ragContext.sources;
+  try {
+    await generateWithCompactionRetry({ id: targetConversationId, prompt: systemPrompt, messages: messagesForContext }, activeTools, conversation?.projectId);
+    if (!isAppleModelSelected() && deps.settings.showGenerationDetails) prepareContext(setDebugInfo,systemPrompt,{messages:messagesForContext,conversationId:targetConversationId});
+  } catch (error: any) {
+    const msg = error?.message || error?.toString?.() || 'Failed to generate response';
+    logger.error('[ChatGen] Generation failed:', msg, error);
+    deps.setAlertState(showAlert('Generation Error', msg));
+    deps.generatingForConversationRef.current = null;
+    return;
+  }
+  deps.generatingForConversationRef.current = null;
+}
+let _msgIdSeq = 0; const nextMsgId = () => `${Date.now()}-${(++_msgIdSeq).toString(36)}`;
+export type SendCall = { text: string; attachments?: MediaAttachment[]; imageMode?: 'auto' | 'force' | 'disabled'; startGeneration: (convId: string, text: string) => Promise<void>; setDebugInfo: SetState<any> };
+export async function handleSendFn(deps: GenerationDeps, call: SendCall): Promise<void> {
+  const requestedAt=replyTimingNow();
+  const { text, attachments, imageMode, startGeneration } = call;
+  if (!deps.hasActiveModel) {
+    deps.setAlertState(showAlert('No Model Selected', 'Please select a model first.'));
+    return;
+  }
+  let targetConversationId = deps.activeConversationId;
+  if (!targetConversationId) {
+    const fallbackModelId = deps.activeModelInfo?.modelId || deps.activeImageModel?.id;
+    targetConversationId = deps.createConversation(fallbackModelId!, undefined, deps.pendingProjectId);
+    deps.setActiveConversation(targetConversationId);
+  }
+  let messageText = appendAttachmentText(text, attachments);
+  const shouldGenerateImage = imageMode !== 'disabled' && await shouldRouteToImageGenerationFn(deps, messageText, imageMode === 'force');
+  if (shouldGenerateImage && deps.activeImageModel) {
+    await handleImageGenerationFn(deps, { prompt: text, conversationId: targetConversationId });
+    return;
+  }
+  if (shouldGenerateImage && !deps.activeImageModel) messageText = `[User wanted an image but no image model is loaded] ${messageText}`;
+  if (generationService.getState().isGenerating) {
+    generationService.enqueueMessage({ id: nextMsgId(), conversationId: targetConversationId, text, attachments, messageText,requestedAt,queuedAt:replyTimingNow() });
+    return;
+  }
+  const sent=deps.addMessage(targetConversationId, { role: 'user', content: text, attachments });
+  if(sent?.id) registerReplySend(sent.id,requestedAt);
+  await startGeneration(targetConversationId, messageText);
+}
+export async function handleStopFn(deps: Pick<GenerationDeps, 'isGeneratingImage' | 'generatingForConversationRef'>): Promise<void> {
+  deps.generatingForConversationRef.current = null;
+  try { await generationService.stopGeneration().catch(() => { }); }
+  catch (e) { logger.error('Error stopping generation:', e); }
+  if (deps.isGeneratingImage) imageGenerationService.cancelGeneration().catch(() => { });
+}
+export async function executeDeleteConversationFn(
+  deps: Pick<GenerationDeps, 'activeConversationId' | 'isStreaming' | 'clearStreamingMessage' | 'removeImagesByConversationId' | 'deleteConversation' | 'setActiveConversation' | 'navigation' | 'setAlertState'>,
+): Promise<void> {
+  if (!deps.activeConversationId) return;
+  deps.setAlertState(hideAlert());
+  if (deps.isStreaming) { await llmService.stopGeneration(); deps.clearStreamingMessage(); }
+  for (const id of deps.removeImagesByConversationId(deps.activeConversationId)) await coreMLImageGeneratorService.deleteGeneratedImage(id);
+  contextCompactionService.clearSummary(deps.activeConversationId);
+  deps.deleteConversation(deps.activeConversationId);
+  deps.setActiveConversation(null);
+  deps.navigation.goBack();
+}
+export type RegenerateCall = { setDebugInfo: SetState<any>; userMessage: Message };
+export async function regenerateResponseFn(deps: GenerationDeps, call: RegenerateCall): Promise<void> {
+  const { userMessage } = call;
+  if (!deps.activeConversationId || !deps.hasActiveModel) return;
+  const targetConversationId = deps.activeConversationId;
+  const messageText = appendAttachmentText(userMessage.content, userMessage.attachments);
+  const shouldGenerateImage = await shouldRouteToImageGenerationFn(deps, messageText);
+  if (shouldGenerateImage && deps.activeImageModel) {
+    await handleImageGenerationFn(deps, { prompt: userMessage.content, conversationId: targetConversationId, skipUserMessage: true });
+    return;
+  }
+  if (!deps.activeModelInfo?.isRemote && deps.activeModel) {
+    if (!(await ensureModelReady(deps))) {
+      deps.setAlertState(showAlert('Error', 'Failed to load model. Please try again.'));
+      return;
+    }
+  }
+  deps.generatingForConversationRef.current = targetConversationId;
+
+  ;
+  const conversation = useChatStore.getState().conversations.find(c => c.id === targetConversationId);
+  const { enabledTools, rawPrompt } = resolveToolsAndPrompt(deps, conversation, messageText);
+  const messages = (conversation?.messages || []).filter((m: Message) => !m.isSystemInfo);
+  const messagesUpToUser = messages.slice(0, messages.findIndex((m: Message) => m.id === userMessage.id) + 1)
+    .map(m => m.id === userMessage.id ? { ...m, content: messageText } : m);
+
+  const isRemote = !!useRemoteServerStore.getState().activeRemoteTextModelId;
+  const activeTools = enabledTools;
+  const ragContext = await injectRagContext(deps.settings.enabledTools?.includes('search_knowledge_base') ? conversation?.projectId : undefined, messageText, {prompt:rawPrompt,canSearchTool:enabledTools.includes('search_knowledge_base'),contextLength:deps.settings.contextLength});
+  if (ragContext.warning) deps.addMessage(targetConversationId, {
+    id: `document-search-${Date.now()}`, role: 'system', content: ragContext.warning,
+    timestamp: Date.now(), isSystemInfo: true,
+  });
+  const basePrompt = ragContext.prompt;
+  const useTextHint = !isAppleModelSelected() && !isRemote && activeTools.length > 0 && !llmService.supportsToolCalling();
+  const systemPrompt = applyGemma4ThinkToken(
+    useTextHint ? `${basePrompt}${buildToolSystemPromptHint(activeTools)}` : basePrompt,
+    isRemote,
+    {  thinkingEnabled: deps.settings.thinkingEnabled },
+  );
+  const { prefix, filtered } = applyCompactionPrefix(conversation, systemPrompt, messagesUpToUser);
+  prefix[0].documentSources = ragContext.sources;
+  try {
+    await generateWithCompactionRetry({ id: targetConversationId, prompt: systemPrompt, messages: [...prefix, ...filtered] }, activeTools, conversation?.projectId);
+  } catch (error: any) {
+    deps.setAlertState(showAlert('Generation Error', error.message || 'Failed to generate response'));
+  }
+  deps.generatingForConversationRef.current = null;
+}
+export type SelectProjectDeps = { activeConversationId: string | null | undefined; setConversationProject: (convId: string, projectId: string | null) => void; setShowProjectSelector: SetState<boolean> };
+export function handleSelectProjectFn(deps: SelectProjectDeps, project: Project | null): void {
+  if (deps.activeConversationId) deps.setConversationProject(deps.activeConversationId, project?.id || null);
+  deps.setShowProjectSelector(false); }

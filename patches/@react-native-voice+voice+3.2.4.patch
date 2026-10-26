@@ -1,0 +1,65 @@
+diff --git a/node_modules/@react-native-voice/voice/ios/Voice/Voice.m b/node_modules/@react-native-voice/voice/ios/Voice/Voice.m
+index fd9dad8..cc73b16 100644
+--- a/node_modules/@react-native-voice/voice/ios/Voice/Voice.m
++++ b/node_modules/@react-native-voice/voice/ios/Voice/Voice.m
+@@ -17,6 +17,9 @@
+ /** Whether speech recognition is finishing.. */
+ @property (nonatomic) BOOL isTearingDown;
+ @property (nonatomic) BOOL continuous;
++// Default NO: Apple recognition is never enabled merely by importing this module.
++@property (nonatomic) BOOL cloudRecognitionAllowed;
++@property (nonatomic) NSUInteger permissionGeneration;
+ 
+ @property (nonatomic) NSString *sessionId;
+ /** Previous category the user was on prior to starting speech recognition */
+@@ -343,6 +346,7 @@ RCT_EXPORT_METHOD(destroySpeech:(RCTResponseSenderBlock)callback) {
+ }
+ 
+ RCT_EXPORT_METHOD(isSpeechAvailable:(RCTResponseSenderBlock)callback) {
++    NSUInteger generation = self.permissionGeneration;
+     [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
+         switch (status) {
+             case SFSpeechRecognizerAuthorizationStatusAuthorized:
+@@ -368,12 +372,28 @@ RCT_EXPORT_METHOD(isRecognizing:(RCTResponseSenderBlock)callback) {
+     }
+ }
+ 
++RCT_EXPORT_METHOD(setCloudRecognitionAllowed:(BOOL)allowed
++                  resolver:(RCTPromiseResolveBlock)resolve
++                  rejecter:(RCTPromiseRejectBlock)reject) {
++    self.permissionGeneration += 1;
++    self.cloudRecognitionAllowed = allowed;
++    if (!allowed && (self.recognitionTask != nil || self.recognitionRequest != nil)) {
++        [self teardown];
++    }
++    resolve(@YES);
++}
++
+ RCT_EXPORT_METHOD(startSpeech:(NSString*)localeStr callback:(RCTResponseSenderBlock)callback) {
++    if (!self.cloudRecognitionAllowed) {
++        callback(@[@"Apple speech is disabled in Voice settings."]);
++        return;
++    }
+     if (self.recognitionTask != nil) {
+         [self sendResult:RCTMakeError(@"Speech recognition already started!", nil, nil) :nil :nil :nil];
+         return;
+     }
+     
++    NSUInteger generation = self.permissionGeneration;
+     [SFSpeechRecognizer requestAuthorization:^(SFSpeechRecognizerAuthorizationStatus status) {
+         switch (status) {
+             case SFSpeechRecognizerAuthorizationStatusNotDetermined:
+@@ -386,7 +406,12 @@ RCT_EXPORT_METHOD(startSpeech:(NSString*)localeStr callback:(RCTResponseSenderBl
+                 [self sendResult:RCTMakeError(@"Speech recognition restricted on this device", nil, nil) :nil :nil :nil];
+                 break;
+             case SFSpeechRecognizerAuthorizationStatusAuthorized:
+-                [self setupAndStartRecognizing:localeStr];
++                dispatch_async(dispatch_get_main_queue(), ^{
++                    // Consent can be revoked while the system prompt is open.
++                    if (self.cloudRecognitionAllowed && generation == self.permissionGeneration) {
++                        [self setupAndStartRecognizing:localeStr];
++                    }
++                });
+                 break;
+         }
+     }];

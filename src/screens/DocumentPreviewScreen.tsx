@@ -1,0 +1,187 @@
+import React,{ useState,useEffect,useCallback } from 'react';
+import {
+View,
+Text,
+ScrollView,
+TouchableOpacity,
+ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation,useRoute,RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Icon from 'react-native-vector-icons/Feather';
+import RNFS from 'react-native-fs';
+import { useTheme,useThemedStyles } from '../theme';
+import type { ThemeColors,ThemeShadows } from '../theme';
+import { TYPOGRAPHY,SPACING } from '../constants';
+import { documentService } from '../services';
+import { RootStackParamList } from '../navigation/types';
+import logger from '../utils/logger';
+import { TableInspector } from '../components/TableInspector';
+import { readLocalTables } from '../services/localFileContent';
+import type { LocalTable } from '../services/tableData';
+import { localDocumentPath } from '../services/localDocumentPath';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type RouteProps = RouteProp<RootStackParamList, 'DocumentPreview'>;
+
+const createStyles = (colors: ThemeColors, shadows: ThemeShadows) => ({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
+    ...shadows.small,
+  },
+  backButton: {
+    padding: SPACING.xs,
+    marginRight: SPACING.md,
+  },
+  headerCenter: {
+    flex: 1,
+  },
+  headerTitle: {
+    ...TYPOGRAPHY.h2,
+    color: colors.text,
+    fontWeight: '500' as const,
+  },
+  headerSubtitle: {
+    ...TYPOGRAPHY.labelSmall,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  content: {
+    flex: 1,
+    padding: SPACING.lg,
+  },
+  contentText: {
+    ...TYPOGRAPHY.body,
+    color: colors.text,
+    fontFamily: 'Menlo',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  centered: {
+    flex: 1,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingHorizontal: SPACING.xxl,
+  },
+  errorText: {
+    ...TYPOGRAPHY.body,
+    color: colors.error,
+    textAlign: 'center' as const,
+    marginTop: SPACING.md,
+  },
+  emptyText: {
+    ...TYPOGRAPHY.body,
+    color: colors.textMuted,
+    textAlign: 'center' as const,
+  },
+});
+
+export const DocumentPreviewScreen: React.FC = () => {
+  const navigation = useNavigation<NavigationProp>();
+  const route = useRoute<RouteProps>();
+  const { filePath, fileName, fileSize } = route.params;
+  const { colors } = useTheme();
+  const styles = useThemedStyles(createStyles);
+
+  const [tables, setTables] = useState<LocalTable[]>([]);
+  const [content, setContent] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadContent = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      setTables([]);
+
+      const foundPath = localDocumentPath(filePath);
+      if (!await RNFS.exists(foundPath)) {
+        setError('File not found. Please import the original document again.');
+        return;
+      }
+
+      const extension = `.${fileName.split('.').pop()?.toLowerCase()}`;
+      if (extension === '.csv' || extension === '.xlsx') {
+        setTables(await readLocalTables(foundPath, extension));
+        setContent('Table data');
+        return;
+      }
+      const attachment = await documentService.processDocumentFromPath(foundPath, fileName);
+      logger.log('[DocumentPreview] Attachment result:', attachment ? 'success' : 'null');
+
+      if (attachment?.textContent) {
+        logger.log('[DocumentPreview] Text content length:', attachment.textContent.length);
+        setContent(attachment.textContent);
+      } else {
+        logger.log('[DocumentPreview] No text content in attachment');
+        setError('Could not extract text from this document');
+      }
+    } catch (err: any) {
+      logger.error('[DocumentPreview] ===== Error loading document =====');
+      logger.error('[DocumentPreview] Error message:', err?.message);
+      logger.error('[DocumentPreview] Error stack:', err?.stack);
+      setError(err?.message || 'Failed to load document');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filePath, fileName]);
+
+  useEffect(() => {
+    loadContent();
+  }, [loadContent]);
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    return bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Icon name="arrow-left" size={20} color={colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {fileName || 'Document'}
+          </Text>
+          {fileSize > 0 && (
+            <Text style={styles.headerSubtitle}>{formatFileSize(fileSize)}</Text>
+          )}
+        </View>
+      </View>
+
+      {isLoading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.emptyText}>Loading document...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.centered}>
+          <Icon name="alert-circle" size={40} color={colors.error} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : content ? (
+        <ScrollView style={styles.content} showsVerticalScrollIndicator>
+          {tables.length ? <TableInspector tables={tables} /> : <Text style={styles.contentText}>{content}</Text>}
+        </ScrollView>
+      ) : (
+        <View style={styles.centered}>
+          <Icon name="file-text" size={40} color={colors.textMuted} />
+          <Text style={styles.emptyText}>No content available</Text>
+        </View>
+      )}
+    </SafeAreaView>
+  );
+};

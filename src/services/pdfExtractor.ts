@@ -1,0 +1,44 @@
+/**
+ * PDFExtractor - TypeScript wrapper for native PDF text extraction modules.
+ * Uses the built-in iOS PDFKit framework.
+ */
+
+import { NativeModules } from 'react-native';
+
+const { PDFExtractorModule } = NativeModules;
+
+class PDFExtractor {
+  /**
+   * Check if the native PDF extraction module is available
+   */
+  isAvailable(): boolean {
+    return PDFExtractorModule != null;
+  }
+
+  async extractImageText(filePath: string, maxChars = 50000): Promise<string> {
+    if (!PDFExtractorModule?.extractImageText) throw new Error('On-device text recognition is unavailable.');
+    return PDFExtractorModule.extractImageText(filePath, maxChars);
+  }
+
+  /**
+   * Extract text from a PDF file at the given path.
+   * Returns up to maxChars characters of text content.
+   */
+  async extractText(filePath: string, maxChars: number = 50000): Promise<string> {
+    if (!this.isAvailable()) {
+      throw new Error('PDF extraction is not available on this platform');
+    }
+
+    try {
+      return await PDFExtractorModule.extractText(filePath, maxChars);
+    } catch (error: any) {
+      // Guard against NullPointerException when bridge promise is rejected after teardown
+      if (error?.message?.includes('NullPointerException') || error?.code === 'BRIDGE_DESTROYED') {
+        throw new Error('PDF extraction failed: native bridge unavailable');
+      }
+      throw error;
+    }
+  }
+}
+
+export const pdfExtractor = new PDFExtractor();

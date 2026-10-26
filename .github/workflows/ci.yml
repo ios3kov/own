@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+# The iOS Podfile builds llama.rn from package sources.
+env:
+  RNLLAMA_SKIP_POSTINSTALL: '1'
+
+jobs:
+  lint:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install SwiftLint
+        run: brew install swiftlint
+
+      - name: Lint
+        run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+  test:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Run Jest tests
+        run: npx jest --coverage --runInBand --detectOpenHandles
+
+      - name: Install CocoaPods and native dependencies
+        run: |
+          gem install --user-install cocoapods -v 1.17.0 --no-document
+          export PATH="$(ruby -r rubygems -e 'puts Gem.user_dir')/bin:$PATH"
+          echo "$(ruby -r rubygems -e 'puts Gem.user_dir')/bin" >> "$GITHUB_PATH"
+          pod install --project-directory=ios
+
+      - name: Select available iPhone simulator
+        run: |
+          xcrun simctl list devices available --json > "$RUNNER_TEMP/own-simulators.json"
+          node -e 'const fs=require("fs");const data=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+"/own-simulators.json"));const device=Object.values(data.devices).flat().find(d=>d.isAvailable&&d.name.startsWith("iPhone"));if(!device)throw Error("No available iPhone simulator");fs.appendFileSync(process.env.GITHUB_ENV,"OWN_IOS_TEST_DESTINATION=platform=iOS Simulator,id="+device.udid+"\n");'
+          xcodebuild -version
+          pod --version
+
+      - name: Run iOS tests
+        env:
+          OWN_IOS_DERIVED_DATA: ${{ runner.temp }}/Own-build
+        run: npm run test:ios
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+
+      - name: Upload iOS test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ios-test-results
+          path: ${{ runner.temp }}/Own-build/Logs/Test/*.xcresult
+          if-no-files-found: ignore

@@ -1,0 +1,169 @@
+import React, {useState} from 'react';
+import { storedMediaUri } from '../../../services/storedMediaUri';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../../../navigation/types';
+import {
+  View,
+  Text,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+} from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+} from 'react-native-reanimated';
+import Icon from 'react-native-vector-icons/Feather';
+import { MediaAttachment } from '../../../types';
+import { viewDocument } from '@react-native-documents/viewer';
+import logger from '../../../utils/logger';
+
+interface FadeInImageProps {
+  uri: string;
+  imageStyle: any;
+  errorColor?: string;
+  testID?: string;
+  wrapperTestID?: string;
+  onPress?: () => void;
+}
+
+function FadeInImage({ uri, imageStyle, errorColor, testID, wrapperTestID, onPress }: FadeInImageProps) {
+  const opacity = useSharedValue(0);
+  const [failed, setFailed] = useState(false);
+  const fadeStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return (
+    <Animated.View style={[fadeInImageStyles.wrapper, fadeStyle]}>
+      <TouchableOpacity
+        testID={wrapperTestID}
+        style={fadeInImageStyles.wrapper}
+        onPress={onPress}
+        disabled={failed}
+        activeOpacity={0.8}
+      >
+        {failed ? <View style={[imageStyle, fadeInImageStyles.fallback]}>
+          <Text style={{color:errorColor}}>Image unavailable</Text>
+        </View> : <Image
+          testID={testID}
+          source={{ uri }}
+          style={imageStyle}
+          resizeMode="cover"
+          onLoad={() => { opacity.value = withTiming(1, { duration: 300 }); }}
+          onError={() => {setFailed(true); opacity.value = 1;}}
+        />}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
+const fadeInImageStyles = StyleSheet.create({
+  fallback: {alignItems: 'center', justifyContent: 'center'},
+  wrapper: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+});
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) { return `${bytes}B`; }
+  if (bytes < 1024 * 1024) { return `${(bytes / 1024).toFixed(0)}KB`; }
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+interface MessageAttachmentsProps {
+  attachments: MediaAttachment[];
+  isUser: boolean;
+  styles: any;
+  colors: any;
+  onImagePress?: (uri: string) => void;
+}
+
+export function MessageAttachments({
+  attachments,
+  isUser,
+  styles,
+  colors,
+  onImagePress,
+}: MessageAttachmentsProps) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  return (
+    <View testID="message-attachments" style={styles.attachmentsContainer}>
+      {attachments.map((attachment, index) =>
+        attachment.type === 'document' ? (
+          <TouchableOpacity
+            key={attachment.id}
+            testID={`document-badge-${index}`}
+            style={[
+              styles.documentBadge,
+              isUser ? styles.documentBadgeUser : styles.documentBadgeAssistant,
+            ]}
+            onPress={() => {
+              if (!attachment.uri) { return; }
+              const ext = (attachment.fileName || '').split('.').pop()?.toLowerCase();
+              if (ext === 'csv' || ext === 'xlsx') {
+                navigation.navigate('DocumentPreview', { filePath: attachment.uri, fileName: attachment.fileName || 'Table', fileSize: attachment.fileSize || 0 });
+                return;
+              }
+              const mimeMap: Record<string, string> = {
+                pdf: 'application/pdf',
+                txt: 'text/plain',
+                md: 'text/markdown',
+                csv: 'text/csv',
+                json: 'application/json',
+                xml: 'application/xml',
+                html: 'text/html',
+                py: 'text/x-python',
+                js: 'text/javascript',
+                ts: 'text/typescript',
+              };
+              const mimeType = ext ? mimeMap[ext] || 'application/octet-stream' : undefined;
+              let uri = storedMediaUri(attachment.uri);
+              if (uri.startsWith('/')) {
+                uri = `file://${uri}`;
+              } else if (!uri.includes('://')) {
+                uri = `file://${uri}`;
+              }
+              logger.log('[ChatMessage] Opening document:', uri);
+              viewDocument({ uri, mimeType, grantPermissions: 'read' }).catch((err: any) => {
+                logger.warn('[ChatMessage] Failed to open document:', err?.message || err);
+              });
+            }}
+            activeOpacity={0.7}
+          >
+            <Icon name="file-text" size={14} color={isUser ? colors.background : colors.textSecondary} />
+            <Text
+              style={[
+                styles.documentBadgeText,
+                isUser ? styles.documentBadgeTextUser : styles.documentBadgeTextAssistant,
+              ]}
+              numberOfLines={1}
+            >
+              {attachment.fileName || 'Document'}
+            </Text>
+            {attachment.fileSize != null && (
+              <Text
+                style={[
+                  styles.documentBadgeSize,
+                  isUser ? styles.documentBadgeSizeUser : styles.documentBadgeSizeAssistant,
+                ]}
+              >
+                {formatFileSize(attachment.fileSize)}
+              </Text>
+            )}
+          </TouchableOpacity>
+        ) : (
+          <FadeInImage
+            key={`${attachment.id}:${storedMediaUri(attachment.uri)}`}
+            uri={storedMediaUri(attachment.uri)}
+            imageStyle={styles.attachmentImage}
+            errorColor={colors.textSecondary}
+            wrapperTestID={isUser ? `message-attachment-${index}` : 'generated-image'}
+            testID={isUser ? `message-image-${index}` : 'generated-image-content'}
+            onPress={() => onImagePress?.(storedMediaUri(attachment.uri))}
+          />
+        )
+      )}
+    </View>
+  );
+}

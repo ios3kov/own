@@ -1,0 +1,521 @@
+/**
+ * Jest Setup File
+ *
+ * Configures global mocks and test utilities for the Own test suite.
+ * This file runs after the test framework is installed in the environment.
+ */
+
+// Import extended matchers - path varies by version
+// v12.4+ has built-in matchers, earlier versions use separate import
+try {
+  require('@testing-library/react-native/extend-expect');
+} catch {
+  // Built-in matchers in v12.4+, or no matchers needed for basic tests
+}
+
+const shouldPrintJestConsole = process.env.DEBUG_JEST_CONSOLE === '1';
+
+// JS/native integration tests use an independent Node crypto oracle. The actual
+// CommonCrypto implementation is exercised by scripts/privacy/native-tests.m.
+const { NativeModules: privacyNativeModules } = require('react-native');
+const privacyCrypto = require('node:crypto');
+// Transport mock only; native pinned-IP behavior has separate iOS tests.
+privacyNativeModules.PublicWebFetcher = { fetch: jest.fn(async (url: string) => {
+  const response = await global.fetch(url, {});
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  return response.text();
+}) };
+privacyNativeModules.PrivacyCrypto = {
+  createVerifier: async (password: string) => {
+    if (!password || Buffer.byteLength(password, 'utf8') > 4096) throw new Error('Invalid passphrase');
+    const salt = privacyCrypto.randomBytes(16);
+    const hash = privacyCrypto.pbkdf2Sync(password, salt, 600000, 32, 'sha256');
+    return `pbkdf2-sha256$600000$${salt.toString('hex')}$${hash.toString('hex')}`;
+  },
+  verifyPassphrase: async (password: string, verifier: string) => {
+    const parts = verifier.split('$');
+    if (parts.length !== 4 || parts[0] !== 'pbkdf2-sha256' || parts[1] !== '600000' ||
+        !/^[a-f0-9]{32}$/.test(parts[2]) || !/^[a-f0-9]{64}$/.test(parts[3]) || !password ||
+        Buffer.byteLength(password, 'utf8') > 4096) return false;
+    const actual = privacyCrypto.pbkdf2Sync(password, Buffer.from(parts[2], 'hex'), 600000, 32, 'sha256');
+    return privacyCrypto.timingSafeEqual(actual, Buffer.from(parts[3], 'hex'));
+  },
+};
+
+// ============================================================================
+// AsyncStorage Mock
+// ============================================================================
+const mockStorage: Record<string, string> = {};
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  setItem: jest.fn((key: string, value: string) => {
+    mockStorage[key] = value;
+    return Promise.resolve();
+  }),
+  getItem: jest.fn((key: string) => {
+    return Promise.resolve(mockStorage[key] || null);
+  }),
+  removeItem: jest.fn((key: string) => {
+    delete mockStorage[key];
+    return Promise.resolve();
+  }),
+  multiSet: jest.fn((pairs: [string, string][]) => {
+    pairs.forEach(([key, value]) => {
+      mockStorage[key] = value;
+    });
+    return Promise.resolve();
+  }),
+  multiGet: jest.fn((keys: string[]) => {
+    return Promise.resolve(keys.map(key => [key, mockStorage[key] || null]));
+  }),
+  multiRemove: jest.fn((keys: string[]) => {
+    keys.forEach(key => delete mockStorage[key]);
+    return Promise.resolve();
+  }),
+  clear: jest.fn(() => {
+    Object.keys(mockStorage).forEach(key => delete mockStorage[key]);
+    return Promise.resolve();
+  }),
+  getAllKeys: jest.fn(() => {
+    return Promise.resolve(Object.keys(mockStorage));
+  }),
+}));
+
+// Helper to clear storage between tests
+export const clearMockStorage = () => {
+  Object.keys(mockStorage).forEach(key => delete mockStorage[key]);
+};
+
+// ============================================================================
+// React Native Mocks - Partial mocks to avoid full module loading issues
+// ============================================================================
+// Note: We don't mock the entire 'react-native' module as it causes issues
+// with internal RN module loading (DevMenu, TurboModules, etc.)
+// Instead, we mock specific native modules that need it.
+
+// ============================================================================
+// Navigation Mocks
+// ============================================================================
+jest.mock('@react-navigation/native', () => {
+  const actual = jest.requireActual('@react-navigation/native');
+  return {
+    ...actual,
+    useScrollToTop: jest.fn(),
+    useNavigation: () => ({
+      navigate: jest.fn(),
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+      addListener: jest.fn(() => jest.fn()),
+    }),
+    useRoute: () => ({
+      params: {},
+    }),
+    useFocusEffect: jest.fn(),
+    useIsFocused: () => true,
+  };
+});
+
+// ============================================================================
+// Native Module Mocks
+// ============================================================================
+
+// llama.rn mock - use virtual mock since native module may not resolve
+jest.mock('llama.rn', () => ({
+  initLlama: jest.fn(() => Promise.resolve({
+    id: 'test-context-id',
+    gpu: false,
+    reasonNoGPU: 'Test environment',
+    model: {
+      nParams: 1000000,
+    },
+    release: jest.fn(() => Promise.resolve()),
+    completion: jest.fn(() => Promise.resolve({
+      text: 'Test completion response',
+      tokens_predicted: 10,
+      tokens_evaluated: 5,
+      timings: {
+        predicted_per_token_ms: 50,
+        predicted_per_second: 20,
+      },
+    })),
+    initMultimodal: jest.fn(() => Promise.resolve(true)),
+    getMultimodalSupport: jest.fn(() => Promise.resolve({ vision: false, audio: false })),
+    embedding: jest.fn((text: string) => Promise.resolve({
+      embedding: new Array(384).fill(0).map((_, i) => Math.sin(i + text.length * 0.1)),
+    })),
+  })),
+  releaseContext: jest.fn(() => Promise.resolve()),
+  completion: jest.fn(() => Promise.resolve({
+    text: 'Test completion response',
+    tokens_predicted: 10,
+    tokens_evaluated: 5,
+    timings: {
+      predicted_per_token_ms: 50,
+      predicted_per_second: 20,
+    },
+  })),
+  stopCompletion: jest.fn(() => Promise.resolve()),
+  tokenize: jest.fn(() => Promise.resolve({ tokens: [1, 2, 3] })),
+  detokenize: jest.fn(() => Promise.resolve({ text: 'detokenized' })),
+}), { virtual: true });
+
+// whisper.rn mock - use virtual mock since native module may not resolve
+jest.mock('whisper.rn', () => ({
+  initWhisper: jest.fn(() => Promise.resolve({
+    id: 'test-whisper-id',
+  })),
+  releaseWhisper: jest.fn(() => Promise.resolve()),
+  transcribeFile: jest.fn(() => Promise.resolve({
+    result: 'Transcribed text',
+    segments: [],
+  })),
+  transcribeRealtime: jest.fn(() => Promise.resolve()),
+  AudioSessionIos: {
+    setCategory: jest.fn(() => Promise.resolve()),
+    setMode: jest.fn(() => Promise.resolve()),
+    setActive: jest.fn(() => Promise.resolve()),
+  },
+}), { virtual: true });
+
+// react-native-fs mock
+jest.mock('react-native-fs', () => ({
+  DocumentDirectoryPath: '/mock/documents',
+  CachesDirectoryPath: '/mock/caches',
+  ExternalDirectoryPath: '/mock/external',
+  MainBundlePath: '/mock/bundle',
+  downloadFile: jest.fn(() => ({
+    jobId: 1,
+    promise: Promise.resolve({ statusCode: 200, bytesWritten: 1000 }),
+  })),
+  stopDownload: jest.fn(),
+  exists: jest.fn(() => Promise.resolve(false)),
+  mkdir: jest.fn(() => Promise.resolve()),
+  unlink: jest.fn(() => Promise.resolve()),
+  readDir: jest.fn(() => Promise.resolve([])),
+  readFile: jest.fn(() => Promise.resolve('')),
+  writeFile: jest.fn(() => Promise.resolve()),
+  stat: jest.fn(() => Promise.resolve({ size: 1000000, isFile: () => true })),
+  read: jest.fn(() => Promise.resolve('GGUF')),
+  copyFile: jest.fn(() => Promise.resolve()),
+  copyFileAssets: jest.fn(() => Promise.resolve()),
+  moveFile: jest.fn(() => Promise.resolve()),
+  hash: jest.fn(() => Promise.resolve('mockhash')),
+}));
+
+// react-native-device-info mock
+jest.mock('react-native-device-info', () => ({
+  getTotalMemory: jest.fn(() => Promise.resolve(8 * 1024 * 1024 * 1024)), // 8GB
+  getUsedMemory: jest.fn(() => Promise.resolve(4 * 1024 * 1024 * 1024)), // 4GB
+  getFreeDiskStorage: jest.fn(() => Promise.resolve(50 * 1024 * 1024 * 1024)), // 50GB
+  getModel: jest.fn(() => 'Test Device'),
+  getSystemName: jest.fn(() => 'iOS'),
+  getSystemVersion: jest.fn(() => '13'),
+  isEmulator: jest.fn(() => Promise.resolve(false)),
+  getDeviceId: jest.fn(() => 'test-device-id'),
+  getHardware: jest.fn(() => Promise.resolve('unknown')),
+}));
+
+// react-native-image-picker mock
+jest.mock('react-native-image-picker', () => ({
+  launchImageLibrary: jest.fn(() => Promise.resolve({
+    assets: [{
+      uri: 'file:///mock/image.jpg',
+      type: 'image/jpeg',
+      fileName: 'image.jpg',
+      width: 1024,
+      height: 768,
+    }],
+  })),
+  launchCamera: jest.fn(() => Promise.resolve({
+    assets: [{
+      uri: 'file:///mock/camera.jpg',
+      type: 'image/jpeg',
+      fileName: 'camera.jpg',
+      width: 1024,
+      height: 768,
+    }],
+  })),
+}));
+
+// react-native-keychain mock
+jest.mock('react-native-keychain', () => ({
+  ACCESSIBLE: { WHEN_UNLOCKED: 'AccessibleWhenUnlocked', WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AccessibleWhenUnlockedThisDeviceOnly' },
+  ACCESS_CONTROL: { BIOMETRY_CURRENT_SET: 'BiometryCurrentSet' },
+  BIOMETRY_TYPE: { FACE_ID: 'FaceID', TOUCH_ID: 'TouchID' },
+  getSupportedBiometryType: jest.fn().mockResolvedValue(null),
+  setGenericPassword: jest.fn(() => Promise.resolve(true)),
+  getGenericPassword: jest.fn(() => Promise.resolve(false)),
+  resetGenericPassword: jest.fn(() => Promise.resolve(true)),
+}));
+
+// @react-native-voice/voice mock
+jest.mock('@react-native-voice/voice', () => ({
+  start: jest.fn(() => Promise.resolve()),
+  stop: jest.fn(() => Promise.resolve()),
+  destroy: jest.fn(() => Promise.resolve()),
+  isAvailable: jest.fn(() => Promise.resolve(true)),
+  onSpeechStart: null,
+  onSpeechEnd: null,
+  onSpeechResults: null,
+  onSpeechError: null,
+}));
+
+// @react-native-documents/picker mock
+jest.mock('@react-native-documents/picker', () => ({
+  keepLocalCopy: jest.fn(async ({files}: any) => files.map((file:any)=>({status:'success',localUri:`file:///mock/documents/${encodeURIComponent(file.fileName)}`}))),
+  pick: jest.fn(() => Promise.resolve([{
+    uri: 'file:///mock/document.txt',
+    name: 'document.txt',
+    type: 'text/plain',
+    size: 1234,
+  }])),
+  types: {
+    allFiles: '*/*',
+    plainText: 'text/plain',
+    csv: 'text/csv',
+    pdf: 'application/pdf',
+  },
+  isErrorWithCode: jest.fn(() => false),
+  errorCodes: {
+    OPERATION_CANCELED: 'OPERATION_CANCELED',
+  },
+}));
+
+// @react-native-documents/viewer mock
+jest.mock('@react-native-documents/viewer', () => ({
+  viewDocument: jest.fn(() => Promise.resolve(null)),
+  isErrorWithCode: jest.fn(() => false),
+  errorCodes: {
+    UNABLE_TO_OPEN: 'UNABLE_TO_OPEN',
+  },
+}));
+
+// react-native-gesture-handler mock
+jest.mock('react-native-gesture-handler', () => {
+  const MockView = 'View';
+  const mockGestureBuilder = () => {
+    const gesture: any = {
+      activeOffsetX: () => gesture,
+      activeOffsetY: () => gesture,
+      minDuration: () => gesture,
+      onStart: () => gesture,
+      onUpdate: () => gesture,
+      onEnd: () => gesture,
+    };
+    return gesture;
+  };
+  return {
+    Swipeable: MockView,
+    GestureHandlerRootView: MockView,
+    GestureDetector: MockView,
+    ScrollView: MockView,
+    PanGestureHandler: MockView,
+    TapGestureHandler: MockView,
+    State: {},
+    Directions: {},
+    Gesture: {
+      Pan: mockGestureBuilder,
+      Tap: mockGestureBuilder,
+      LongPress: mockGestureBuilder,
+      Race: (..._gestures: any[]) => ({}),
+      Simultaneous: (..._gestures: any[]) => ({}),
+      Exclusive: (..._gestures: any[]) => ({}),
+    },
+  };
+});
+
+// Mock the direct import of Swipeable
+jest.mock('react-native-gesture-handler/Swipeable', () => 'View');
+
+// react-native-worklets mock — must come before reanimated
+jest.mock('react-native-worklets', () => ({}));
+
+// react-native-reanimated mock — fully manual to avoid loading native worklets
+jest.mock('react-native-reanimated', () => {
+  const { View, Text, Image } = require('react-native');
+  return {
+    __esModule: true,
+    default: {
+      createAnimatedComponent: (component: any) => component || View,
+      addWhitelistedNativeProps: jest.fn(),
+      addWhitelistedUIProps: jest.fn(),
+      View,
+      Text,
+      Image,
+    },
+    useSharedValue: jest.fn((init: any) => ({ value: init })),
+    useAnimatedStyle: jest.fn((fn: any) => fn()),
+    useDerivedValue: jest.fn((fn: any) => ({ value: fn() })),
+    useAnimatedProps: jest.fn((fn: any) => fn()),
+    useReducedMotion: jest.fn(() => false),
+    withSpring: jest.fn((val: any) => val),
+    withTiming: jest.fn((val: any) => val),
+    withDelay: jest.fn((_: any, val: any) => val),
+    withSequence: jest.fn((...vals: any[]) => vals[vals.length - 1]),
+    withRepeat: jest.fn((val: any) => val),
+    cancelAnimation: jest.fn(),
+    Easing: {
+      linear: jest.fn(),
+      ease: jest.fn(),
+      bezier: jest.fn(() => jest.fn()),
+      in: jest.fn(),
+      out: jest.fn(),
+      inOut: jest.fn(),
+    },
+    FadeIn: { duration: jest.fn().mockReturnThis(), delay: jest.fn().mockReturnThis() },
+    FadeOut: { duration: jest.fn().mockReturnThis(), delay: jest.fn().mockReturnThis() },
+    SlideInDown: { duration: jest.fn().mockReturnThis() },
+    SlideOutDown: { duration: jest.fn().mockReturnThis() },
+    Layout: { duration: jest.fn().mockReturnThis() },
+    createAnimatedComponent: (component: any) => component || View,
+  };
+});
+
+// react-native-haptic-feedback mock
+jest.mock('react-native-haptic-feedback', () => ({
+  trigger: jest.fn(),
+}));
+
+// @react-native-community/blur mock
+jest.mock('@react-native-community/blur', () => ({
+  BlurView: 'BlurView',
+}));
+
+// lottie-react-native mock
+jest.mock('lottie-react-native', () => 'LottieView');
+
+// react-native-linear-gradient mock
+jest.mock('react-native-linear-gradient', () => 'LinearGradient');
+
+// moti mock (kept for any transitive imports)
+jest.mock('moti', () => ({
+  MotiView: 'MotiView',
+  MotiText: 'MotiText',
+  MotiImage: 'MotiImage',
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => children,
+}), { virtual: true });
+
+// @op-engineering/op-sqlite mock
+jest.mock('@op-engineering/op-sqlite', () => {
+  const mockResults = { rows: [], insertId: 0, rowsAffected: 0 };
+  const mockDb = {
+    executeSync: jest.fn(() => mockResults),
+    execute: jest.fn(() => Promise.resolve(mockResults)),
+    close: jest.fn(),
+    delete: jest.fn(),
+  };
+  return {
+    open: jest.fn(() => mockDb),
+  };
+});
+
+// react-native-zip-archive mock
+jest.mock('react-native-zip-archive', () => ({
+  unzip: jest.fn(() => Promise.resolve('/mock/unzipped/path')),
+  zip: jest.fn(() => Promise.resolve('/mock/zipped/path')),
+}));
+
+
+// Mock react-native-vector-icons
+jest.mock('react-native-vector-icons/Feather', () => 'Icon');
+
+// react-native-spotlight-tour mock
+jest.mock('react-native-spotlight-tour', () => ({
+  SpotlightTourProvider: ({ children }: { children: React.ReactNode }) => children,
+  AttachStep: ({ children }: { children: React.ReactNode }) => children,
+  useSpotlightTour: () => ({
+    start: jest.fn(),
+    stop: jest.fn(),
+    next: jest.fn(),
+    previous: jest.fn(),
+    goTo: jest.fn(),
+    current: 0,
+    status: 'idle',
+    pause: jest.fn(),
+    resume: jest.fn(),
+  }),
+}));
+
+// react-native-safe-area-context mock
+jest.mock('react-native-safe-area-context', () => {
+  const defaultInset = { top: 0, right: 0, bottom: 0, left: 0 };
+  return {
+    SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
+    SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+    useSafeAreaInsets: jest.fn(() => defaultInset),
+  };
+});
+
+// ============================================================================
+// Global Test Utilities
+// ============================================================================
+
+const { Animated } = require('react-native');
+
+const instantAnimation = (value?: { setValue?: (next: number) => void }, toValue?: number) => ({
+  start: (callback?: (result: { finished: boolean }) => void) => {
+    if (typeof toValue === 'number') {
+      value?.setValue?.(toValue);
+    }
+    callback?.({ finished: true });
+  },
+  stop: jest.fn(),
+  reset: jest.fn(),
+});
+
+jest.spyOn(Animated, 'timing').mockImplementation((value: any, config: any) => instantAnimation(value, config?.toValue) as any);
+jest.spyOn(Animated, 'spring').mockImplementation((value: any, config: any) => instantAnimation(value, config?.toValue) as any);
+jest.spyOn(Animated, 'delay').mockImplementation(() => instantAnimation() as any);
+function makeGroupAnimation(animations: any[]) {
+  return {
+    start: (callback?: (result: { finished: boolean }) => void) => {
+      animations.forEach(animation => animation?.start?.());
+      callback?.({ finished: true });
+    },
+    stop: jest.fn(),
+    reset: jest.fn(),
+  } as any;
+}
+jest.spyOn(Animated, 'sequence').mockImplementation((...args: unknown[]) =>
+  makeGroupAnimation(args[0] as any[])
+);
+jest.spyOn(Animated, 'parallel').mockImplementation((...args: unknown[]) =>
+  makeGroupAnimation(args[0] as any[])
+);
+jest.spyOn(Animated, 'stagger').mockImplementation((...args: unknown[]) => {
+  const animations = args[1] as any[];
+  return Animated.parallel(animations) as any;
+});
+jest.spyOn(Animated, 'loop').mockImplementation((animation: any) => ({
+  start: (callback?: (result: { finished: boolean }) => void) => {
+    animation?.start?.();
+    callback?.({ finished: true });
+  },
+  stop: jest.fn(),
+  reset: jest.fn(),
+}) as any);
+
+if (!shouldPrintJestConsole) {
+  console.log = jest.fn();
+  console.debug = jest.fn();
+  console.info = jest.fn();
+  console.warn = jest.fn();
+  console.error = jest.fn();
+}
+
+// Reset all mocks before each test
+beforeEach(() => {
+  jest.clearAllMocks();
+  clearMockStorage();
+});
+
+// Global timeout for async operations
+jest.setTimeout(10000);
+
+// Existing service tests simulate an approved native confirmation. Consent tests
+// explicitly unmock this adapter and exercise the real alert before native start.
+jest.mock('./src/services/downloadConsent', () => ({
+  ...jest.requireActual('./src/services/downloadConsent'),
+  requireDownloadConsent: jest.fn().mockResolvedValue(undefined),
+  requestDownloadConsent: jest.fn().mockResolvedValue(true),
+}));

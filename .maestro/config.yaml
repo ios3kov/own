@@ -1,0 +1,2 @@
+# iOS flows use ${APP_ID} supplied by scripts/run-tests.sh.
+# Direct example: maestro test -e APP_ID=io.github.ios3kov.own <flow>
