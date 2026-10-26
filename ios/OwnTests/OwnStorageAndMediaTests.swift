@@ -429,3 +429,61 @@ final class CoreMLImageOutputTests: XCTestCase {
     XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.path), [])
   }
 }
+
+// MARK: - Optional image pipeline retention policy (no Core ML model allocation)
+final class OwnImageRetentionPolicyTests: XCTestCase {
+  func testOptInAndEnvironmentAdmission() {
+    let policy = OwnImageRetentionPolicy()
+    let initial = policy.ticket()
+    XCTAssertFalse(policy.permits(ticket: initial, enabled: true, lowPower: false, thermal: .nominal))
+    policy.invalidate(active: true)
+    let ticket = policy.ticket()
+    XCTAssertFalse(policy.permits(ticket: ticket, enabled: false, lowPower: false, thermal: .nominal))
+    XCTAssertTrue(policy.permits(ticket: ticket, enabled: true, lowPower: false, thermal: .nominal))
+    XCTAssertTrue(policy.permits(ticket: ticket, enabled: true, lowPower: false, thermal: .fair))
+    XCTAssertFalse(policy.permits(ticket: ticket, enabled: true, lowPower: true, thermal: .nominal))
+    XCTAssertFalse(policy.permits(ticket: ticket, enabled: true, lowPower: false, thermal: .serious))
+    XCTAssertFalse(policy.permits(ticket: ticket, enabled: true, lowPower: false, thermal: .critical))
+  }
+  func testEvictionAndRecoveryCannotRefillFromOldCompletion() {
+    let policy = OwnImageRetentionPolicy()
+    policy.invalidate(active: true)
+    let activeReply = policy.ticket()
+    policy.invalidate(active: false)
+    policy.invalidate(active: true)
+    XCTAssertFalse(policy.permits(ticket: activeReply, enabled: true, lowPower: false, thermal: .nominal))
+    XCTAssertTrue(policy.permits(ticket: policy.ticket(), enabled: true, lowPower: false, thermal: .nominal))
+    let recovered = policy.ticket()
+    policy.invalidate() // preference off, pressure, timer, or power/thermal notification
+    XCTAssertFalse(policy.permits(ticket: recovered, enabled: true, lowPower: false, thermal: .nominal))
+  }
+}
+
+final class OwnImageIdleLeaseTests: XCTestCase {
+  func testRejectedRequestKeepsOriginalDeadline() {
+    var lease = OwnImageIdleLease()
+    let timer = lease.retain(now: 10)
+    XCTAssertFalse(lease.admit(validRequest: false))
+    XCTAssertFalse(lease.expires(revision: timer, now: 69.99))
+    XCTAssertTrue(lease.expires(revision: timer, now: 70))
+  }
+  func testEnvironmentEpochChangeCannotDisableIdleExpiry() {
+    let environment = OwnImageRetentionPolicy()
+    var lease = OwnImageIdleLease()
+    let timer = lease.retain(now: 20)
+    environment.invalidate(active: true)
+    XCTAssertTrue(lease.expires(revision: timer, now: 80))
+    lease.release() // production foreground handler queues this RAM-only release
+    XCTAssertFalse(lease.expires(revision: timer, now: 80))
+  }
+  func testValidAdmissionAndNewRetentionRejectOldTimer() {
+    var lease = OwnImageIdleLease()
+    let oldTimer = lease.retain(now: 10)
+    XCTAssertTrue(lease.admit(validRequest: true))
+    XCTAssertFalse(lease.expires(revision: oldTimer, now: 100))
+    let newTimer = lease.retain(now: 100)
+    XCTAssertFalse(lease.expires(revision: oldTimer, now: 200))
+    XCTAssertFalse(lease.expires(revision: newTimer, now: 159))
+    XCTAssertTrue(lease.expires(revision: newTimer, now: 160))
+  }
+}

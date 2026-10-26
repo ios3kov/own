@@ -1,3 +1,4 @@
+import {installVisionPreparationTransportMock} from '../../utils/testHelpers';
 /**
  * LLMService Unit Tests
  *
@@ -57,6 +58,7 @@ function setupScalingTest({
 
 describe('LLMService', () => {
   beforeEach(() => {
+    installVisionPreparationTransportMock();
     jest.clearAllMocks();
     resetStores();
 

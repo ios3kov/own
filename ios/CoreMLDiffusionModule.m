@@ -10,6 +10,9 @@ RCT_EXTERN_METHOD(loadModel:(NSDictionary *)params
 RCT_EXTERN_METHOD(unloadModel:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(releaseIdlePipeline:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 RCT_EXTERN_METHOD(isModelLoaded:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 

@@ -5,6 +5,7 @@
  */
 
 import { act } from '@testing-library/react-native';
+import {NativeModules} from 'react-native';
 import { useAppStore } from '../../src/stores/appStore';
 import { useChatStore } from '../../src/stores/chatStore';
 import { useAuthStore } from '../../src/stores/authStore';
@@ -582,3 +583,12 @@ export const actAsyncStoreUpdate = async (fn: () => Promise<void>): Promise<void
     await fn();
   });
 };
+
+/** Transport fake only; real pixel conversion and cache ownership have native fixture tests. */
+export function installVisionPreparationTransportMock(): void {
+ NativeModules.PDFExtractorModule = {
+  ...NativeModules.PDFExtractorModule,
+  prepareVisionImages:jest.fn(async(paths:string[])=>paths.map(path=>path.startsWith('file://') ? path : `file://${path}`)),
+  finishVisionPreparation:jest.fn().mockResolvedValue(true),
+ };
+}

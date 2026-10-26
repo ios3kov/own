@@ -376,11 +376,8 @@ final class CoreMLDiffusionModuleTests: XCTestCase {
   // MARK: supportedEvents
 
   func testSupportedEvents() {
-    let events = module.supportedEvents()!
-    XCTAssertTrue(events.contains("OwnImageProgress"))
-    XCTAssertTrue(events.contains("OwnImageError"))
-    XCTAssertTrue(events.contains("OwnImageLoadProgress"))
-    XCTAssertEqual(events.count, 3)
+    XCTAssertEqual(module.supportedEvents(),
+      ["OwnImageProgress", "OwnImageError", "OwnImageLoadProgress", "OwnImageResidency"])
   }
 
   func testValidateModelDirectoryAcceptsStandardUnetLayout() throws {

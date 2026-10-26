@@ -555,8 +555,21 @@ final class OwnResourceSettingsUITests: XCTestCase {
     XCTAssertNotEqual(control.value as? String, original)
     control.tap()
     XCTAssertEqual(control.value as? String, original)
+    let ready = app.switches["image-pipeline-ready"].firstMatch
+    for _ in 0..<8 {
+      if ready.exists && ready.isHittable { break }
+      app.swipeUp(velocity: .slow)
+    }
+    let readyLabel = app.staticTexts["Keep image generator ready"].firstMatch
+    XCTAssertTrue(ready.isHittable)
+    XCTAssertTrue(readyLabel.isHittable)
+    let originalReady = ready.value as? String
+    ready.tap()
+    XCTAssertNotEqual(ready.value as? String, originalReady)
+    ready.tap()
+    XCTAssertEqual(ready.value as? String, originalReady)
     let shot = XCTAttachment(screenshot: app.screenshot())
-    shot.name = largeText ? "Live preview setting large text" : "Live preview setting"
+    shot.name = largeText ? "Image resource settings large text" : "Image resource settings"
     shot.lifetime = .keepAlways
     add(shot)
   }

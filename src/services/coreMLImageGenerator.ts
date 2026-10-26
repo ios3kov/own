@@ -1,3 +1,4 @@
+import {useAppStore} from '../stores/appStore';
 import { beginModelLoad, reportModelLoad, finishModelLoad } from '../stores/modelLoadStore';
 import { NativeModules,NativeEventEmitter } from 'react-native';
 import {
@@ -18,6 +19,34 @@ type PreviewCallback = (preview: { previewPath: string; step: number; totalSteps
 
 /** On-device Core ML image generation through the iOS bridge. */
 class CoreMLImageGeneratorService {
+  private residencyRevision = -1;
+  private residencyListeners = new Set<(resident: boolean, modelPath: string | null) => void>();
+  private residencySubscription: {remove: () => void} | null = null;
+  subscribeResidency(listener: (resident: boolean, modelPath: string | null) => void): () => void {
+    this.residencyListeners.add(listener);
+    if (this.isAvailable() && !this.residencySubscription) {
+      this.residencySubscription = this.getEmitter().addListener('OwnImageResidency', event => {
+        if (!Number.isSafeInteger(event.revision) || event.revision <= this.residencyRevision) return;
+        this.residencyRevision = event.revision;
+        const resident = event.resident === true && typeof event.modelPath === 'string';
+        if (!resident) this.loadedThreads = null;
+        this.residencyListeners.forEach(callback => callback(resident, resident ? event.modelPath : null));
+      });
+    }
+    return () => {
+      this.residencyListeners.delete(listener);
+      if (!this.residencyListeners.size) { this.residencySubscription?.remove(); this.residencySubscription = null; }
+    };
+  }
+  /** Release RAM only. Selection and downloaded files are unchanged. */
+  async releaseIdlePipeline(): Promise<void> {
+    this.modelLoadEpoch += 1;
+    if (!this.isAvailable()) return;
+    // New bridge invalidates its ticket immediately, then drains active work on its native queue.
+    if (typeof DiffusionModule.releaseIdlePipeline === 'function') await DiffusionModule.releaseIdlePipeline();
+    else await this.serialize(() => DiffusionModule.unloadModel());
+    this.loadedThreads = null;
+  }
   private loadedThreads: number | null = null;
   private generating = false;
   private generationSequence = 0;
@@ -144,6 +173,7 @@ class CoreMLImageGeneratorService {
       width: params.width || 512,
       height: params.height || 512,
       previewInterval: params.previewInterval ?? 0,
+      keepPipelineReady: useAppStore.getState().settings.keepImagePipelineReady === true,
     };
   }
 
@@ -184,9 +214,8 @@ class CoreMLImageGeneratorService {
 
     try {
       const result = await this.serialize(() => DiffusionModule.generateImage(this.buildNativeParams(params, trimmedPrompt, requestId)));
-      // Native side releases the CoreML pipeline after generation to free
-      // memory, so clear TS-side state so the next request triggers a reload.
-      this.loadedThreads = null;
+      // Older native modules always release; query actual residency rather than infer from preference.
+      if (!(await this.isModelLoaded())) this.loadedThreads = null;
       return this.buildResult(params, result);
     } catch (error: any) {
       const msg = error?.message || '';

@@ -1,6 +1,6 @@
 import React from 'react';
 import {render,fireEvent,act} from '@testing-library/react-native';
-import {ImagePreviewSetting,AppleReadySetting} from '../../../src/components/ModelResourceOptions';
+import {ImagePreviewSetting,AppleReadySetting,ImageReadySetting} from '../../../src/components/ModelResourceOptions';
 import {installAppleSessionPolicy} from '../../../src/hooks/useAppleSessionPolicy';
 import {useAppStore} from '../../../src/stores/appStore';
 import {useChatStore} from '../../../src/stores/chatStore';
@@ -42,15 +42,29 @@ it('releases runtime cache on preference-off or model switch without cancelling 
  const before=JSON.stringify(useChatStore.getState().conversations);
  const records=JSON.stringify(useAppStore.getState().downloadedModels);
  const dispose=installAppleSessionPolicy();
- act(()=>useAppStore.getState().updateSettings({appleSessionReuseEnabled:true}));
+ act(()=>{useAppStore.getState().updateSettings({appleSessionReuseEnabled:true});});
  expect(release).not.toHaveBeenCalled();
- act(()=>useAppStore.getState().updateSettings({appleSessionReuseEnabled:false}));
+ act(()=>{useAppStore.getState().updateSettings({appleSessionReuseEnabled:false});});
  expect(release).toHaveBeenCalledTimes(1);
- act(()=>useAppStore.getState().setActiveModelId('other'));
+ act(()=>{useAppStore.getState().setActiveModelId('other');});
  expect(release).toHaveBeenCalledTimes(2);
  expect(stop).not.toHaveBeenCalled();
  expect(JSON.stringify(useChatStore.getState().conversations)).toBe(before);
  expect(JSON.stringify(useAppStore.getState().downloadedModels)).toBe(records);
  dispose();
  expect(release).toHaveBeenCalledTimes(3);
+});
+
+it('keeps image retention off by default and preserves selected model and downloads when toggled',()=>{
+ const selected=useAppStore.getState().activeImageModelId;
+ const downloaded=useAppStore.getState().downloadedImageModels;
+ const screen=render(<ImageReadySetting/>);
+ const control=screen.getByRole('switch',{name:'Keep image generator ready'});
+ expect(control.props.value).toBe(false);
+ fireEvent(control,'valueChange',true);
+ expect(useAppStore.getState().settings.keepImagePipelineReady).toBe(true);
+ fireEvent(control,'valueChange',false);
+ expect(useAppStore.getState().settings.keepImagePipelineReady).toBe(false);
+ expect(useAppStore.getState().activeImageModelId).toBe(selected);
+ expect(useAppStore.getState().downloadedImageModels).toBe(downloaded);
 });

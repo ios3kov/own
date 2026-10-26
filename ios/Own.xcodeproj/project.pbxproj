@@ -41,6 +41,8 @@
 		A20261025000000000000042 /* OwnHardwareInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = A20261025000000000000032 /* OwnHardwareInfo.m */; };
 		1429B65A7F9A4F1C94A9866A /* OwnStorageAndMediaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEC20CF178A74A0C910EE79A /* OwnStorageAndMediaTests.swift */; };
 		4F5ABFE0988C4FB3ACE6EE52 /* OwnAppleSessionPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 782958738A974999A459C3A8 /* OwnAppleSessionPolicyTests.swift */; };
+		CA8410000000000000000001 /* OwnVisionImagePreparationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA8410000000000000000002 /* OwnVisionImagePreparationTests.swift */; };
+		CA6210000000000000000001 /* OwnImagePipelineLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA6210000000000000000002 /* OwnImagePipelineLifecycleTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -103,6 +105,8 @@
 		A20261025000000000000032 /* OwnHardwareInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = OwnHardwareInfo.m; sourceTree = "<group>"; };
 		BEC20CF178A74A0C910EE79A /* OwnStorageAndMediaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnStorageAndMediaTests.swift; sourceTree = "<group>"; };
 		782958738A974999A459C3A8 /* OwnAppleSessionPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnAppleSessionPolicyTests.swift; sourceTree = "<group>"; };
+		CA8410000000000000000002 /* OwnVisionImagePreparationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnVisionImagePreparationTests.swift; sourceTree = "<group>"; };
+		CA6210000000000000000002 /* OwnImagePipelineLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OwnImagePipelineLifecycleTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -234,6 +238,8 @@
 				AABB000200000000000002AA /* OwnTests.swift */,
 				BEC20CF178A74A0C910EE79A /* OwnStorageAndMediaTests.swift */,
 				782958738A974999A459C3A8 /* OwnAppleSessionPolicyTests.swift */,
+				CA8410000000000000000002 /* OwnVisionImagePreparationTests.swift */,
+				CA6210000000000000000002 /* OwnImagePipelineLifecycleTests.swift */,
 				0A7B3D082F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift */,
 			);
 			path = OwnTests;
@@ -521,6 +527,8 @@
 				AABB000100000000000001AA /* OwnTests.swift in Sources */,
 				1429B65A7F9A4F1C94A9866A /* OwnStorageAndMediaTests.swift in Sources */,
 				4F5ABFE0988C4FB3ACE6EE52 /* OwnAppleSessionPolicyTests.swift in Sources */,
+				CA8410000000000000000001 /* OwnVisionImagePreparationTests.swift in Sources */,
+				CA6210000000000000000001 /* OwnImagePipelineLifecycleTests.swift in Sources */,
 				0A7B3D072F3A0B1200CC5FA1 /* EmbeddingModelBundleTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

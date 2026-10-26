@@ -5,6 +5,43 @@ import CoreML
 import React
 import StableDiffusion
 
+/// Thread-safe invalidation ticket; never controls active inference cancellation.
+final class OwnImageRetentionPolicy {
+  private let lock = NSLock()
+  private var epoch: UInt64 = 0
+  private var active = false
+  func ticket() -> UInt64 { lock.lock(); defer { lock.unlock() }; return epoch }
+  func invalidate(active: Bool? = nil) {
+    lock.lock(); defer { lock.unlock() }
+    epoch &+= 1
+    if let active = active { self.active = active }
+  }
+  func permits(ticket: UInt64, enabled: Bool, lowPower: Bool, thermal: ProcessInfo.ThermalState) -> Bool {
+    lock.lock(); defer { lock.unlock() }
+    return enabled && active && ticket == epoch && !lowPower && (thermal == .nominal || thermal == .fair)
+  }
+}
+
+/// Serial-queue idle ownership, independent from environment/generation epoch.
+struct OwnImageIdleLease {
+  private(set) var revision: UInt64 = 0
+  private var deadline: TimeInterval?
+  mutating func admit(validRequest: Bool) -> Bool {
+    guard validRequest else { return false }
+    revision &+= 1; deadline = nil
+    return true
+  }
+  mutating func retain(now: TimeInterval) -> UInt64 {
+    revision &+= 1; deadline = now + 60
+    return revision
+  }
+  mutating func release() { revision &+= 1; deadline = nil }
+  func expires(revision: UInt64, now: TimeInterval) -> Bool {
+    guard revision == self.revision, let deadline = deadline else { return false }
+    return now >= deadline
+  }
+}
+
 /// React Native bridge for Apple's ml-stable-diffusion pipeline.
 /// Provides the native Core ML image generation interface.
 /// can use a single abstraction via Platform.select().
@@ -16,8 +53,18 @@ class CoreMLDiffusionModule: RCTEventEmitter {
   /// Both StableDiffusionPipeline and StableDiffusionXLPipeline conform to
   /// StableDiffusionPipelineProtocol, so we store whichever one was created.
   private var pipeline: StableDiffusionPipelineProtocol?
-  private var loadedModelPath: String?
-  private var generating = false
+  private var loadedModelPath: String? {
+    didSet { reportResidency() }
+  }
+  private let retention = OwnImageRetentionPolicy()
+  private var idleExpiry: DispatchWorkItem?
+  private var idleLease = OwnImageIdleLease()
+  private var residencyRevision = 0
+  private var generatingFlag = false
+  private var generating: Bool {
+    get { cancellationLock.lock(); defer { cancellationLock.unlock() }; return generatingFlag }
+    set { cancellationLock.lock(); generatingFlag = newValue; cancellationLock.unlock() }
+  }
   private let cancellationLock = NSLock()
   private var cancellationFlag = false
   private var cancelRequested: Bool {
@@ -38,27 +85,25 @@ class CoreMLDiffusionModule: RCTEventEmitter {
 
   override init() {
     super.init()
-    NotificationCenter.default.addObserver(
-      self,
-      selector: #selector(handleMemoryWarning),
-      name: UIApplication.didReceiveMemoryWarningNotification,
-      object: nil
-    )
-  }
-
-  deinit {
-    NotificationCenter.default.removeObserver(self)
-  }
-
-  @objc private func handleMemoryWarning() {
-    pipelineQueue.async { [weak self] in
-      guard let self = self, !self.generating, self.pipeline != nil else { return }
-      self.pipeline = nil
-      self.loadedModelPath = nil
-      self.sendEvent(withName: "OwnImageError", body: [
-        "error": "Model unloaded due to low memory. Please try a smaller model."
-      ])
+    _ = ProcessInfo.processInfo.thermalState
+    for name in [UIApplication.didReceiveMemoryWarningNotification, UIApplication.didEnterBackgroundNotification,
+                 ProcessInfo.thermalStateDidChangeNotification, Notification.Name.NSProcessInfoPowerStateDidChange] {
+      NotificationCenter.default.addObserver(self, selector: #selector(environmentChanged), name: name, object: nil)
     }
+    NotificationCenter.default.addObserver(self, selector: #selector(becameActive),
+      name: UIApplication.didBecomeActiveNotification, object: nil)
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      self.retention.invalidate(active: self.applicationIsActive())
+    }
+  }
+
+  deinit { NotificationCenter.default.removeObserver(self); idleExpiry?.cancel() }
+
+  @objc func releaseIdlePipeline(_ resolve: @escaping RCTPromiseResolveBlock,
+                                rejecter _: @escaping RCTPromiseRejectBlock) {
+    retention.invalidate()
+    pipelineQueue.async { [weak self] in self?.releasePipeline(); resolve(true) }
   }
 
   // MARK: - RCTEventEmitter
@@ -66,63 +111,21 @@ class CoreMLDiffusionModule: RCTEventEmitter {
   override static func requiresMainQueueSetup() -> Bool { false }
 
   override func supportedEvents() -> [String]! {
-    ["OwnImageProgress", "OwnImageError", "OwnImageLoadProgress"]
+    ["OwnImageProgress", "OwnImageError", "OwnImageLoadProgress", "OwnImageResidency"]
   }
 
-  // MARK: - SDXL detection
-
-  /// Returns true if the model directory contains TextEncoder2.mlmodelc,
-  /// which is the hallmark of an SDXL model.
-  static func isXLModelDirectory(at url: URL) -> Bool {
-    let te2 = url.appendingPathComponent("TextEncoder2.mlmodelc")
-    return FileManager.default.fileExists(atPath: te2.path)
+  // Narrow native boundaries allow lifecycle tests without allocating model weights.
+  func validatePipelineDirectory(_ url: URL) -> String? { Self.validateModelDirectory(at: url) }
+  func makePipeline(at url: URL, configuration: MLModelConfiguration, isXL: Bool) throws -> StableDiffusionPipelineProtocol {
+    try Self.createPipeline(at: url, configuration: configuration, isXL: isXL)
   }
-
-  // MARK: - Model integrity validation
-
-  /// SDXL iOS models may ship either a monolithic Unet.mlmodelc or split
-  /// the UNet into two compiled chunks.
-  static func hasValidUnetDirectory(at url: URL) -> Bool {
-    let unet = url.appendingPathComponent("Unet.mlmodelc")
-    if FileManager.default.fileExists(atPath: unet.path) {
-      return true
-    }
-
-    let unetChunk1 = url.appendingPathComponent("UnetChunk1.mlmodelc")
-    let unetChunk2 = url.appendingPathComponent("UnetChunk2.mlmodelc")
-    return FileManager.default.fileExists(atPath: unetChunk1.path) &&
-      FileManager.default.fileExists(atPath: unetChunk2.path)
+  func applicationIsActive() -> Bool { UIApplication.shared.applicationState == .active }
+  func retentionConditions() -> (lowPower: Bool, thermal: ProcessInfo.ThermalState) {
+    (ProcessInfo.processInfo.isLowPowerModeEnabled, ProcessInfo.processInfo.thermalState)
   }
-
-  /// Validates that the required model sub-components exist on disk before
-  /// attempting to run the pipeline.  A missing TextEncoder.mlmodelc is the
-  /// most common cause of the "Unexpectedly found nil" crash in
-  /// TextEncoder.encode(ids:).
-  static func validateModelDirectory(at url: URL) -> String? {
-    let isXL = isXLModelDirectory(at: url)
-    let requiredComponents = [
-      "TextEncoder.mlmodelc",
-      "VAEDecoder.mlmodelc"
-    ]
-    for component in requiredComponents {
-      let path = url.appendingPathComponent(component)
-      if !FileManager.default.fileExists(atPath: path.path) {
-        return "Missing required model component: \(component)"
-      }
-    }
-    if !hasValidUnetDirectory(at: url) {
-      return isXL
-        ? "Missing required model component: Unet.mlmodelc or UnetChunk1.mlmodelc + UnetChunk2.mlmodelc"
-        : "Missing required model component: Unet.mlmodelc"
-    }
-    if isXL {
-      let te2 = url.appendingPathComponent("TextEncoder2.mlmodelc")
-      if !FileManager.default.fileExists(atPath: te2.path) {
-        return "Missing required SDXL component: TextEncoder2.mlmodelc"
-      }
-    }
-    return nil
-  }
+  func monotonicNow() -> TimeInterval { ProcessInfo.processInfo.systemUptime }
+  func scheduleIdleExpiry(_ item: DispatchWorkItem) { pipelineQueue.asyncAfter(deadline: .now() + 60, execute: item) }
+  func enqueuePipeline(_ work: @escaping () -> Void) { pipelineQueue.async(execute: work) }
 
   // MARK: - loadModel
 
@@ -137,10 +140,12 @@ class CoreMLDiffusionModule: RCTEventEmitter {
     pipelineQueue.async { [weak self] in
       guard let self = self else { return }
 
+      self.retention.invalidate()
+      let loadTicket = self.retention.ticket()
+      self.idleExpiry?.cancel(); self.idleExpiry = nil
       // Unload previous if different path
       if self.loadedModelPath != nil && self.loadedModelPath != modelPath {
-        self.pipeline = nil
-        self.loadedModelPath = nil
+        self.releasePipeline()
       }
 
       do {
@@ -149,7 +154,8 @@ class CoreMLDiffusionModule: RCTEventEmitter {
         self.sendEvent(withName: "OwnImageLoadProgress", body: ["modelPath": modelPath, "phase": "Checking model files"])
         // Validate model files exist before attempting to load
         let isXL = Self.isXLModelDirectory(at: url)
-        if let validationError = Self.validateModelDirectory(at: url) {
+        if let validationError = self.validatePipelineDirectory(url) {
+          self.releasePipeline()
           reject("ERR_INVALID_MODEL", validationError, nil)
           return
         }
@@ -162,24 +168,7 @@ class CoreMLDiffusionModule: RCTEventEmitter {
         config.computeUnits = cpuOnly ? .cpuAndGPU : .cpuAndNeuralEngine
 
         self.sendEvent(withName: "OwnImageLoadProgress", body: ["modelPath": modelPath, "phase": "Preparing CoreML pipeline"])
-        let pipe: StableDiffusionPipelineProtocol
-
-        if isXL {
-          // SDXL models need the XL pipeline which uses TextEncoderXL
-          // (expects "hidden_embeds" output instead of "last_hidden_state")
-          pipe = try StableDiffusionXLPipeline(
-            resourcesAt: url,
-            configuration: config,
-            reduceMemory: true
-          )
-        } else {
-          pipe = try StableDiffusionPipeline(
-            resourcesAt: url,
-            controlNet: [],
-            configuration: config,
-            reduceMemory: true
-          )
-        }
+        let pipe = try self.makePipeline(at: url, configuration: config, isXL: isXL)
 
         // Skip prewarm for 'original' variant (low-memory devices): prewarm
         // loads the full Unet into memory just to unload it, causing an OOM spike.
@@ -190,10 +179,16 @@ class CoreMLDiffusionModule: RCTEventEmitter {
           try pipe.loadResources()
         }
 
+        guard self.retention.ticket() == loadTicket else {
+          self.releasePipeline()
+          reject("ERR_LOAD_CANCELLED", "Image model loading was cancelled by resource cleanup.", nil)
+          return
+        }
         self.pipeline = pipe
         self.loadedModelPath = modelPath
         resolve(true)
       } catch {
+        self.releasePipeline()
         reject("ERR_LOAD_FAILED", "Failed to load Core ML model: \(error.localizedDescription)", error)
       }
     }
@@ -203,9 +198,9 @@ class CoreMLDiffusionModule: RCTEventEmitter {
 
   @objc func unloadModel(_ resolve: @escaping RCTPromiseResolveBlock,
                          rejecter _: @escaping RCTPromiseRejectBlock) {
+    retention.invalidate()
     pipelineQueue.async { [weak self] in
-      self?.pipeline = nil
-      self?.loadedModelPath = nil
+      self?.releasePipeline()
       resolve(true)
     }
   }
@@ -283,6 +278,11 @@ class CoreMLDiffusionModule: RCTEventEmitter {
   @objc func generateImage(_ params: NSDictionary,
                            resolver resolve: @escaping RCTPromiseResolveBlock,
                            rejecter reject: @escaping RCTPromiseRejectBlock) {
+    let ticket = retention.ticket()
+    pipelineQueue.async { [weak self] in
+      guard let self = self else { return }
+      let pipeline = self.pipeline
+      let generating = self.generating
     guard let pipe = pipeline else {
       reject("ERR_NO_MODEL", "No model loaded", nil)
       return
@@ -314,16 +314,15 @@ class CoreMLDiffusionModule: RCTEventEmitter {
       return
     }
 
-    generating = true
-    cancelRequested = false
+    // Only a valid admitted request consumes the idle lease. Rejected input preserves TTL.
+    self.admitGeneration()
 
-    pipelineQueue.async { [weak self] in
-      guard let self = self else { return }
-
+      var completed = false
       let previews = CoreMLImagePreviewSession(interval: options.previewInterval, requestId: options.requestId)
       defer {
         previews.cleanup()
         self.generating = false
+        if !completed { self.releasePipeline() }
       }
 
       // Re-check that pipeline hasn't been released (e.g. by a memory warning)
@@ -351,8 +350,7 @@ class CoreMLDiffusionModule: RCTEventEmitter {
 
           // If the error may indicate a corrupted model state, release it so
           // the next attempt triggers a fresh load.
-          self.pipeline = nil
-          self.loadedModelPath = nil
+          self.releasePipeline()
 
           reject("ERR_GENERATION", msg, error)
           return
@@ -384,12 +382,8 @@ class CoreMLDiffusionModule: RCTEventEmitter {
           Self.exportImage(cgImage, size: CGSize(width: width, height: height)).pngData()
         })
 
-        // Release the pipeline immediately after generation to free memory.
-        // On iOS devices the CoreML pipeline holds 1-2 GB+ even when idle;
-        // keeping it loaded while the user navigates causes blank screens and
-        // UI hangs.  The model will auto-reload on the next generation request.
-        self.pipeline = nil
-        self.loadedModelPath = nil
+        completed = true
+        self.finishPipeline(ticket: ticket, enabled: params["keepPipelineReady"] as? Bool == true)
 
         resolve([
           "id": imageId,
@@ -632,4 +626,109 @@ enum CoreMLImageOutput {
       throw CancellationError()
     }
   }
+}
+
+extension CoreMLDiffusionModule {
+  // MARK: - SDXL detection
+
+  /// Returns true if the model directory contains TextEncoder2.mlmodelc,
+  /// which is the hallmark of an SDXL model.
+  static func isXLModelDirectory(at url: URL) -> Bool {
+    let te2 = url.appendingPathComponent("TextEncoder2.mlmodelc")
+    return FileManager.default.fileExists(atPath: te2.path)
+  }
+
+  // MARK: - Model integrity validation
+
+  /// SDXL iOS models may ship either a monolithic Unet.mlmodelc or split
+  /// the UNet into two compiled chunks.
+  static func hasValidUnetDirectory(at url: URL) -> Bool {
+    let unet = url.appendingPathComponent("Unet.mlmodelc")
+    if FileManager.default.fileExists(atPath: unet.path) {
+      return true
+    }
+
+    let unetChunk1 = url.appendingPathComponent("UnetChunk1.mlmodelc")
+    let unetChunk2 = url.appendingPathComponent("UnetChunk2.mlmodelc")
+    return FileManager.default.fileExists(atPath: unetChunk1.path) &&
+      FileManager.default.fileExists(atPath: unetChunk2.path)
+  }
+
+  /// Validates that the required model sub-components exist on disk before
+  /// attempting to run the pipeline.  A missing TextEncoder.mlmodelc is the
+  /// most common cause of the "Unexpectedly found nil" crash in
+  /// TextEncoder.encode(ids:).
+  static func validateModelDirectory(at url: URL) -> String? {
+    let isXL = isXLModelDirectory(at: url)
+    let requiredComponents = [
+      "TextEncoder.mlmodelc",
+      "VAEDecoder.mlmodelc"
+    ]
+    for component in requiredComponents {
+      let path = url.appendingPathComponent(component)
+      if !FileManager.default.fileExists(atPath: path.path) {
+        return "Missing required model component: \(component)"
+      }
+    }
+    if !hasValidUnetDirectory(at: url) {
+      return isXL
+        ? "Missing required model component: Unet.mlmodelc or UnetChunk1.mlmodelc + UnetChunk2.mlmodelc"
+        : "Missing required model component: Unet.mlmodelc"
+    }
+    if isXL {
+      let te2 = url.appendingPathComponent("TextEncoder2.mlmodelc")
+      if !FileManager.default.fileExists(atPath: te2.path) {
+        return "Missing required SDXL component: TextEncoder2.mlmodelc"
+      }
+    }
+    return nil
+  }
+
+}
+
+private extension CoreMLDiffusionModule {
+  static func createPipeline(at url: URL, configuration: MLModelConfiguration, isXL: Bool) throws -> StableDiffusionPipelineProtocol {
+    if isXL {
+      return try StableDiffusionXLPipeline(resourcesAt: url, configuration: configuration, reduceMemory: true)
+    }
+    return try StableDiffusionPipeline(resourcesAt: url, controlNet: [], configuration: configuration, reduceMemory: true)
+  }
+  func admitGeneration() {
+    _ = idleLease.admit(validRequest: true)
+    idleExpiry?.cancel(); idleExpiry = nil
+    generating = true
+    cancelRequested = false
+  }
+  private func reportResidency() {
+    residencyRevision += 1
+    sendEvent(withName: "OwnImageResidency", body: ["resident": pipeline != nil,
+      "modelPath": loadedModelPath.map { $0 as Any } ?? NSNull(), "revision": residencyRevision])
+  }
+  private func releasePipeline() {
+    idleExpiry?.cancel(); idleExpiry = nil
+    idleLease.release()
+    pipeline = nil; loadedModelPath = nil
+  }
+  private func finishPipeline(ticket: UInt64, enabled: Bool) {
+    let conditions = retentionConditions()
+    guard retention.permits(ticket: ticket, enabled: enabled, lowPower: conditions.lowPower,
+      thermal: conditions.thermal) else { releasePipeline(); return }
+    let leaseRevision = idleLease.retain(now: monotonicNow())
+    let expiry = DispatchWorkItem { [weak self] in
+      guard let self = self,
+        self.idleLease.expires(revision: leaseRevision, now: self.monotonicNow()) else { return }
+      self.retention.invalidate(); self.releasePipeline()
+    }
+    idleExpiry = expiry
+    scheduleIdleExpiry(expiry)
+  }
+  @objc private func becameActive() {
+    retention.invalidate(active: true)
+    pipelineQueue.async { [weak self] in self?.releasePipeline() }
+  }
+  @objc private func environmentChanged(_ note: Notification) {
+    retention.invalidate(active: note.name == UIApplication.didEnterBackgroundNotification ? false : nil)
+    pipelineQueue.async { [weak self] in self?.releasePipeline() }
+  }
+
 }

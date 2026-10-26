@@ -1,4 +1,4 @@
-import {ImagePreviewSetting} from '../../components/ModelResourceOptions';
+import {ImagePreviewSetting,ImageReadySetting} from '../../components/ModelResourceOptions';
 import React,{ useState } from 'react';
 import { View,Text,Switch } from 'react-native';
 import Slider from '@react-native-community/slider';
@@ -190,7 +190,7 @@ export const ImageGenerationSection: React.FC = () => {
         />
       </View>
 
-      <ImagePreviewSetting />
+      <ImageReadySetting/><ImagePreviewSetting />
 
       <AdvancedToggle isExpanded={showAdvanced} onPress={() => setShowAdvanced(!showAdvanced)} testID="image-advanced-toggle" />
 

@@ -43,3 +43,9 @@ export function AppleReadySetting() {
  return <ResourceOption label="Keep Apple chat ready" hint="Text chats with tools off. Uses extra memory; clears when you leave the app."
   enabled={enabled} disabled={!enabled && (!available || toolsOn)} onChange={value=>update({appleSessionReuseEnabled:value})} testID="apple-chat-ready"/>;
 }
+
+export function ImageReadySetting() {
+ const enabled=useAppStore(s=>s.settings.keepImagePipelineReady===true);const update=useAppStore(s=>s.updateSettings);
+ return <ResourceOption label="Keep image generator ready" hint="After drawing, keeps its setup for up to one minute. May use more memory; clears when you leave the app."
+  enabled={enabled} onChange={value=>update({keepImagePipelineReady:value})} testID="image-pipeline-ready"/>;
+}

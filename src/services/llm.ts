@@ -1,3 +1,4 @@
+import {withPreparedVisionMessages,VisionPreparationIdentity,VISION_PREPROCESSING} from './visionImagePreparation';
 import { beginModelLoad, finishModelLoad, reportModelLoad } from '../stores/modelLoadStore';
 import { contextForMeasuredCompletion } from './contextUsage';
 import { LlamaContext,RNLlamaOAICompatibleMessage } from 'llama.rn';
@@ -31,6 +32,10 @@ function resolveGpuBackend(enabled: boolean): string {
   return ('Metal');
 }
 class LLMService {
+  private preparedVisionIdentity = new VisionPreparationIdentity();
+  private resetPreparedProjector(path?:string,useGpu=false):void {
+    this.preparedVisionIdentity.setProjector(path,useGpu);
+  }
   private context: LlamaContext | null = null;
   private currentModelPath: string | null = null;
   private isGenerating: boolean = false;
@@ -39,6 +44,7 @@ class LLMService {
   private multimodalInitialized: boolean = false;
   private pendingMmProjPath: string | undefined;
   private visionLoadFailed = false;
+  private visionPreparationAbort: AbortController | null = null;
   private performanceStats: LLMPerformanceStats = { lastTokensPerSecond: 0, lastDecodeTokensPerSecond: 0, lastTimeToFirstToken: 0, lastGenerationTime: 0, lastTokenCount: 0 };
   private currentSettings: LLMPerformanceSettings = { nThreads: (4), nBatch: 512, contextLength: 2048 };
   private gpuEnabled: boolean = false;
@@ -89,6 +95,7 @@ class LLMService {
   private async applyLoadedContext(opts: { context: LlamaContext; actualLength: number; gpuAttemptFailed: boolean; nGpuLayers: number; modelPath: string; mmProjPath?: string }): Promise<void> {
     const { context, actualLength, gpuAttemptFailed, nGpuLayers, modelPath, mmProjPath } = opts;
     this.context = context;
+    this.resetPreparedProjector();
     if (actualLength !== this.currentSettings.contextLength) this.currentSettings.contextLength = actualLength;
     logContextMetadata(context, actualLength);
     useAppStore.getState().setModelMaxContext(getModelMaxContext(context));
@@ -171,6 +178,7 @@ class LLMService {
     this.multimodalInitialized = false;
     this.multimodalSupport = null;
     this.pendingMmProjPath = mmProjPath;
+    this.resetPreparedProjector();
     this.visionLoadFailed = false;
   }
   async initializeMultimodal(mmProjPath: string): Promise<boolean> {
@@ -206,9 +214,11 @@ class LLMService {
     } catch (statErr) { logger.error('[LLM] Failed to stat mmproj file:', statErr); }
     const devInfo = useAppStore.getState().deviceInfo;
     const useGpuForClip = (!devInfo?.isEmulator) && (devInfo?.totalMemory ?? 0) > 4 * BYTES_PER_GB;
+    this.resetPreparedProjector();
     const { initialized, support } = await initMultimodal(this.context, mmProjPath, useGpuForClip);
     this.multimodalInitialized = initialized;
     this.multimodalSupport = support;
+    if (initialized) this.resetPreparedProjector(mmProjPath,useGpuForClip);
     return initialized;
   }
   async checkMultimodalSupport(): Promise<MultimodalSupport> {
@@ -243,14 +253,17 @@ class LLMService {
   }
   /** Internal unload without acquiring the mutex (used by loadModel which already holds it). */
   private async doUnloadModel(): Promise<void> {
+    this.visionPreparationAbort?.abort();
     if (!this.context) return;
     if (this.isGenerating) {
       try { await this.context.stopCompletion(); } catch (e) { logger.log('[LLM] Stop during unload:', e); }
       this.isGenerating = false;
     }
-    if (this.activeCompletionPromise !== null) { await this.activeCompletionPromise; this.activeCompletionPromise = null; }
+    const stoppedCompletion = this.activeCompletionPromise;
+    if (stoppedCompletion !== null) { await stoppedCompletion; if (this.activeCompletionPromise === stoppedCompletion) this.activeCompletionPromise = null; }
     try { await this.context.release(); } catch (e) { logger.warn('[LLM] Error releasing context (bridge may be torn down):', e); }
     useAppStore.getState().setModelMaxContext(null);
+    this.resetPreparedProjector();
     Object.assign(this, { launchConfiguration:undefined, context: null, currentModelPath: null, pendingMmProjPath: undefined, visionLoadFailed: false, loadFallbackReason: undefined, multimodalSupport: null, multimodalInitialized: false, toolCallingSupported: false, thinkingSupported: false, gpuEnabled: false, gpuReason: '', gpuDevices: [], activeGpuLayers: 0 });
   }
   async unloadModel(): Promise<void> {
@@ -282,6 +295,7 @@ class LLMService {
       if(this.isGenerating || !this.context || !this.multimodalInitialized) return false;
       await this.context.releaseMultimodal();
       this.multimodalInitialized=false;this.multimodalSupport=null;
+      this.resetPreparedProjector();
       return true;
     })().finally(()=>mutex.release());
     const barrier=work.then(()=>undefined,()=>undefined);
@@ -291,12 +305,15 @@ class LLMService {
   async generateResponse(messages: Message[], onStream?: StreamCallback, onComplete?: CompleteCallback): Promise<string> {
     if(this.visionReleasePromise) await this.waitForVisionRelease();
     if (!this.context) throw new Error('No model loaded');
-    if (this.isGenerating) throw new Error('Generation already in progress');
+    if (this.isGenerating || this.activeCompletionPromise) throw new Error('Generation already in progress');
     this.isGenerating = true;
     const ctx = this.context;
+    const preparation = new AbortController();
+    this.visionPreparationAbort = preparation;
     const completionWork = (async () => {
       await this.prepareVision(messages);
-      const managed = await this.manageContextWindow(messages);
+      return this.withPreparedImages(messages, preparation.signal, async requestMessages => {
+      const managed = await this.manageContextWindow(requestMessages);
       const hasImages = managed.some(m => m.attachments?.some(a => a.type === 'image'));
       logger.log('[LLM] Generation mode:', hasImages && this.multimodalInitialized ? 'VISION' : 'TEXT-ONLY');
       const oaiMessages = this.convertToOAIMessages(managed);
@@ -328,29 +345,52 @@ class LLMService {
       logger.log(`[LLM][THINKING] Final result — hasContent=${!!result.content}, hasReasoningContent=${!!result.reasoningContent}, reasoningLength=${result.reasoningContent?.length ?? 0}, fullReasoningFromStream=${fullReasoningContent.length}`);
       onComplete?.(result);
       return result.content;
+      });
     })();
     this.activeCompletionPromise = completionWork.then(() => { }, () => { });
-    try { return await completionWork; } finally { this.isGenerating = false; this.activeCompletionPromise = null; }
+    try { return await completionWork; } finally { if (this.visionPreparationAbort === preparation) { this.isGenerating = false; this.activeCompletionPromise = null; this.visionPreparationAbort = null; } }
+  }
+  private async withPreparedImages<T>(messages: Message[], signal: AbortSignal, work: (prepared: Message[]) => Promise<T>): Promise<T> {
+    if (signal.aborted) return Promise.reject(new Error('Generation cancelled.'));
+    if (!this.multimodalInitialized || !messages.some(message => message.role === 'user' && !message.isSystemInfo && message.attachments?.some(attachment => attachment.type === 'image'))) return work(messages);
+    return withPreparedVisionMessages(messages, {
+      modelIdentity: this.visionPreparationIdentity(signal),
+      maximumEdge: VISION_PREPROCESSING.maximumEdge, signal,
+    }, work);
+  }
+  private visionPreparationIdentity(signal: AbortSignal): string {
+    if (signal.aborted) throw new Error('Generation cancelled.');
+    if (!this.context) throw new Error('No model loaded');
+    return this.preparedVisionIdentity.forContext(this.context,LLAMA_ENGINE_VERSION);
   }
   async generateResponseWithTools(messages: Message[], options: { tools: any[]; onStream?: StreamCallback; onComplete?: CompleteCallback }): Promise<{ fullResponse: string; toolCalls: ToolCall[] }> {
     if(this.visionReleasePromise) await this.waitForVisionRelease();
-    const work = generateWithToolsImpl({
-      context: this.context, isGenerating: this.isGenerating,
-      isActive: () => this.isGenerating, contextLength: this.currentSettings.contextLength,
+    if (!this.context) throw new Error('No model loaded');
+    if (this.isGenerating || this.activeCompletionPromise) throw new Error('Generation already in progress');
+    this.isGenerating = true;
+    const preparation = new AbortController();
+    this.visionPreparationAbort = preparation;
+    const work = (async () => {
+      await this.prepareVision(messages);
+      return this.withPreparedImages(messages, preparation.signal, preparedMessages => generateWithToolsImpl({
+      context: this.context, isGenerating: false,
+      isActive: () => this.isGenerating && !preparation.signal.aborted, contextLength: this.currentSettings.contextLength,
       isThinkingEnabled: this.isThinkingEnabled(),
       isGemma4Model: this.isGemma4Model(),
       manageContextWindow: async (msgs, extra?) => { await this.prepareVision(msgs); return this.manageContextWindow(msgs, extra); },
       convertToOAIMessages: (msgs) => this.convertToOAIMessages(msgs),
       setPerformanceStats: (s) => { this.performanceStats = s; },
-      setIsGenerating: (v) => { this.isGenerating = v; },
-    }, messages, {
+      // The outer request owns the shared busy flag through asynchronous lease cleanup.
+      setIsGenerating: () => {},
+    }, preparedMessages, {
       tools: options.tools,
       onStream: options.onStream,
       onComplete: options.onComplete
         ? ((onComplete) => (fullResponse: string) => onComplete({ content: fullResponse, reasoningContent: '' }))(options.onComplete) : undefined,
-    });
+    }));
+    })();
     this.activeCompletionPromise = work.then(() => { }, () => { });
-    try { return await work; } finally { this.activeCompletionPromise = null; }
+    try { return await work; } finally { if (this.visionPreparationAbort === preparation) { this.activeCompletionPromise = null; this.isGenerating = false; this.visionPreparationAbort = null; } }
   }
   /** No-op pass-through — lets llama.rn's native ctx_shift handle overflow for KV cache reuse. */
   private async manageContextWindow(messages: Message[], _extraReserve = 0): Promise<Message[]> {
@@ -360,7 +400,7 @@ class LLMService {
   async generateWithMaxTokens(messages: Message[], maxTokens: number): Promise<string> {
     if(this.visionReleasePromise) await this.waitForVisionRelease();
     if (!this.context) throw new Error('No model loaded');
-    if (this.isGenerating) throw new Error('Generation already in progress');
+    if (this.isGenerating || this.activeCompletionPromise) throw new Error('Generation already in progress');
     this.isGenerating = true;
     const oaiMessages = this.convertToOAIMessages(messages);
     const { settings } = useAppStore.getState();
@@ -374,10 +414,12 @@ class LLMService {
     try { await completionWork; return fullResponse.trim(); } finally { this.isGenerating = false; this.activeCompletionPromise = null; }
   }
   async stopGeneration(): Promise<void> {
+    this.visionPreparationAbort?.abort();
     this.generationStopEpoch+=1;
     if (this.context) { try { await this.context.stopCompletion(); } catch (e) { logger.log('[LLM] Stop error:', e); } }
     this.isGenerating = false;
-    if (this.activeCompletionPromise !== null) { await this.activeCompletionPromise; this.activeCompletionPromise = null; }
+    const stoppedCompletion = this.activeCompletionPromise;
+    if (stoppedCompletion !== null) { await stoppedCompletion; if (this.activeCompletionPromise === stoppedCompletion) this.activeCompletionPromise = null; }
   }
   async clearKVCache(clearData: boolean = false): Promise<void> {
     if (!this.context || this.isGenerating) return;
@@ -439,7 +481,7 @@ class LLMService {
       logger.log(`[LLM] Reloading with threads=${settings.nThreads}, batch=${settings.nBatch}, ctx=${settings.contextLength}`);
       try {
         const { context, gpuAttemptFailed } = await initContextWithFallback(baseParams, settings.contextLength, nGpuLayers);
-        this.context = context; Object.assign(this, captureGpuInfo(context, gpuAttemptFailed, nGpuLayers));
+        this.context = context; this.resetPreparedProjector(); Object.assign(this, captureGpuInfo(context, gpuAttemptFailed, nGpuLayers));
         this.currentModelPath = modelPath; this.pendingMmProjPath = projector; this.multimodalSupport = null; this.multimodalInitialized = false;
         await this.checkMultimodalSupport(); this.detectToolCallingSupport(); this.detectThinkingSupport();
       } catch (error) { logger.error('[LLM] Error reloading model:', error); Object.assign(this, { launchConfiguration:undefined, context: null, currentModelPath: null, toolCallingSupported: false, thinkingSupported: false }); throw error; }

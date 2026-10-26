@@ -45,6 +45,33 @@ class ActiveModelService {
     this.textMutex = new Promise<void>(resolve => { release = resolve; });
     return { release, ready: prev.catch(() => {}) };
   }
+  constructor() {
+    coreMLImageGeneratorService.subscribeResidency?.((resident, path) => {
+      if (!resident) {
+        this.loadedImageModelId = null;
+        this.loadedImageModelThreads = null;
+      } else {
+        // Only match the currently selected model; stale model events cannot select a model.
+        const store = useAppStore.getState();
+        const selected = store.downloadedImageModels.find(model => model.id === store.activeImageModelId);
+        if (!selected || selected.modelPath !== path) return;
+        this.loadedImageModelId = selected.id;
+      }
+      this.notifyListeners();
+    });
+    useAppStore.subscribe((state, previous) => {
+      if (previous.settings.keepImagePipelineReady === true && state.settings.keepImagePipelineReady !== true) {
+        void coreMLImageGeneratorService.releaseIdlePipeline().catch(() => {});
+      }
+    });
+  }
+  /** Evict RAM without changing the user's selected image model. */
+  async releaseImageModelMemory(): Promise<void> {
+    await coreMLImageGeneratorService.releaseIdlePipeline();
+    this.loadedImageModelId = null;
+    this.loadedImageModelThreads = null;
+    this.notifyListeners();
+  }
   getActiveModels(): ActiveModelInfo {
     const store = useAppStore.getState();
     const textModel =

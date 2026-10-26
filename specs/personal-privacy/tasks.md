@@ -96,3 +96,11 @@ Host functional checks and scoped simulator visuals are recorded in the latest f
 - No phone access, installation, model downloads, data migration or deletion in this continuation.
 
 Final current-source checks:5,560 JS tests /260 suites PASS,90 native PASS,12 UI PASS/7 fixture skips, then2 affected UI PASS after the visual correction. Final normal/max-text row/header screenshots inspected; TypeScript and scoped lint PASS with warnings. Device and external review limitations remain open.
+
+### Generator retention and vision preparation — 2026-10-26
+
+Implemented62 as an explicit default-off option with60s idle ownership and RAM-only eviction; it preserves selected/downloaded model records. Implemented84 private bounded image preparation/reuse before request token counting, with orientation/aspect preservation and request leases. Full JS coverage5,576 tests/264 suites PASS; latest copy-only settings checks5PASS. Native five bridge lifecycle and five image fixture cases PASS. One old event-count assertion failed because the new residency event is intentional; source now checks all four exact names. Final full push-hook native verification is pending; no failed overall run is labeled PASS.
+
+The session-restoration26 worker-offload prototype is isolated outside Own and not shipped. Source investigation found per-context concurrency and a five-second native release timeout; a safe shipping cache needs lifetime/serialization changes and actual KV roundtrip proof. The existing local19MB fixture can support an isolated experiment; no model download or phone is needed for that prototype. This item remains unimplemented in the application.
+
+No phone access or data migration/deletion/model downloads in this batch. Real image-pipeline performance, vision quality and supported-device memory/energy checks remain open. Prototype checks and mocked transport do not replace real inference.

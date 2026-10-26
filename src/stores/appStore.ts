@@ -29,6 +29,7 @@ type OnboardingChecklist = {
 };
 
 type AppSettings = {
+  keepImagePipelineReady?: boolean;
   allowAppleSpeech: boolean;
   readRepliesAloud: boolean;
   replyVoiceId: string;
@@ -136,6 +137,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   nThreads: 0,
   nBatch: 512,
   nUbatch: 0,
+  keepImagePipelineReady: false,
   imageGenerationMode: 'auto' as ImageGenerationMode,
   autoDetectMethod: 'pattern' as AutoDetectMethod,
   classifierModelId: null,

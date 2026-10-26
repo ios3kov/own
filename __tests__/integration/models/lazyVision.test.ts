@@ -1,3 +1,4 @@
+import {installVisionPreparationTransportMock} from '../../utils/testHelpers';
 import { initLlama } from 'llama.rn';
 import RNFS from 'react-native-fs';
 import { llmService } from '../../../src/services/llm';
@@ -6,6 +7,7 @@ import { createMockLlamaContext, resetStores } from '../../utils/testHelpers';
 const text = [{id:'q',role:'user' as const,content:'Hello',timestamp:0}];
 const photo = [{...text[0],attachments:[{id:'photo',type:'image' as const,uri:'file:///photo.jpg'}]}];
 beforeEach(async () => {
+  installVisionPreparationTransportMock();
   await llmService.unloadModel(); resetStores();
   (initLlama as jest.Mock).mockReset();
   (RNFS.exists as jest.Mock).mockResolvedValue(true);

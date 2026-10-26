@@ -156,3 +156,28 @@ Final affected visual correction: maximum-text screenshot review found the new r
 Wider simulator run completed PASS:90 native tests,12 UI passed,7 fixture-dependent skips,0 failures (`Test-Own-2026.10.26_07-55-42-+0100.xcresult`). Final affected UI rerun after layout correction:2 passed,0 skipped/failed (`Test-Own-2026.10.26_08-16-25-+0100.xcresult`, `../own-resumed-preview-layout-ios.log`). The new optional Apple control is hidden on unsupported simulator hardware; its supported-phone rendering and actual model reuse remain NOT_RUN. Initial attachment export preceded report finalization; the completed export also needed Xcode report-cache access. No missing export was counted as visual proof.
 
 Final current-source JS run after the layout fix and all added cases:260 suites /5,560 tests PASS (`../own-resumed-final-jest.log`). Final TypeScript and scoped ESLint PASS (`../own-resumed-final-types.log`, `../own-resumed-final-eslint.log`). No production writes followed these checks. Native policies are unchanged from the90-test run; the affected title/row was rebuilt and visually verified as above.
+
+## Generator retention and image preparation — 2026-10-26
+
+Scope:62/84; source based on302f1d1. No phone/model downloads/data deletion. New keep-generator-ready preference defaults off. Model/vision/OCR originals are unchanged; only request copies use protected derived PNGs.
+
+| Check | Result | Evidence outside repository |
+|---|---|---|
+| Full JS coverage | PASS:264 suites/5,576 tests after cancellation/ownership fixes; final copy-only settings checks5PASS | own-next-final-jest.log,own-next-copy-regression.log |
+| Types and scoped lint | PASS with warnings | own-next-types-final.log,own-next-final-lint.log,own-next-eslint-fixed.log |
+| Actual native image fixtures | PASS:five tests for content/identity reuse,invalidation,orientation/aspect,bounded reads,cancellation,pinning/cleanup | own-next-native-retry.log |
+| Actual bridge lifecycle with fake pipeline | PASS:five tests for default release,opt-in TTL,invalid input/load,active-generation eviction,load eviction and failure | same log |
+| Native overall retry | FAIL:104 passed,1 old event-count assertion failed. Source now checks all four exact supported event names; final complete verification is required in the normal push hook. | Test-Own-2026.10.26_09-11-31-+0100.xcresult |
+| Initial native build | FAIL:new test helper did not mark callback parameters escaping; corrected before the runtime retry. No native test ran in that attempt. | own-next-ios.log |
+| Settings UI and visual review | PASS:two normal/max-text scenarios,preference toggles restored,1170×2532 screenshots inspected. New control label,complete hint and switch readable;header remains clear. | own-next-native-retry.log;docs/screenshots/image-resource-settings.png and image-resource-settings-large.png |
+| Real model performance/quality | NOT_RUN:retained setup does not guarantee retained weights or faster generation;1024px vision preparation needs real model/detail/token/memory acceptance. | open device/model gate |
+
+The failed retry stalled in its owned simctl diagnose child after tests completed. Its PID,parent and result path were verified; only that diagnostic collector was interrupted. Xcode then finalized the actual failed report. No failure was hidden or counted PASS.
+
+Cross-review of isolated candidates found and corrected stale ownership during async cleanup,invalid timer ownership,weak cache identity and unbounded input-read concerns. Final integration review found/fixed import cycles,late-load residency,and unload cancellation; new fixture regressions passed. Later reviewer turns hit host capacity,so the final merged source and subsequent corrections received coordinator self-review rather than a fresh independent-worker verdict. Source manifest:own-next-candidate-sha256.json outside the repository.
+
+Pixel preparation depends on immutable image bytes and effective preprocessing configuration. The native cache hashes image bytes; loaded-context object identity and actual projector revision/config distinguish loaded resources. Per-request model-file hashing was removed after review: it reread gigabytes and identified disk files rather than the loaded model. Source paths and saved attachments stay unchanged. The SDK retains reduceMemory=true. Optional generator setup expires after60s and evicts on environment/pref/error; native residency events update memory estimates without deselecting or deleting a model.
+
+Session restoration26 is a separate unshipped prototype. No shipping session API call or dependency worker patch was added. A model-free check cannot establish KV restoration correctness; native context lifetime/serialization and actual existing-fixture roundtrip remain required.
+
+External Gemini review request was rejected by automatic approval review because it could disclose private source to an external service. User approval was requested and remains pending; no workaround/retry was used. Local/source/native checks continued. Sonar and other external service gaps remain separate.

@@ -1,3 +1,4 @@
+import {installVisionPreparationTransportMock} from '../../utils/testHelpers';
 import { initLlama } from 'llama.rn';
 import { initWhisper } from 'whisper.rn';
 import RNFS from 'react-native-fs';
@@ -10,6 +11,7 @@ import { residentAuxiliaryMemory } from '../../../src/services/residentAuxiliary
 import { createMockLlamaContext, resetStores } from '../../utils/testHelpers';
 
 beforeEach(async()=>{
+  installVisionPreparationTransportMock();
   await llmService.unloadModel();await whisperService.unloadModel();await embeddingService.unload();resetStores();
   (RNFS.exists as jest.Mock).mockResolvedValue(true);(RNFS.stat as jest.Mock).mockResolvedValue({size:100_000_000,isFile:()=>true});
 });

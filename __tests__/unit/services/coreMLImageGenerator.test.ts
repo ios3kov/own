@@ -506,6 +506,7 @@ describe('CoreMLImageGeneratorService', () => {
         height: 512,
         previewInterval: 0,
         requestId: expect.any(String),
+        keepPipelineReady: false,
       });
     });
 
